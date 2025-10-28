@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>IMAGINE — Chat Test</title>
+  <style>
+    body{font-family:system-ui;margin:20px;background:#0f1115;color:#e6e6e6}
+    input,button,select,textarea{background:#161a22;color:#e6e6e6;border:1px solid #273042;border-radius:8px;padding:8px}
+    .row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+    .chat{border:1px solid #273042;border-radius:12px;padding:12px;max-width:900px;min-height:200px;overflow:auto;background:#0c0f14}
+    .bubble{padding:8px 10px;border-radius:10px;margin:6px 0;max-width:80%}
+    .user{background:#22324a;align-self:flex-end}
+    .assistant{background:#1c2a2b;align-self:flex-start}
+    .system{background:#2a1c1c;align-self:center}
+    .msg{display:flex}
+  </style>
+</head>
+<body>
+  <h1>IMAGINE — Chat Test</h1>
+
+  <div class="row">
+    <button id="btnModels">Load Models</button>
+    <select id="models"></select>
+    <input id="title" placeholder="Thread title" style="width:240px" />
+    <button id="btnNew">Create Thread</button>
+    <span id="threadInfo"></span>
+  </div>
+
+  <div class="row">
+    <button id="btnThreads">My Threads</button>
+    <select id="threads"></select>
+    <button id="btnLoad">Load</button>
+  </div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="row">
+    <textarea id="msg" placeholder="Say something..." style="width:600px;height:70px"></textarea>
+    <button id="btnSend">Send</button>
+  </div>
+
+<script>
+async function j(url, opts={}){
+  const r = await fetch(url, Object.assign({credentials:'include'}, opts));
+  if(!r.ok){ throw new Error(r.status + ' ' + await r.text()); }
+  return r.json();
+}
+function addBubble(role, content){
+  const wrap = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const b = document.createElement('div');
+  b.className = 'bubble ' + role;
+  b.textContent = content;
+  div.appendChild(b);
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+let currentThread = null;
+
+document.getElementById('btnModels').onclick = async () => {
+  const data = await j('/imagine/models');
+  const sel = document.getElementById('models');
+  sel.innerHTML = '';
+  data.models.forEach(m => {
+    const o = document.createElement('option'); o.value=m; o.textContent=m;
+    if(m === data.default) o.selected = true;
+    sel.appendChild(o);
+  });
+};
+
+document.getElementById('btnNew').onclick = async () => {
+  const model = document.getElementById('models').value || null;
+  const title = document.getElementById('title').value || null;
+  const data = await j('/imagine/thread', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({model, title})
+  });
+  currentThread = data.thread_id;
+  document.getElementById('threadInfo').textContent = 'Thread: ' + currentThread;
+  const h = await j('/imagine/history/' + currentThread);
+  document.getElementById('chat').innerHTML='';
+  h.messages.forEach(m => addBubble(m.role, m.content));
+};
+
+document.getElementById('btnThreads').onclick = async () => {
+  const data = await j('/imagine/threads');
+  const sel = document.getElementById('threads');
+  sel.innerHTML = '';
+  data.threads.forEach(t => {
+    const o = document.createElement('option'); o.value=t.id; o.textContent=t.title + ' ('+t.model+')';
+    sel.appendChild(o);
+  });
+};
+
+document.getElementById('btnLoad').onclick = async () => {
+  const tid = document.getElementById('threads').value;
+  if(!tid) return;
+  currentThread = tid;
+  document.getElementById('threadInfo').textContent = 'Thread: ' + currentThread;
+  const h = await j('/imagine/history/' + currentThread);
+  document.getElementById('chat').innerHTML='';
+  h.messages.forEach(m => addBubble(m.role, m.content));
+};
+
+document.getElementById('btnSend').onclick = async () => {
+  const text = document.getElementById('msg').value.trim();
+  if(!currentThread){ alert('Create or load a thread first.'); return; }
+  if(!text) return;
+  addBubble('user', text);
+  document.getElementById('msg').value='';
+  try{
+    const data = await j('/imagine/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({thread_id: currentThread, message: text})
+    });
+    addBubble('assistant', data.reply);
+  }catch(e){
+    addBubble('system', 'Error: ' + e.message);
+  }
+};
+</script>
+</body>
+</html>

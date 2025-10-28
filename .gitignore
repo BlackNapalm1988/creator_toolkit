@@ -1,0 +1,42 @@
+# env / secrets
+.env
+.env.*
+*.key
+*.pem
+
+# sqlite data
+data/*.db
+data/*.sqlite3
+data/*.sqlite
+data/backups/
+
+# generated runtime files
+static/uploads/
+static/music/
+static/tts/
+static/reports/
+static/masters/
+
+# worker output / logs
+*.log
+logs/
+*.tmp
+tmp/
+
+# python cache / venv
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# node / frontend build
+node_modules/
+dist/
+build/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
