@@ -12,6 +12,19 @@ Creator Toolkit is a FastAPI application that stitches together creative tooling
 - **YouTube publishing** – OAuth helper endpoints to refresh upload tokens, normalize scheduling data, and upload finished videos directly.
 - **Dashboard UI shell** – Jinja2 template and static assets that surface the Imagine, Create, and Publish workflows in the browser.
 
+## Roles & Access
+
+The toolkit now includes role-based access control (RBAC) with four tiers:
+
+| Role   | Capabilities |
+|--------|--------------|
+| **admin** | Full platform control: manage SMTP/system settings, publish content, update user roles, and maintain all provider keys. |
+| **owner** | Produce and publish content for their environment and manage their own provider keys. |
+| **editor** | Generate, QA, and package content but cannot publish or manage API keys. |
+| **viewer** | Read-only access to dashboard data and generated assets. |
+
+New users are provisioned as **owners** by default. API endpoints and the dashboard automatically adapt their behaviour based on the active role.
+
 #### Dashboard Data Binding
 - `GET /dashboard/data` — Returns combined JSON for the current user's profile, connected service status, recent jobs, and recent assets.
 - The `/dashboard` page now dynamically fetches and displays this data for a live overview.
@@ -60,9 +73,16 @@ python scripts/worker.py
 Visit `http://localhost:8000/dashboard` to use the dashboard shell. Authenticated developer accounts can open the API docs at `/docs` once verified.
 The `templates/dashboard.html` view now loads its profile, provider, job, and asset cards by fetching `/dashboard/data` on page load.
 
+## First-Run Admin & Password Rotation
+
+- When the application starts with an empty user database it automatically bootstraps a default administrator account: `admin@local` with the temporary password `CHANGE_ME_NOW`.
+- The account is marked as verified and flagged with `must_change_password`. The login response and dashboard both surface this flag so the admin rotates the password immediately.
+- Updating the password via `POST /profile/password` clears the rotation requirement. Subsequent logins include the updated status in the profile payload.
+- Administrators can manage SMTP credentials via the new `/admin/system/smtp` endpoints; non-admins receive `403 Forbidden` responses.
+
 ## Testing
 
-We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files.
+We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access) and password rotation behaviour.
 
 To execute the tests locally:
 
@@ -79,7 +99,11 @@ Before running the tests, install the dependencies from `requirements.txt` and s
 - `POST /auth/register` – Create a user account.
 - `POST /auth/login` – Authenticate and receive a JWT.
 - `POST /profile/keys` – Store or update encrypted provider API keys.
+- `POST /profile/role` – Admin-only role management for self or other users.
 - `POST /qa/batch_async` – Queue a QA batch job for processing.
+- `GET /admin/system/smtp` – Retrieve the effective SMTP configuration (admin only).
+- `POST /admin/system/smtp` – Save SMTP configuration overrides (admin only).
+- `POST /admin/system/smtp/test` – Send a test email using stored SMTP credentials (admin only).
 
 ## Typical workflow
 

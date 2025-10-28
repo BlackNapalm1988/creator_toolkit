@@ -34,16 +34,28 @@ const profileNameInput = document.getElementById("profileName");
 const profileEmailInput = document.getElementById("profileEmail");
 const profileFormFeedback = document.getElementById("profileFormFeedback");
 const profileVerificationStatus = document.getElementById("profileVerificationStatus");
-const profileAccessGroupLabel = document.getElementById("profileAccessGroup");
+const profileRoleLabel = document.getElementById("profileRole");
+const rolePermissionsList = document.getElementById("rolePermissionsList");
+const passwordResetBanner = document.getElementById("passwordResetBanner");
+const openPasswordResetButton = document.getElementById("openPasswordResetButton");
 
 const passwordForm = document.getElementById("passwordForm");
 const currentPasswordInput = document.getElementById("currentPassword");
 const newPasswordInput = document.getElementById("newPassword");
 const passwordFormFeedback = document.getElementById("passwordFormFeedback");
 
-const accessGroupForm = document.getElementById("accessGroupForm");
-const accessGroupSelect = document.getElementById("accessGroupSelect");
-const accessGroupFeedback = document.getElementById("accessGroupFeedback");
+const smtpConfigSection = document.getElementById("smtpConfigSection");
+const smtpConfigForm = document.getElementById("smtpConfigForm");
+const smtpConfigFeedback = document.getElementById("smtpConfigFeedback");
+const smtpHostInput = document.getElementById("smtpHost");
+const smtpPortInput = document.getElementById("smtpPort");
+const smtpUsernameInput = document.getElementById("smtpUsername");
+const smtpPasswordInput = document.getElementById("smtpPassword");
+const smtpFromAddressInput = document.getElementById("smtpFromAddress");
+const smtpUseTlsInput = document.getElementById("smtpUseTls");
+const smtpTestForm = document.getElementById("smtpTestForm");
+const smtpTestRecipientInput = document.getElementById("smtpTestRecipient");
+const smtpTestFeedback = document.getElementById("smtpTestFeedback");
 
 const apiKeyForm = document.getElementById("apiKeyForm");
 const apiKeyProviderInput = document.getElementById("apiKeyProvider");
@@ -66,13 +78,47 @@ const dashboardProviders = document.getElementById("dashboardProviders");
 const recentJobsBody = document.getElementById("recentJobsBody");
 const recentAssetsList = document.getElementById("recentAssetsList");
 
-const protectedControls = [
+const generateControls = [
   document.getElementById("imagineSendBtn"),
   document.getElementById("musicGenerateBtn"),
   document.getElementById("videoGenerateBtn"),
   document.getElementById("masterBuildBtn"),
+].filter(Boolean);
+
+const publishControls = [
   document.getElementById("ytUploadBtn"),
-];
+].filter(Boolean);
+
+const ROLE_CAPABILITIES = {
+  admin: { generate: true, publish: true, manageKeys: true, admin: true },
+  owner: { generate: true, publish: true, manageKeys: true, admin: false },
+  editor: { generate: true, publish: false, manageKeys: false, admin: false },
+  viewer: { generate: false, publish: false, manageKeys: false, admin: false },
+};
+
+const ROLE_DESCRIPTIONS = {
+  admin: [
+    "Configure system SMTP settings.",
+    "Publish content and manage all API keys.",
+    "Manage roles for other users.",
+  ],
+  owner: [
+    "Create and publish content for your workspace.",
+    "Manage your own API keys and credentials.",
+  ],
+  editor: [
+    "Create and QA content.",
+    "Package projects for review (no publishing).",
+  ],
+  viewer: [
+    "View dashboards and assets in read-only mode.",
+  ],
+};
+
+function getRoleCapabilities(role) {
+  const key = (role || "viewer").toLowerCase();
+  return ROLE_CAPABILITIES[key] || ROLE_CAPABILITIES.viewer;
+}
 
 let lastDashboardUserId = null;
 let dashboardLoading = false;
@@ -131,6 +177,7 @@ function resetDashboardWidgetsForLoggedOut() {
   clearDashboardError();
   dashboardLoading = false;
   lastDashboardUserId = null;
+  if (passwordResetBanner) passwordResetBanner.classList.add("hidden");
 }
 
 function formatTimestamp(value) {
@@ -156,8 +203,9 @@ function renderDashboardData(payload) {
     const entries = [
       { label: "Display Name", value: profile.display_name || "—" },
       { label: "User ID", value: profile.id !== undefined && profile.id !== null ? profile.id : "—" },
-      { label: "Access Group", value: profile.access_group || "—" },
+      { label: "Role", value: (profile.role || "viewer").toString().charAt(0).toUpperCase() + (profile.role || "viewer").toString().slice(1) },
       { label: "Email Verified", value: profile.email_verified ? "Yes" : "No" },
+      { label: "Password Change Required", value: profile.must_change_password ? "Yes" : "No" },
     ];
     entries.forEach(({ label, value }) => {
       const li = document.createElement("li");
@@ -362,10 +410,14 @@ function openProfileModal() {
   profileModal.classList.remove("hidden");
   setFeedback(profileFormFeedback, "");
   setFeedback(passwordFormFeedback, "");
-  setFeedback(accessGroupFeedback, "");
   setFeedback(apiKeysFeedback, "");
+  setFeedback(smtpConfigFeedback, "");
+  setFeedback(smtpTestFeedback, "");
   syncModalOpenState();
   loadApiKeys();
+  if (authState.capabilities && authState.capabilities.admin) {
+    loadSmtpSettings();
+  }
 }
 
 function closeProfileModal(options = {}) {
@@ -395,16 +447,52 @@ function setFeedback(el, message, type) {
   if (type === "success") el.classList.add("success");
 }
 
-function updateProtectedUI(locked) {
-  protectedControls.forEach(btn => {
+function setApiKeyFormEnabled(enabled) {
+  if (!apiKeyForm) return;
+  const elements = Array.from(apiKeyForm.elements || []);
+  elements.forEach(el => {
+    if (!el) return;
+    if (el.tagName === "BUTTON" || el.tagName === "INPUT" || el.tagName === "SELECT") {
+      el.disabled = !enabled;
+    }
+  });
+}
+
+function updateFeatureAvailability({ verified, capabilities }) {
+  const verifyReason = "Verify your email to use this feature";
+  const generateReason = "Your role cannot generate content.";
+  const publishReason = "Your role cannot publish content.";
+
+  generateControls.forEach(btn => {
     if (!btn) return;
-    if (locked) {
-      btn.dataset.locked = "1";
+    const shouldLock = !verified || !capabilities.generate;
+    if (shouldLock) {
+      btn.dataset.locked = !verified ? "verify" : "role";
       btn.disabled = true;
-      btn.title = "Verify your email to use this feature";
-    } else if (btn.dataset.locked === "1") {
-      delete btn.dataset.locked;
-      btn.removeAttribute("title");
+      btn.title = !verified ? verifyReason : generateReason;
+    } else {
+      if (btn.dataset.locked) {
+        delete btn.dataset.locked;
+        btn.removeAttribute("title");
+      }
+      if (!btn.classList.contains("busy")) {
+        btn.disabled = false;
+      }
+    }
+  });
+
+  publishControls.forEach(btn => {
+    if (!btn) return;
+    const shouldLock = !verified || !capabilities.publish;
+    if (shouldLock) {
+      btn.dataset.locked = !verified ? "verify" : "role";
+      btn.disabled = true;
+      btn.title = !verified ? verifyReason : publishReason;
+    } else {
+      if (btn.dataset.locked) {
+        delete btn.dataset.locked;
+        btn.removeAttribute("title");
+      }
       if (!btn.classList.contains("busy")) {
         btn.disabled = false;
       }
@@ -419,24 +507,42 @@ function applyUserState() {
     if (userActions) userActions.classList.add("hidden");
     if (docsLink) docsLink.classList.add("hidden");
     document.body.classList.remove("dev-mode");
-    updateProtectedUI(true);
+    updateFeatureAvailability({ verified: false, capabilities: ROLE_CAPABILITIES.viewer });
     if (verificationBanner) verificationBanner.classList.add("hidden");
+    if (passwordResetBanner) passwordResetBanner.classList.add("hidden");
+    setApiKeyFormEnabled(false);
+    if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
+    authState.capabilities = ROLE_CAPABILITIES.viewer;
     return;
   }
+
+  const role = (user.role || "viewer").toLowerCase();
+  const capabilities = getRoleCapabilities(role);
+  authState.capabilities = capabilities;
+
   if (userActions) userActions.classList.remove("hidden");
   if (userGreeting) {
     const firstName = user.full_name ? user.full_name.split(" ")[0] : user.email;
     userGreeting.textContent = firstName ? `Hi, ${firstName}` : "";
   }
-  const group = user.access_group || "User";
-  document.body.classList.toggle("dev-mode", group === "Dev");
-  if (docsLink) docsLink.classList.toggle("hidden", group !== "Dev");
+
+  document.body.classList.toggle("dev-mode", capabilities.admin);
+  if (docsLink) docsLink.classList.toggle("hidden", !capabilities.admin);
+
   const verified = !!user.is_verified;
-  updateProtectedUI(!verified);
+  updateFeatureAvailability({ verified, capabilities });
   if (verificationBanner) verificationBanner.classList.toggle("hidden", verified);
   if (verified) {
     hideVerificationOverlay();
   }
+
+  if (passwordResetBanner) {
+    passwordResetBanner.classList.toggle("hidden", !user.must_change_password);
+  }
+
+  setApiKeyFormEnabled(capabilities.manageKeys);
+  if (smtpConfigSection) smtpConfigSection.classList.toggle("hidden", !capabilities.admin);
+
   populateProfileSummary();
   loadDashboardData(true);
 }
@@ -447,11 +553,19 @@ function populateProfileSummary() {
   if (profileVerificationStatus) {
     profileVerificationStatus.textContent = user.is_verified ? "Email verified" : "Verification required";
   }
-  if (profileAccessGroupLabel) {
-    profileAccessGroupLabel.textContent = `Access Group: ${user.access_group || "User"}`;
+  const role = (user.role || "viewer").toLowerCase();
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+  if (profileRoleLabel) {
+    profileRoleLabel.textContent = `Role: ${roleLabel}`;
   }
-  if (accessGroupSelect) {
-    accessGroupSelect.value = user.access_group || "User";
+  if (rolePermissionsList) {
+    rolePermissionsList.innerHTML = "";
+    const items = ROLE_DESCRIPTIONS[role] || ROLE_DESCRIPTIONS.viewer;
+    items.forEach(text => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      rolePermissionsList.appendChild(li);
+    });
   }
 }
 
@@ -557,12 +671,22 @@ async function loadApiKeys() {
   setFeedback(apiKeysFeedback, "");
   if (!authState.user) {
     apiKeysList.innerHTML = '<p class="help-text">Log in to manage API keys.</p>';
+    setApiKeyFormEnabled(false);
     return;
   }
   if (!authState.user.is_verified) {
     apiKeysList.innerHTML = '<p class="help-text">Verify your email to manage API keys.</p>';
+    setApiKeyFormEnabled(false);
     return;
   }
+  const capabilities = authState.capabilities || getRoleCapabilities(authState.user.role);
+  if (!capabilities.manageKeys) {
+    apiKeysList.innerHTML = '<p class="help-text">Your role cannot manage API keys.</p>';
+    setFeedback(apiKeysFeedback, "", null);
+    setApiKeyFormEnabled(false);
+    return;
+  }
+  setApiKeyFormEnabled(true);
   const resp = await getJSON("/profile/keys");
   if (!resp.ok) {
     const message = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Could not load API keys.";
@@ -600,6 +724,39 @@ async function loadApiKeys() {
   });
 }
 
+async function loadSmtpSettings() {
+  if (!smtpConfigSection) return;
+  const isAdmin = authState.capabilities && authState.capabilities.admin;
+  smtpConfigSection.classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) {
+    return;
+  }
+
+  if (smtpPasswordInput) smtpPasswordInput.value = "";
+  setFeedback(smtpConfigFeedback, "");
+  const resp = await getJSON("/admin/system/smtp");
+  if (!resp.ok) {
+    const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Unable to load SMTP settings.";
+    setFeedback(smtpConfigFeedback, msg, "error");
+    return;
+  }
+  const data = resp.data || {};
+  if (smtpHostInput) smtpHostInput.value = data.host || "";
+  if (smtpPortInput) smtpPortInput.value = data.port !== undefined && data.port !== null ? data.port : "";
+  if (smtpUsernameInput) smtpUsernameInput.value = data.username || "";
+  if (smtpFromAddressInput) smtpFromAddressInput.value = data.from_address || "";
+  if (smtpUseTlsInput) smtpUseTlsInput.checked = data.use_tls !== false;
+  if (smtpConfigFeedback) {
+    if (data.configured_via_env) {
+      setFeedback(smtpConfigFeedback, "Currently using environment configuration. Saving will override it.");
+    } else if (data.password_set) {
+      setFeedback(smtpConfigFeedback, "SMTP password is set. Leave the field blank to keep the current password.");
+    } else {
+      setFeedback(smtpConfigFeedback, "", null);
+    }
+  }
+}
+
 authTabs.forEach(tab => {
   tab.addEventListener("click", () => {
     setActiveAuthMode(tab.dataset.mode || "login");
@@ -620,10 +777,13 @@ if (loginForm) {
         setFeedback(authFeedback, msg, "error");
         return;
       }
-      const { token, user, requires_verification } = resp.data || {};
+      const { token, user, requires_verification, must_change_password } = resp.data || {};
       if (!token || !user) {
         setFeedback(authFeedback, "Unexpected login response.", "error");
         return;
+      }
+      if (typeof must_change_password !== "undefined") {
+        user.must_change_password = must_change_password;
       }
       setToken(token);
       authState.user = user;
@@ -722,6 +882,15 @@ if (verifyLogoutButton) {
   });
 }
 
+if (openPasswordResetButton) {
+  openPasswordResetButton.addEventListener("click", () => {
+    openProfileModal();
+    if (passwordForm) {
+      passwordForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+}
+
 if (profileForm) {
   profileForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -773,31 +942,13 @@ if (passwordForm) {
       }
       currentPasswordInput.value = "";
       newPasswordInput.value = "";
-      setFeedback(passwordFormFeedback, "Password updated.", "success");
-    });
-  });
-}
-
-if (accessGroupForm) {
-  accessGroupForm.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    if (!accessGroupSelect) return;
-    const value = accessGroupSelect.value;
-    const submitBtn = accessGroupForm.querySelector("button[type='submit']");
-    await withButtonWorkingState(submitBtn, async () => {
-      const resp = await postJSON("/profile/access-group", { access_group: value });
-      if (!resp.ok) {
-        const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Failed to update access group.";
-        setFeedback(accessGroupFeedback, msg, "error");
-        return;
-      }
       if (resp.data && resp.data.user) {
         authState.user = resp.data.user;
         applyUserState();
       } else {
         await refreshSession();
       }
-      setFeedback(accessGroupFeedback, `Access group set to ${value}.`, "success");
+      setFeedback(passwordFormFeedback, "Password updated.", "success");
     });
   });
 }
@@ -814,6 +965,11 @@ if (apiKeyForm) {
       setFeedback(apiKeysFeedback, "Provider and secret are required.", "error");
       return;
     }
+    const capabilities = authState.capabilities || getRoleCapabilities(authState.user && authState.user.role);
+    if (!capabilities.manageKeys) {
+      setFeedback(apiKeysFeedback, "Your role cannot manage API keys.", "error");
+      return;
+    }
     const submitBtn = apiKeyForm.querySelector("button[type='submit']");
     await withButtonWorkingState(submitBtn, async () => {
       const resp = await postJSON("/profile/keys", payload);
@@ -826,6 +982,68 @@ if (apiKeyForm) {
       setFeedback(apiKeysFeedback, `${payload.provider} key saved.`, "success");
       await loadApiKeys();
       await loadDashboardData(true);
+    });
+  });
+}
+
+if (smtpConfigForm) {
+  smtpConfigForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!authState.capabilities || !authState.capabilities.admin) {
+      setFeedback(smtpConfigFeedback, "Admin role required to update SMTP settings.", "error");
+      return;
+    }
+    const payload = {};
+    if (smtpHostInput) payload.host = smtpHostInput.value.trim();
+    if (smtpPortInput && smtpPortInput.value !== "") {
+      const portValue = Number(smtpPortInput.value);
+      if (!Number.isNaN(portValue)) {
+        payload.port = portValue;
+      }
+    }
+    payload.use_tls = smtpUseTlsInput ? !!smtpUseTlsInput.checked : true;
+    if (smtpUsernameInput) payload.username = smtpUsernameInput.value.trim();
+    if (smtpFromAddressInput) payload.from_address = smtpFromAddressInput.value.trim();
+    if (smtpPasswordInput && smtpPasswordInput.value) {
+      payload.password = smtpPasswordInput.value;
+    }
+    const submitBtn = smtpConfigForm.querySelector("button[type='submit']");
+    await withButtonWorkingState(submitBtn, async () => {
+      const resp = await postJSON("/admin/system/smtp", payload);
+      if (!resp.ok) {
+        const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Failed to save SMTP settings.";
+        setFeedback(smtpConfigFeedback, msg, "error");
+        return;
+      }
+      if (smtpPasswordInput) smtpPasswordInput.value = "";
+      setFeedback(smtpConfigFeedback, "SMTP settings saved.", "success");
+      await loadSmtpSettings();
+    });
+  });
+}
+
+if (smtpTestForm) {
+  smtpTestForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!authState.capabilities || !authState.capabilities.admin) {
+      setFeedback(smtpTestFeedback, "Admin role required to send test emails.", "error");
+      return;
+    }
+    if (!smtpTestRecipientInput) return;
+    const to = smtpTestRecipientInput.value.trim();
+    if (!to) {
+      setFeedback(smtpTestFeedback, "Enter a test recipient email.", "error");
+      return;
+    }
+    const submitBtn = smtpTestForm.querySelector("button[type='submit']");
+    await withButtonWorkingState(submitBtn, async () => {
+      const resp = await postJSON("/admin/system/smtp/test", { to });
+      if (!resp.ok) {
+        const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "SMTP test failed.";
+        setFeedback(smtpTestFeedback, msg, "error");
+        return;
+      }
+      setFeedback(smtpTestFeedback, "Test email sent.", "success");
     });
   });
 }

@@ -25,6 +25,11 @@
     <button id="openVerificationButton" class="ghost-btn">Verify Now</button>
   </div>
 
+  <div id="passwordResetBanner" class="verification-banner warning hidden">
+    <span>Password update required. Update it from your profile to continue.</span>
+    <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
+  </div>
+
   <!-- Tab buttons -->
   <nav class="tabs">
     <button class="tab-btn active" data-target="tab-imagine">IMAGINE</button>
@@ -334,7 +339,7 @@
     <div class="modal-card wide">
       <button class="close-modal" id="closeProfileModal" aria-label="Close profile">&times;</button>
       <h2 class="modal-title">Your Profile</h2>
-      <p class="modal-subtitle">Manage account details, access group, and API keys.</p>
+      <p class="modal-subtitle">Manage account details, roles, and API keys.</p>
 
       <section class="modal-section">
         <h3>Account Information</h3>
@@ -352,7 +357,7 @@
         <div id="profileFormFeedback" class="form-feedback"></div>
         <div class="profile-meta">
           <span id="profileVerificationStatus"></span>
-          <span id="profileAccessGroup"></span>
+          <span id="profileRole"></span>
         </div>
       </section>
 
@@ -373,18 +378,12 @@
       </section>
 
       <section class="modal-section">
-        <h3>Access Group</h3>
-        <form id="accessGroupForm" class="modal-form inline active">
-          <label>Select Role
-            <select id="accessGroupSelect">
-              <option value="User">User</option>
-              <option value="Dev">Dev</option>
-            </select>
-          </label>
-          <button type="submit">Update Role</button>
-        </form>
-        <div id="accessGroupFeedback" class="form-feedback"></div>
-        <p class="help-text">Dev members can view raw JSON responses and access API docs.</p>
+        <h3>Role &amp; Permissions</h3>
+        <div class="profile-role-overview">
+          <p id="profileRole" class="profile-role-label"></p>
+          <ul id="rolePermissionsList" class="help-text"></ul>
+        </div>
+        <p class="help-text">Role assignments are managed by administrators.</p>
       </section>
 
       <section class="modal-section">
@@ -403,6 +402,45 @@
           <button type="submit">Save API Key</button>
         </form>
         <p class="help-text">Stored keys are encrypted. You can reset any provider by removing and adding it again.</p>
+      </section>
+
+      <section class="modal-section hidden" id="smtpConfigSection">
+        <h3>SMTP Settings (Admin Only)</h3>
+        <p class="help-text">Configure outgoing email for verification and other system messages.</p>
+        <form id="smtpConfigForm" class="modal-form inline active">
+          <div class="two-col">
+            <label>Host
+              <input id="smtpHost" type="text" placeholder="smtp.example.com" />
+            </label>
+            <label>Port
+              <input id="smtpPort" type="number" min="0" placeholder="587" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label>Username
+              <input id="smtpUsername" type="text" />
+            </label>
+            <label>From Address
+              <input id="smtpFromAddress" type="email" placeholder="no-reply@example.com" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label><input id="smtpUseTls" type="checkbox" checked /> Use TLS</label>
+            <label>Password
+              <input id="smtpPassword" type="password" placeholder="Leave blank to keep existing" />
+            </label>
+          </div>
+          <button type="submit">Save SMTP Settings</button>
+        </form>
+        <div id="smtpConfigFeedback" class="form-feedback"></div>
+        <form id="smtpTestForm" class="modal-form inline">
+          <label>Test Recipient
+            <input id="smtpTestRecipient" type="email" placeholder="admin@example.com" required />
+          </label>
+          <button type="submit">Send Test Email</button>
+        </form>
+        <div id="smtpTestFeedback" class="form-feedback"></div>
+        <p class="help-text">Passwords are stored encrypted when a Fernet key is configured.</p>
       </section>
     </div>
   </div>
