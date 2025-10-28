@@ -4,14 +4,19 @@ from modules.packager import build_master_from_loop, probe_audio_duration
 def job_handle_package(jid: str, payload: dict):
     import os
     loop = payload["loop_video_path"]; audio = payload["audio_path"]
-    fade_in = int(payload.get("fade_in_ms", 500)); fade_out = int(payload.get("fade_out_ms", 800))
     out_path = payload.get("out_path") or os.path.join("static","uploads","master.mp4")
     set_progress(jid, 5); append_log(jid, "Probing audio...")
     ms = probe_audio_duration(audio)
     if ms <= 0:
         set_error(jid, "Invalid audio file (duration <= 0)"); return
     set_progress(jid, 20); append_log(jid, "Concatenating & muxing...")
-    res = build_master_from_loop(loop, audio, out_path, fade_in, fade_out)
+    res = build_master_from_loop(
+        loop_clip_path=loop,
+        music_audio_path=audio,
+        out_path=out_path,
+        target_ms=ms,
+        voiceover_audio_path=None,
+    )
     if "error" in res:
         set_error(jid, f"Packaging failed: {res}"); return
     set_progress(jid, 95); append_log(jid, "Finalizing…")

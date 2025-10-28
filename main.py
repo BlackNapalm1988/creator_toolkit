@@ -1881,19 +1881,21 @@ class PackageReqV2(BaseModel):
 @app.post("/package")
 def package(req: PackageReq):
     out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
-    res = build_master_from_loop(
-        req.loop_video_path,
-        req.audio_path,
-        out_path,
-        req.fade_in_ms,
-        req.fade_out_ms,
-    )
-    if "error" in res:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "packager failed", "detail": res},
-        )
     audio_ms = probe_audio_duration(req.audio_path)
+    if audio_ms <= 0:
+        raise HTTPException(status_code=400, detail="Invalid audio file (duration <= 0)")
+
+    try:
+        res = build_master_from_loop(
+            loop_clip_path=req.loop_video_path,
+            music_audio_path=req.audio_path,
+            out_path=out_path,
+            target_ms=audio_ms,
+            voiceover_audio_path=None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"packager failed: {exc}")
+
     return {
         "master_path": out_path,
         "audio_ms": audio_ms,
