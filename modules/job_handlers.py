@@ -1,53 +1,108 @@
-from modules.jobs import set_progress, append_log, set_result, set_error
+"""Long-running job handlers used by the background worker."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import time
+from typing import Dict, List
+
+from modules.jobs import append_log, set_error, set_progress, set_result
 from modules.packager import build_master_from_loop, probe_audio_duration
 
-def job_handle_package(jid: str, payload: dict):
-    import os
-    loop = payload["loop_video_path"]; audio = payload["audio_path"]
-    out_path = payload.get("out_path") or os.path.join("static","uploads","master.mp4")
-    set_progress(jid, 5); append_log(jid, "Probing audio...")
-    ms = probe_audio_duration(audio)
-    if ms <= 0:
-        set_error(jid, "Invalid audio file (duration <= 0)"); return
-    set_progress(jid, 20); append_log(jid, "Concatenating & muxing...")
-    res = build_master_from_loop(
-        loop_clip_path=loop,
-        music_audio_path=audio,
+
+def job_handle_package(job_id: str, payload: Dict[str, str]) -> None:
+    """Combine a looped video clip and music track into a mastered export."""
+
+    loop_path = payload["loop_video_path"]
+    audio_path = payload["audio_path"]
+    out_path = payload.get("out_path") or os.path.join("static", "uploads", "master.mp4")
+
+    set_progress(job_id, 5)
+    append_log(job_id, "Probing audio...")
+    duration_ms = probe_audio_duration(audio_path)
+    if duration_ms <= 0:
+        set_error(job_id, "Invalid audio file (duration <= 0)")
+        return
+
+    set_progress(job_id, 20)
+    append_log(job_id, "Concatenating & muxing...")
+    result = build_master_from_loop(
+        loop_clip_path=loop_path,
+        music_audio_path=audio_path,
         out_path=out_path,
-        target_ms=ms,
+        target_ms=duration_ms,
         voiceover_audio_path=None,
     )
-    if "error" in res:
-        set_error(jid, f"Packaging failed: {res}"); return
-    set_progress(jid, 95); append_log(jid, "Finalizing…")
-    set_result(jid, {"master_path": out_path, "audio_ms": ms, "detail": res})
 
-def job_handle_qa_batch(jid: str, payload: dict):
-    import os, hashlib, time
+    if "error" in result:
+        set_error(job_id, f"Packaging failed: {result}")
+        return
+
+    set_progress(job_id, 95)
+    append_log(job_id, "Finalizing…")
+    set_result(
+        job_id,
+        {"master_path": out_path, "audio_ms": duration_ms, "detail": result},
+    )
+
+
+def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
+    """Perform a lightweight QA scan against a batch of rendered videos."""
+
     def compute_loop_score(video_path: str) -> float:
-        try: size = os.path.getsize(video_path)
-        except: size = 1
-        h = int(hashlib.sha256(video_path.encode()).hexdigest(), 16) % 1000
-        return round(min(0.99, 0.65 + (size % 100000)/100000 * 0.3 + (h/1000)*0.05), 3)
-    def compute_style_score(video_path: str, palette: list) -> int:
-        base = (len(palette)*13 + len(os.path.basename(video_path))*3) % 40 + 60
+        try:
+            size = os.path.getsize(video_path)
+        except OSError:
+            size = 1
+        pseudo_random = int(hashlib.sha256(video_path.encode()).hexdigest(), 16) % 1000
+        return round(
+            min(0.99, 0.65 + (size % 100000) / 100000 * 0.3 + (pseudo_random / 1000) * 0.05),
+            3,
+        )
+
+    def compute_style_score(video_path: str, palette: List[str]) -> int:
+        base = (len(palette) * 13 + len(os.path.basename(video_path)) * 3) % 40 + 60
         return int(base)
+
     def detect_watermark(video_path: str) -> bool:
         return "wm" in os.path.basename(video_path).lower()
 
-    paths = payload["paths"]; palette = payload.get("palette", [])
-    thresholds = payload.get("thresholds", {"loop":0.92,"style":75})
-    results, total = [], max(1, len(paths))
-    for i, p in enumerate(paths, start=1):
-        if not os.path.exists(p):
-            results.append({"path": p, "error":"not found"})
+    paths = payload["paths"]  # type: ignore[index]
+    palette = payload.get("palette", [])  # type: ignore[assignment]
+    thresholds = payload.get("thresholds", {"loop": 0.92, "style": 75})  # type: ignore[assignment]
+
+    results = []
+    total = max(1, len(paths))
+    for index, path in enumerate(paths, start=1):
+        if not os.path.exists(path):
+            results.append({"path": path, "error": "not found"})
         else:
-            loop_score = compute_loop_score(p)
-            style_score = compute_style_score(p, palette)
-            wm = detect_watermark(p)
-            verdict = "PASS" if (loop_score >= thresholds.get("loop",0.92) and style_score >= thresholds.get("style",75) and not wm) else "RETRY"
-            results.append({"path": p, "loop_score": loop_score, "style_score": style_score, "watermark": wm, "verdict": verdict})
-        set_progress(jid, int(100*i/total))
-        if i % 3 == 0: append_log(jid, f"Processed {i}/{total}")
+            loop_score = compute_loop_score(path)
+            style_score = compute_style_score(path, palette)
+            watermark = detect_watermark(path)
+            verdict = (
+                "PASS"
+                if (
+                    loop_score >= thresholds.get("loop", 0.92)
+                    and style_score >= thresholds.get("style", 75)
+                    and not watermark
+                )
+                else "RETRY"
+            )
+            results.append(
+                {
+                    "path": path,
+                    "loop_score": loop_score,
+                    "style_score": style_score,
+                    "watermark": watermark,
+                    "verdict": verdict,
+                }
+            )
+
+        set_progress(job_id, int(100 * index / total))
+        if index % 3 == 0:
+            append_log(job_id, f"Processed {index}/{total}")
         time.sleep(0.01)
-    set_result(jid, {"results": results})
+
+    set_result(job_id, {"results": results})
