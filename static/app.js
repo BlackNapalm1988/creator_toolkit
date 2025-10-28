@@ -59,6 +59,13 @@ const docsLink = document.getElementById("docsLink");
 const verificationBanner = document.getElementById("verificationBanner");
 const openVerificationButton = document.getElementById("openVerificationButton");
 
+const dashboardInfo = document.getElementById("dashboardInfo");
+const dashboardError = document.getElementById("dashboardError");
+const dashboardProfileList = document.getElementById("dashboardProfileList");
+const dashboardProviders = document.getElementById("dashboardProviders");
+const recentJobsBody = document.getElementById("recentJobsBody");
+const recentAssetsList = document.getElementById("recentAssetsList");
+
 const protectedControls = [
   document.getElementById("imagineSendBtn"),
   document.getElementById("musicGenerateBtn"),
@@ -66,6 +73,225 @@ const protectedControls = [
   document.getElementById("masterBuildBtn"),
   document.getElementById("ytUploadBtn"),
 ];
+
+let lastDashboardUserId = null;
+let dashboardLoading = false;
+
+function setDashboardMessage(message) {
+  if (!dashboardInfo) return;
+  dashboardInfo.textContent = message || "";
+  dashboardInfo.classList.toggle("hidden", !message);
+}
+
+function clearDashboardError() {
+  if (!dashboardError) return;
+  dashboardError.textContent = "";
+  dashboardError.classList.add("hidden");
+}
+
+function showDashboardError(message) {
+  if (!dashboardError) return;
+  dashboardError.textContent = message || "Unable to load dashboard data.";
+  dashboardError.classList.remove("hidden");
+}
+
+function resetDashboardWidgetsForLoggedOut() {
+  if (dashboardProfileList) {
+    dashboardProfileList.innerHTML = "";
+    const item = document.createElement("li");
+    item.className = "dashboard-placeholder";
+    item.textContent = "Sign in to view your profile.";
+    dashboardProfileList.appendChild(item);
+  }
+  if (dashboardProviders) {
+    dashboardProviders.innerHTML = "";
+    const msg = document.createElement("p");
+    msg.className = "dashboard-placeholder";
+    msg.textContent = "Sign in to view connected services.";
+    dashboardProviders.appendChild(msg);
+  }
+  if (recentJobsBody) {
+    recentJobsBody.innerHTML = "";
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "dashboard-placeholder";
+    cell.textContent = "Sign in to view recent jobs.";
+    row.appendChild(cell);
+    recentJobsBody.appendChild(row);
+  }
+  if (recentAssetsList) {
+    recentAssetsList.innerHTML = "";
+    const assetItem = document.createElement("li");
+    assetItem.className = "dashboard-placeholder";
+    assetItem.textContent = "Sign in to view recent assets.";
+    recentAssetsList.appendChild(assetItem);
+  }
+  setDashboardMessage("Sign in to view your account overview.");
+  clearDashboardError();
+  dashboardLoading = false;
+  lastDashboardUserId = null;
+}
+
+function formatTimestamp(value) {
+  if (!value) return "—";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toLocaleString();
+}
+
+function formatProgress(value) {
+  if (value === null || value === undefined) return "—";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  return `${Math.round(num)}%`;
+}
+
+function renderDashboardData(payload) {
+  if (!payload) return;
+
+  const profile = payload.user || {};
+  if (dashboardProfileList) {
+    dashboardProfileList.innerHTML = "";
+    const entries = [
+      { label: "Display Name", value: profile.display_name || "—" },
+      { label: "User ID", value: profile.id !== undefined && profile.id !== null ? profile.id : "—" },
+      { label: "Access Group", value: profile.access_group || "—" },
+      { label: "Email Verified", value: profile.email_verified ? "Yes" : "No" },
+    ];
+    entries.forEach(({ label, value }) => {
+      const li = document.createElement("li");
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "label";
+      labelSpan.textContent = `${label}:`;
+      const valueSpan = document.createElement("span");
+      valueSpan.textContent = value;
+      li.appendChild(labelSpan);
+      li.appendChild(valueSpan);
+      dashboardProfileList.appendChild(li);
+    });
+  }
+
+  if (dashboardProviders) {
+    dashboardProviders.innerHTML = "";
+    const providerMap = [
+      { key: "openai", label: "OpenAI" },
+      { key: "elevenlabs", label: "ElevenLabs" },
+      { key: "youtube", label: "YouTube" },
+    ];
+    providerMap.forEach(({ key, label }) => {
+      const status = payload.providers && payload.providers[key] === "connected" ? "connected" : "missing";
+      const row = document.createElement("div");
+      row.className = "status-row";
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = label;
+      const badge = document.createElement("span");
+      badge.className = `status-pill ${status}`;
+      badge.textContent = status === "connected" ? "Connected" : "Missing";
+      row.appendChild(nameSpan);
+      row.appendChild(badge);
+      dashboardProviders.appendChild(row);
+    });
+  }
+
+  if (recentJobsBody) {
+    recentJobsBody.innerHTML = "";
+    const jobs = Array.isArray(payload.recent_jobs) ? payload.recent_jobs : [];
+    if (!jobs.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 5;
+      cell.className = "dashboard-placeholder";
+      cell.textContent = "No recent jobs.";
+      row.appendChild(cell);
+      recentJobsBody.appendChild(row);
+    } else {
+      jobs.forEach(job => {
+        const row = document.createElement("tr");
+        const cells = [
+          job.id || "—",
+          job.type || "—",
+          job.status || "—",
+          formatProgress(job.progress),
+          formatTimestamp(job.updated_at),
+        ];
+        cells.forEach(text => {
+          const cell = document.createElement("td");
+          cell.textContent = text;
+          row.appendChild(cell);
+        });
+        recentJobsBody.appendChild(row);
+      });
+    }
+  }
+
+  if (recentAssetsList) {
+    recentAssetsList.innerHTML = "";
+    const assets = Array.isArray(payload.recent_assets) ? payload.recent_assets : [];
+    if (!assets.length) {
+      const item = document.createElement("li");
+      item.className = "dashboard-placeholder";
+      item.textContent = "No assets to display.";
+      recentAssetsList.appendChild(item);
+    } else {
+      assets.forEach(asset => {
+        const item = document.createElement("li");
+        item.className = "dashboard-asset";
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "label";
+        labelSpan.textContent = `${(asset.asset_type || "Asset").toString().toUpperCase()}:`;
+        const detailsSpan = document.createElement("span");
+        const parts = [asset.file_path || "(no path)", formatTimestamp(asset.created_at)];
+        if (asset.project_id) {
+          parts.unshift(`Project ${asset.project_id}`);
+        }
+        detailsSpan.textContent = parts.join(" • ");
+        item.appendChild(labelSpan);
+        item.appendChild(detailsSpan);
+        recentAssetsList.appendChild(item);
+      });
+    }
+  }
+}
+
+async function loadDashboardData(force = false) {
+  const hasDashboard = dashboardProfileList || dashboardProviders || recentJobsBody || recentAssetsList;
+  if (!hasDashboard) return;
+
+  if (!authState.user) {
+    resetDashboardWidgetsForLoggedOut();
+    return;
+  }
+
+  const currentUserId = authState.user.id;
+  if (!force && (dashboardLoading || lastDashboardUserId === currentUserId)) {
+    return;
+  }
+
+  lastDashboardUserId = currentUserId;
+  dashboardLoading = true;
+  setDashboardMessage("Loading dashboard data...");
+  clearDashboardError();
+
+  try {
+    const resp = await getJSON("/dashboard/data");
+    if (!resp.ok || !resp.data) {
+      showDashboardError("Unable to load dashboard data");
+      setDashboardMessage("");
+      lastDashboardUserId = null;
+      return;
+    }
+    setDashboardMessage("");
+    renderDashboardData(resp.data);
+  } catch (err) {
+    console.error("dashboard load failed", err);
+    showDashboardError("Unable to load dashboard data");
+    setDashboardMessage("");
+    lastDashboardUserId = null;
+  } finally {
+    dashboardLoading = false;
+  }
+}
 
 function setToken(token) {
   authState.token = token || null;
@@ -189,6 +415,7 @@ function updateProtectedUI(locked) {
 function applyUserState() {
   const user = authState.user;
   if (!user) {
+    resetDashboardWidgetsForLoggedOut();
     if (userActions) userActions.classList.add("hidden");
     if (docsLink) docsLink.classList.add("hidden");
     document.body.classList.remove("dev-mode");
@@ -211,6 +438,7 @@ function applyUserState() {
     hideVerificationOverlay();
   }
   populateProfileSummary();
+  loadDashboardData(true);
 }
 
 function populateProfileSummary() {
@@ -364,6 +592,7 @@ async function loadApiKeys() {
         setFeedback(apiKeysFeedback, `${provider} key removed.`, "success");
       }
       await loadApiKeys();
+      await loadDashboardData(true);
     });
     item.appendChild(nameSpan);
     item.appendChild(removeBtn);
@@ -596,6 +825,7 @@ if (apiKeyForm) {
       apiKeySecretInput.value = "";
       setFeedback(apiKeysFeedback, `${payload.provider} key saved.`, "success");
       await loadApiKeys();
+      await loadDashboardData(true);
     });
   });
 }

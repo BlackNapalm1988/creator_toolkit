@@ -9,7 +9,7 @@ import secrets
 import smtplib
 import uuid
 from email.message import EmailMessage
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from urllib.parse import urlencode
@@ -542,6 +542,64 @@ def dashboard_page(request: Request):
     Frontend JS will call the API routes.
     """
     return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+@app.get("/dashboard/data", tags=["Dashboard"])
+def dashboard_data(user=Depends(current_user)):
+    """Return aggregated dashboard data for the signed-in user."""
+
+    # --- user summary ---
+    payload = _user_payload(user)
+    user_summary = {
+        "id": payload.get("id"),
+        "display_name": payload.get("full_name") or payload.get("email"),
+        "access_group": payload.get("access_group"),
+        "email_verified": bool(payload.get("is_verified")),
+    }
+
+    # --- provider connection status ---
+    stored_keys = list_user_keys(payload["id"])
+    providers = {}
+    for provider in ("openai", "elevenlabs", "youtube"):
+        providers[provider] = "connected" if stored_keys.get(provider) else "missing"
+
+    # --- recent jobs ---
+    def _to_iso(ts: int | None) -> str | None:
+        if not ts:
+            return None
+        try:
+            return datetime.datetime.fromtimestamp(
+                int(ts), tz=datetime.timezone.utc
+            ).isoformat()
+        except Exception:
+            return None
+
+    recent_jobs = []
+    for job in list_jobs(limit=10):
+        raw_progress = job.get("progress")
+        try:
+            progress_value = int(raw_progress) if raw_progress is not None else None
+        except (TypeError, ValueError):
+            progress_value = None
+        recent_jobs.append(
+            {
+                "id": job.get("id"),
+                "type": job.get("type"),
+                "status": job.get("status"),
+                "progress": progress_value,
+                "updated_at": _to_iso(job.get("updated_at")),
+            }
+        )
+
+    # --- assets placeholder ---
+    recent_assets: List[Dict[str, str]] = []
+
+    return {
+        "user": user_summary,
+        "providers": providers,
+        "recent_jobs": recent_jobs,
+        "recent_assets": recent_assets,
+    }
 
 @app.get("/imagine/models")
 def imagine_models(user=Depends(verified_user)):

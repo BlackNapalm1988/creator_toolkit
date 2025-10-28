@@ -38,6 +38,56 @@
     <section id="tab-imagine" class="tab-panel active">
       <h2>IMAGINE · Chat / Prompt R&D</h2>
 
+      <div class="card dashboard-overview">
+        <h3>Dashboard Overview</h3>
+        <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p>
+        <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p>
+
+        <div class="dashboard-columns">
+          <div class="dashboard-column">
+            <h4>Your Profile</h4>
+            <ul id="dashboardProfileList" class="dashboard-list">
+              <li class="dashboard-placeholder">Sign in to view your profile.</li>
+            </ul>
+          </div>
+          <div class="dashboard-column">
+            <h4>Connected Services</h4>
+            <div id="dashboardProviders" class="status-grid">
+              <p class="dashboard-placeholder">Sign in to view connected services.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-subsection">
+          <h4>Recent Jobs</h4>
+          <div class="table-wrapper">
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="recentJobsBody">
+                <tr>
+                  <td colspan="5" class="dashboard-placeholder">Sign in to view recent jobs.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="dashboard-subsection">
+          <h4>Recent Assets</h4>
+          <ul id="recentAssetsList" class="dashboard-list">
+            <li class="dashboard-placeholder">Sign in to view recent assets.</li>
+          </ul>
+        </div>
+      </div>
+
       <div class="card">
         <div class="row">
           <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
