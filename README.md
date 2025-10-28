@@ -12,6 +12,11 @@ Creator Toolkit is a FastAPI application that stitches together creative tooling
 - **YouTube publishing** – OAuth helper endpoints to refresh upload tokens, normalize scheduling data, and upload finished videos directly.
 - **Dashboard UI shell** – Jinja2 template and static assets that surface the Imagine, Create, and Publish workflows in the browser.
 
+#### Dashboard Data Binding
+- `GET /dashboard/data` — Returns combined JSON for the current user's profile, connected service status, recent jobs, and recent assets.
+- The `/dashboard` page now dynamically fetches and displays this data for a live overview.
+- Users can monitor job progress and service connections in real time.
+
 ## Installation
 
 1. **Clone & set up Python**
@@ -53,6 +58,28 @@ python scripts/worker.py
 ```
 
 Visit `http://localhost:8000/dashboard` to use the dashboard shell. Authenticated developer accounts can open the API docs at `/docs` once verified.
+The `templates/dashboard.html` view now loads its profile, provider, job, and asset cards by fetching `/dashboard/data` on page load.
+
+## Testing
+
+We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files.
+
+To execute the tests locally:
+
+```bash
+pytest
+```
+
+Before running the tests, install the dependencies from `requirements.txt` and set any required environment variables (for example `JWT_SECRET`) so the application can start. When adding new features, include accompanying tests that cover happy paths, authentication/authorization behaviour, and basic error handling.
+
+## Key API Routes
+
+- `GET /dashboard/data` – Aggregated dashboard payload for the signed-in user.
+- `GET /dashboard` – Renders the interactive dashboard shell.
+- `POST /auth/register` – Create a user account.
+- `POST /auth/login` – Authenticate and receive a JWT.
+- `POST /profile/keys` – Store or update encrypted provider API keys.
+- `POST /qa/batch_async` – Queue a QA batch job for processing.
 
 ## Typical workflow
 

@@ -9,3 +9,8 @@ python-multipart
 openai>=1.0.0
 requests
 jinja2
+PyJWT==2.9.0
+python-jose[cryptography]==3.3.0
+pytest==7.4.4
+pytest-asyncio==0.21.1
+httpx==0.26.0
