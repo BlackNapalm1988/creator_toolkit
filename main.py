@@ -1,20 +1,20 @@
 import csv
+import datetime
 import hashlib
 import json
+import logging
 import math
 import os
-import uuid
-import logging
-import datetime
 import secrets
 import smtplib
+import uuid
+from email.message import EmailMessage
 from typing import List, Optional
 
-from email.message import EmailMessage
-
-import requests
 from dotenv import load_dotenv
 from urllib.parse import urlencode
+
+import requests
 
 load_dotenv()
 
@@ -31,14 +31,12 @@ from fastapi import (
     Depends,
 )
 
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBearer
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr
 
 # --- modules ---
@@ -118,11 +116,17 @@ for d in ("static", "static/uploads", "static/reports", "ui", "data", "scenes"):
 auth_scheme = HTTPBearer(auto_error=False)
 
 # Additional helper utilities
+
+
 def _generate_verification_code() -> str:
+    """Return a random six-digit verification code as a string."""
+
     return f"{secrets.randbelow(900000) + 100000}"
 
 
 def _send_verification_email(recipient: str, code: str, full_name: str | None = None) -> bool:
+    """Send a verification code email using the configured SMTP settings."""
+
     if not recipient:
         logger.warning("No recipient provided for verification email; skipping send")
         return False
@@ -157,12 +161,14 @@ def _send_verification_email(recipient: str, code: str, full_name: str | None = 
             smtp.send_message(msg)
         logger.info("Sent verification email to %s", recipient)
         return True
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - network dependent
         logger.warning("Could not send verification email to %s: %s", recipient, exc)
         return False
 
 
 def current_user(request: Request, credentials=Depends(auth_scheme)):
+    """Resolve the authenticated user based on bearer token or cookie."""
+
     # 1. Pull token from Authorization header or cookie
     token = None
     if credentials and credentials.credentials:
@@ -202,6 +208,8 @@ def current_user(request: Request, credentials=Depends(auth_scheme)):
 
 
 def _user_payload(u: dict) -> dict:
+    """Return the subset of user columns that should be exposed externally."""
+
     return {
         "id": u["id"],
         "email": u.get("email"),
@@ -212,12 +220,16 @@ def _user_payload(u: dict) -> dict:
 
 
 def verified_user(user=Depends(current_user)):
+    """Dependency that requires the user to have completed email verification."""
+
     if not user.get("is_verified"):
         raise HTTPException(status_code=403, detail="Email verification required")
     return user
 
 
 def dev_user(user=Depends(verified_user)):
+    """Dependency restricting access to members of the ``Dev`` access group."""
+
     if user.get("access_group") != "Dev":
         raise HTTPException(status_code=403, detail="Developer access required")
     return user
@@ -247,11 +259,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/openapi.json", include_in_schema=False)
 def custom_openapi(user=Depends(dev_user)):
+    """Expose the generated OpenAPI schema to verified developers."""
+
     return JSONResponse(app.openapi())
 
 
 @app.get("/docs", include_in_schema=False)
 def custom_docs(user=Depends(dev_user)):
+    """Serve Swagger UI for developers while keeping it hidden from public."""
+
     return get_swagger_ui_html(openapi_url="/openapi.json", title="Creator Toolkit API Docs")
 
 
@@ -293,23 +309,27 @@ class MusicStatusReq(BaseModel):
 
 
 def _get_openai_key_for_user(user_id: int) -> str:
-    # list_user_keys returns a dict of provider -> encrypted_secret
+    """Retrieve and decrypt the stored OpenAI API key for ``user_id``."""
+
     raw = list_user_keys(user_id)
     cipher = raw.get("openai")
     if not cipher:
         raise HTTPException(
             status_code=400,
-            detail="No OpenAI API key on file. Save one via /profile/keys."
+            detail="No OpenAI API key on file. Save one via /profile/keys.",
         )
     return decrypt_value(cipher)
 
+
 def _get_eleven_key_for_user(user_id: int) -> str:
-    raw = list_user_keys(user_id)  # returns { provider: encrypted_secret, ... }
+    """Return the decrypted ElevenLabs key for ``user_id``."""
+
+    raw = list_user_keys(user_id)
     cipher = raw.get("elevenlabs")
     if not cipher:
         raise HTTPException(
             status_code=400,
-            detail="No ElevenLabs API key on file. Save one via /profile/keys."
+            detail="No ElevenLabs API key on file. Save one via /profile/keys.",
         )
     return decrypt_value(cipher)
 
@@ -328,19 +348,22 @@ YOUTUBE_SCOPES = (
     "https://www.googleapis.com/auth/youtube.upload"
 )
 
-# Scopes allow listing channel info and uploading videos.
-
 def _get_youtube_refresh(user_id: int) -> str:
+    """Load the encrypted YouTube refresh token for a user."""
+
     raw = list_user_keys(user_id)
     cipher = raw.get("youtube_refresh")
     if not cipher:
         raise HTTPException(
             status_code=400,
-            detail="No YouTube refresh token on file. Hit /youtube/auth/url and finish OAuth."
+            detail="No YouTube refresh token on file. Hit /youtube/auth/url and finish OAuth.",
         )
     return decrypt_value(cipher)
 
+
 def _youtube_get_access_token(refresh_token: str) -> str:
+    """Exchange a stored refresh token for a short-lived access token."""
+
     data = {
         "client_id": os.getenv("GOOGLE_CLIENT_ID"),
         "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
@@ -365,7 +388,10 @@ def _youtube_get_access_token(refresh_token: str) -> str:
         raise HTTPException(status_code=500, detail="No access_token in refresh response")
     return at
 
+
 def _normalize_publish_at(publish_at_raw: Optional[str]) -> Optional[str]:
+    """Validate and normalize an optional scheduled publish timestamp."""
+
     if not publish_at_raw:
         return None
     value = publish_at_raw.strip()
@@ -405,10 +431,7 @@ def _youtube_upload_from_disk(
     privacy_status: str,
     publish_at: Optional[str] = None,
 ) -> dict:
-    """
-    Uploads an mp4 from disk directly to YouTube using stored refresh token.
-    Returns dict with video_id and raw response.
-    """
+    """Upload a prepared mp4 to YouTube using the stored refresh token."""
 
     refresh_token = _get_youtube_refresh(user_id)
     access_token = _youtube_get_access_token(refresh_token)
@@ -503,6 +526,8 @@ def _youtube_upload_from_disk(
 
 
 def _parse_tags(tags_raw: Optional[str]) -> List[str]:
+    """Split a comma-delimited tag string into a clean list."""
+
     if not tags_raw:
         return []
     # user sends: "lofi, rainy night, chill study beats"
@@ -520,10 +545,14 @@ def dashboard_page(request: Request):
 
 @app.get("/imagine/models")
 def imagine_models(user=Depends(verified_user)):
+    """Return the list of allowed OpenAI chat models."""
+
     return {"models": ALLOWED_OPENAI_MODELS, "default": OPENAI_MODEL}
 
 @app.post("/imagine/thread")
 def imagine_thread_create(req: ImagineThreadCreateReq, user=Depends(verified_user)):
+    """Create a new chat thread for brainstorming prompts."""
+
     model = (req.model or OPENAI_MODEL)
     if model not in ALLOWED_OPENAI_MODELS:
         raise HTTPException(status_code=400, detail="Model not allowed")
@@ -542,10 +571,14 @@ def imagine_thread_create(req: ImagineThreadCreateReq, user=Depends(verified_use
 
 @app.get("/imagine/threads")
 def imagine_threads_list(user=Depends(verified_user)):
+    """Return recent imagine threads for the signed-in user."""
+
     return {"threads": list_threads(user["id"])}
 
 @app.get("/imagine/history/{thread_id}")
 def imagine_history(thread_id: str, user=Depends(verified_user)):
+    """Fetch a thread plus the last N messages for review."""
+
     th = get_thread(thread_id)
     if not th:
         raise HTTPException(status_code=404, detail="thread not found")
@@ -559,6 +592,8 @@ def imagine_history(thread_id: str, user=Depends(verified_user)):
 
 @app.post("/imagine/send")
 def imagine_send(req: ImagineSendReq, user=Depends(verified_user)):
+    """Send a chat message and stream the assistant's reply back."""
+
     th = get_thread(req.thread_id)
     if not th:
         raise HTTPException(status_code=404, detail="thread not found")
@@ -762,10 +797,7 @@ def _generate_voiceover_mp3_for_user(
     voice_id: str,
     model_id: Optional[str] = None,
 ) -> str:
-    """
-    Returns a DISK PATH like "static/tts/4_abc123.mp3"
-    Uses the user's ElevenLabs key, same as /elevenlabs/generate.
-    """
+    """Generate speech audio using the user's ElevenLabs credentials."""
 
     api_key = _get_eleven_key_for_user(user_id)
 
@@ -1655,6 +1687,8 @@ class EnqueuePackageReq(BaseModel):
 
 @app.post("/package_async")
 def package_async(req: EnqueuePackageReq, user=Depends(verified_user)):
+    """Enqueue a video packaging job for background processing."""
+
     # associate job with user in the future; for now just enqueue
     jid = enqueue("package", req.dict())
     return {"job_id": jid}
