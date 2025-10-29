@@ -77,22 +77,27 @@ Typical job types include (examples):
 
 **Role:**  
 Owns identity and trust.  
-- Handles registration, login, and email verification.  
-- Issues and validates JWT tokens.  
-- Encrypts/decrypts user-provided provider keys (OpenAI, ElevenLabs, YouTube, etc.).  
-- Tracks access group / role for future RBAC and quota logic.
+- Handles registration, login, and email verification.
+- Issues and validates JWT tokens.
+- Encrypts/decrypts user-provided provider keys (OpenAI, ElevenLabs, YouTube, etc.).
+- Manages role-based access control and password rotation flags.
 
 **Key Responsibilities:**  
-- Securely store hashed passwords and verification codes.  
-- Expose profile routes (e.g. `/me`, `/profile/keys`) that let a user manage identity and credentials.  
-- Gate access to routes that can spend money (generation) or publish content (YouTube upload).  
+- Securely store hashed passwords and verification codes.
+- Expose profile routes (e.g. `/me`, `/profile/keys`) that let a user manage identity and credentials.
+- Gate access to routes that can spend money (generation) or publish content (YouTube upload).
 - Never expose full provider keys or secrets in any response body.
+- Maintain role assignments (admin / owner / editor / viewer) and expose admin tools such as `/profile/role` and `/admin/system/smtp`.
+- Enforce password rotation via the `must_change_password` flag and surface that status in API responses.
 
 **Quality / Testing (Auth / Identity Agent):**  
-- Add tests for:  
-  - Successful login / token issuance for a verified user.  
-  - Rejected login for invalid credentials.  
-  - Rejected or restricted access if a user is unverified / lacks role.  
+- Add tests for:
+  - Successful login / token issuance for a verified user.
+  - Rejected login for invalid credentials.
+  - Rejected or restricted access if a user is unverified / lacks role.
+  - Role-based access enforcement (admin-only SMTP endpoints, publish permissions, viewer dashboard access).
+  - Password rotation clearing after `/profile/password` updates.
+  - Bootstrap admin user creation on empty databases.
 - Add tests that protected endpoints actually require valid auth (e.g. `/dashboard/data` should not respond to anonymous requests).  
 - Use dummy keys and dummy emails in tests — do not leak real credentials.  
 - If auth flows change in a breaking way (for example, adding new role requirements), that must be reflected in tests AND described in the PR summary.

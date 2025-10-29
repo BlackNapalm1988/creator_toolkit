@@ -1,20 +1,5 @@
-import os
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict
-
-import pytest
-from fastapi.testclient import TestClient
-import jwt as pyjwt
-
-# Ensure the FastAPI app sees a predictable JWT secret during import time.
-os.environ.setdefault("JWT_SECRET", "test-secret")
-
-# Add the project root to ``sys.path`` so ``import main`` succeeds when running via pytest.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 import main  # noqa: E402  pylint: disable=wrong-import-position
 from modules import auth as auth_module
@@ -22,40 +7,19 @@ from modules import jobs as jobs_module
 from modules import users as users_module
 
 
-@pytest.fixture(autouse=True)
-def isolate_databases(tmp_path, monkeypatch):
-    """Use temporary SQLite databases for auth and jobs during each test."""
-
-    auth_db = tmp_path / "auth.db"
-    jobs_db = tmp_path / "jobs.db"
-    auth_db.parent.mkdir(parents=True, exist_ok=True)
-    jobs_db.parent.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr(users_module, "DB_PATH", str(auth_db))
-    monkeypatch.setattr(jobs_module, "DB_PATH", str(jobs_db))
-
-    users_module.init_db()
-    jobs_module.init_jobs_db()
-    yield
-
-
-@pytest.fixture
-def client():
-    """Return a TestClient bound to the FastAPI app."""
-
-    return TestClient(main.app)
-
-
 def _issue_token(user_id: int, email: str) -> str:
     """Helper to mint a JWT for the created user."""
 
-    token = pyjwt.encode({"sub": str(user_id), "email": email}, main.JWT_SECRET, algorithm="HS256")
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
-    return token
+    return auth_module.create_access_token(user_id, email)
 
 
-def _create_sample_user(email: str = "test@example.com", *, is_verified: bool = True) -> Dict[str, object]:
+def _create_sample_user(
+    email: str = "test@example.com",
+    *,
+    is_verified: bool = True,
+    role: str = "owner",
+    must_change_password: bool = False,
+) -> Dict[str, object]:
     """Create a user record and return its details."""
 
     password_hash = auth_module.hash_password("example-password")
@@ -64,7 +28,8 @@ def _create_sample_user(email: str = "test@example.com", *, is_verified: bool = 
         full_name="Test User",
         password_hash=password_hash,
         is_verified=is_verified,
-        access_group="User",
+        role=role,
+        must_change_password=must_change_password,
     )
     return {"id": user_id, "email": email}
 
@@ -88,6 +53,8 @@ def test_dashboard_data_authenticated_success(client):
 
     assert payload["user"]["id"] == user_info["id"]
     assert payload["user"]["display_name"] == "Test User"
+    assert payload["user"]["role"] == "owner"
+    assert payload["user"]["must_change_password"] is False
     assert payload["providers"] == {
         "openai": "connected",
         "elevenlabs": "missing",
@@ -125,6 +92,8 @@ def test_user_payload_exposes_expected_fields():
         "access_group": "Dev",
         "is_verified": 1,
         "password_hash": "secret",
+        "role": "admin",
+        "must_change_password": True,
         "extra_column": "should be ignored",
     }
 
@@ -135,4 +104,6 @@ def test_user_payload_exposes_expected_fields():
         "full_name": "Payload User",
         "access_group": "Dev",
         "is_verified": True,
+        "role": "admin",
+        "must_change_password": True,
     }

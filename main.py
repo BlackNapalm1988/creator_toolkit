@@ -18,9 +18,9 @@ import requests
 
 load_dotenv()
 
-import jwt as pyjwt  # PyJWT
 from fastapi import (
     FastAPI,
+    APIRouter,
     UploadFile,
     File,
     Form,
@@ -81,7 +81,9 @@ from modules.users import (
     delete_user_key,
     set_verification_code,
     mark_email_verified,
-    update_access_group,
+    set_must_change_password,
+    count_users,
+    update_role,
 )
 
 from modules.auth import (
@@ -89,6 +91,15 @@ from modules.auth import (
     verify_password,
     encrypt_value,
     decrypt_value,
+    decode_access_token,
+    create_access_token,
+    require_role as base_require_role,
+)
+
+from modules.system import (
+    resolve_smtp_settings,
+    get_public_smtp_settings,
+    update_smtp_settings,
 )
 
 
@@ -101,13 +112,13 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET missing. Set it in your .env")
 
-SMTP_HOST = os.getenv("SMTP_HOST")
-SMTP_PORT = int(os.getenv("SMTP_PORT") or 0)
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM = os.getenv("SMTP_FROM_EMAIL") or SMTP_USER
+DEFAULT_ADMIN_EMAIL = "admin@local"
+DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"
+
+CREATOR_ROLES = ["admin", "owner", "editor"]
+PUBLISHER_ROLES = ["admin", "owner"]
+
 SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT_SECONDS") or 10)
-SMTP_USE_TLS = (os.getenv("SMTP_USE_TLS", "1").strip().lower() in {"1", "true", "yes"})
 
 # make sure these dirs exist
 for d in ("static", "static/uploads", "static/reports", "ui", "data", "scenes"):
@@ -127,18 +138,26 @@ def _generate_verification_code() -> str:
 def _send_verification_email(recipient: str, code: str, full_name: str | None = None) -> bool:
     """Send a verification code email using the configured SMTP settings."""
 
+    smtp_settings = resolve_smtp_settings()
+    smtp_host = smtp_settings.get("host")
+    smtp_port = int(smtp_settings.get("port") or 0)
+    smtp_user = smtp_settings.get("username")
+    smtp_password = smtp_settings.get("password")
+    smtp_from = smtp_settings.get("from_address") or smtp_user
+    smtp_use_tls = bool(smtp_settings.get("use_tls", True))
+
     if not recipient:
         logger.warning("No recipient provided for verification email; skipping send")
         return False
 
-    if not SMTP_HOST or not SMTP_FROM:
+    if not smtp_host or not smtp_from:
         logger.warning("SMTP not configured; verification code for %s is %s", recipient, code)
         return False
 
     msg = EmailMessage()
     friendly_name = full_name or recipient
     msg["Subject"] = "Your Creator Toolkit verification code"
-    msg["From"] = SMTP_FROM
+    msg["From"] = smtp_from
     msg["To"] = recipient
     body = (
         f"Hi {friendly_name},\n\n"
@@ -150,20 +169,43 @@ def _send_verification_email(recipient: str, code: str, full_name: str | None = 
     msg.set_content(body)
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT or 0, timeout=SMTP_TIMEOUT) as smtp:
-            if SMTP_USE_TLS:
+        with smtplib.SMTP(smtp_host, smtp_port or 0, timeout=SMTP_TIMEOUT) as smtp:
+            if smtp_use_tls:
                 try:
                     smtp.starttls()
                 except smtplib.SMTPException:
                     logger.debug("SMTP server did not accept STARTTLS; continuing without TLS")
-            if SMTP_USER and SMTP_PASSWORD:
-                smtp.login(SMTP_USER, SMTP_PASSWORD)
+            if smtp_user and smtp_password:
+                smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)
         logger.info("Sent verification email to %s", recipient)
         return True
     except Exception as exc:  # pragma: no cover - network dependent
         logger.warning("Could not send verification email to %s: %s", recipient, exc)
         return False
+
+
+def bootstrap_default_admin() -> Optional[int]:
+    """Ensure a default admin user exists on first run."""
+
+    if count_users():
+        return None
+
+    password_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
+    admin_id = create_user(
+        DEFAULT_ADMIN_EMAIL,
+        "System Administrator",
+        password_hash,
+        access_group="Dev",
+        is_verified=True,
+        role="admin",
+        must_change_password=True,
+    )
+    logger.info(
+        "Created default admin user %s with temporary password requirement",
+        DEFAULT_ADMIN_EMAIL,
+    )
+    return admin_id
 
 
 def current_user(request: Request, credentials=Depends(auth_scheme)):
@@ -182,10 +224,8 @@ def current_user(request: Request, credentials=Depends(auth_scheme)):
     if token.startswith("Bearer "):
         token = token[len("Bearer "):]
 
-    try:
-        payload = pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except Exception as exc:
-        logger.debug("current_user: decode failed: %r", exc)
+    payload = decode_access_token(token)
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     uid_raw = payload.get("sub") or payload.get("id")
@@ -207,15 +247,28 @@ def current_user(request: Request, credentials=Depends(auth_scheme)):
     return user
 
 
+def require_role(allowed_roles, *, require_verified: bool = False):
+    """Return dependency enforcing a user's role (and optional verification)."""
+
+    return base_require_role(
+        allowed_roles,
+        dependency=current_user,
+        require_verified=require_verified,
+    )
+
+
 def _user_payload(u: dict) -> dict:
     """Return the subset of user columns that should be exposed externally."""
 
+    role = (u.get("role") or "viewer").lower()
     return {
         "id": u["id"],
         "email": u.get("email"),
         "full_name": u.get("full_name"),
         "access_group": u.get("access_group", "User"),
         "is_verified": bool(u.get("is_verified")),
+        "role": role,
+        "must_change_password": bool(u.get("must_change_password")),
     }
 
 
@@ -230,8 +283,8 @@ def verified_user(user=Depends(current_user)):
 def dev_user(user=Depends(verified_user)):
     """Dependency restricting access to members of the ``Dev`` access group."""
 
-    if user.get("access_group") != "Dev":
-        raise HTTPException(status_code=403, detail="Developer access required")
+    if (user.get("role") or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
@@ -253,6 +306,8 @@ app = FastAPI(
     openapi_url=None,
 )
 
+admin_router = APIRouter(prefix="/admin/system", tags=["Admin"])
+
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -273,6 +328,7 @@ def custom_docs(user=Depends(dev_user)):
 
 # init databases we'll need
 init_db()         # users / profile
+bootstrap_default_admin()
 init_jobs_db()    # job queue
 init_chat_db()    # imagine chat history
 
@@ -555,6 +611,8 @@ def dashboard_data(user=Depends(current_user)):
         "display_name": payload.get("full_name") or payload.get("email"),
         "access_group": payload.get("access_group"),
         "email_verified": bool(payload.get("is_verified")),
+        "role": payload.get("role"),
+        "must_change_password": bool(payload.get("must_change_password")),
     }
 
     # --- provider connection status ---
@@ -602,13 +660,16 @@ def dashboard_data(user=Depends(current_user)):
     }
 
 @app.get("/imagine/models")
-def imagine_models(user=Depends(verified_user)):
+def imagine_models(user=Depends(require_role(CREATOR_ROLES, require_verified=True))):
     """Return the list of allowed OpenAI chat models."""
 
     return {"models": ALLOWED_OPENAI_MODELS, "default": OPENAI_MODEL}
 
 @app.post("/imagine/thread")
-def imagine_thread_create(req: ImagineThreadCreateReq, user=Depends(verified_user)):
+def imagine_thread_create(
+    req: ImagineThreadCreateReq,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """Create a new chat thread for brainstorming prompts."""
 
     model = (req.model or OPENAI_MODEL)
@@ -628,13 +689,18 @@ def imagine_thread_create(req: ImagineThreadCreateReq, user=Depends(verified_use
     return {"thread_id": tid}
 
 @app.get("/imagine/threads")
-def imagine_threads_list(user=Depends(verified_user)):
+def imagine_threads_list(
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """Return recent imagine threads for the signed-in user."""
 
     return {"threads": list_threads(user["id"])}
 
 @app.get("/imagine/history/{thread_id}")
-def imagine_history(thread_id: str, user=Depends(verified_user)):
+def imagine_history(
+    thread_id: str,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """Fetch a thread plus the last N messages for review."""
 
     th = get_thread(thread_id)
@@ -649,7 +715,10 @@ def imagine_history(thread_id: str, user=Depends(verified_user)):
     }
 
 @app.post("/imagine/send")
-def imagine_send(req: ImagineSendReq, user=Depends(verified_user)):
+def imagine_send(
+    req: ImagineSendReq,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """Send a chat message and stream the assistant's reply back."""
 
     th = get_thread(req.thread_id)
@@ -694,7 +763,9 @@ def imagine_send(req: ImagineSendReq, user=Depends(verified_user)):
 # ----------------------------
 
 @app.get("/elevenlabs/voices", tags=["ElevenLabs"])
-def eleven_list_voices(user=Depends(verified_user)):
+def eleven_list_voices(
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Return a clean list of voices the user can pick from:
     [
@@ -757,7 +828,7 @@ def eleven_list_voices(user=Depends(verified_user)):
 
 @app.post("/elevenlabs/generate", tags=["ElevenLabs"])
 def eleven_generate_tts(
-    user=Depends(verified_user),
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
     text: str = Form(...),
     voice_id: Optional[str] = Form(None),
     model_id: Optional[str] = Form(None),
@@ -905,7 +976,10 @@ class ImagineChatResp(BaseModel):
     reply: str
 
 @app.post("/imagine/chat", response_model=ImagineChatResp, tags=["Imagine"])
-def imagine_chat(req: ImagineChatReq, user=Depends(verified_user)):
+def imagine_chat(
+    req: ImagineChatReq,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Lightweight 'writer's room' chat.
     Uses the user's saved OpenAI key to get creative guidance for visual/music ideas.
@@ -968,7 +1042,10 @@ def imagine_chat(req: ImagineChatReq, user=Depends(verified_user)):
     return {"reply": reply_text}
 
 @app.post("/generate/music", tags=["Generate"])
-def generate_music(req: MusicGenReq, user=Depends(verified_user)):
+def generate_music(
+    req: MusicGenReq,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Kick off ElevenLabs music generation.
     Returns either:
@@ -1132,7 +1209,10 @@ def generate_music(req: MusicGenReq, user=Depends(verified_user)):
     }
 
 @app.get("/generate/music/status", tags=["Generate"])
-def get_music_status(job_id: str, user=Depends(verified_user)):
+def get_music_status(
+    job_id: str,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Poll ElevenLabs about a music generation job.
     If finished, download the audio and save it.
@@ -1261,7 +1341,10 @@ def get_music_status(job_id: str, user=Depends(verified_user)):
 
 
 @app.post("/generate/video", tags=["Generate"])
-def generate_video(req: VideoGenReq, user=Depends(verified_user)):
+def generate_video(
+    req: VideoGenReq,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Ask Sora 2 for a clip and (if possible) request a custom duration + aspect.
     Falls back to polling /generate/video/status if we only get metadata back.
@@ -1474,7 +1557,7 @@ def generate_video(req: VideoGenReq, user=Depends(verified_user)):
 # ----------------------------
 
 @app.get("/youtube/auth/url", tags=["YouTube"])
-def youtube_auth_url(user=Depends(verified_user)):
+def youtube_auth_url(user=Depends(require_role(PUBLISHER_ROLES, require_verified=True))):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
@@ -1507,10 +1590,9 @@ def youtube_oauth2_callback(code: str, request: Request):
     if token.startswith("Bearer "):
         token = token[len("Bearer "):]
 
-    try:
-        payload = pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid or expired token during callback: {repr(e)}")
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token during callback")
 
     uid_raw = payload.get("sub") or payload.get("id")
     if uid_raw is None:
@@ -1570,7 +1652,9 @@ def youtube_oauth2_callback(code: str, request: Request):
 
 
 @app.get("/youtube/channels/me", tags=["YouTube"])
-def youtube_channels_me(user=Depends(verified_user)):
+def youtube_channels_me(
+    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
+):
     # 1. Get your encrypted refresh token from DB
     refresh_token = _get_youtube_refresh(user["id"])
 
@@ -1595,7 +1679,7 @@ def youtube_channels_me(user=Depends(verified_user)):
 
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
-    user=Depends(verified_user),
+    user=Depends(require_role(["admin", "owner"], require_verified=True)),
     video_file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(""),
@@ -1744,7 +1828,10 @@ class EnqueuePackageReq(BaseModel):
     out_path: str | None = None
 
 @app.post("/package_async")
-def package_async(req: EnqueuePackageReq, user=Depends(verified_user)):
+def package_async(
+    req: EnqueuePackageReq,
+    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+):
     """Enqueue a video packaging job for background processing."""
 
     # associate job with user in the future; for now just enqueue
@@ -1777,7 +1864,10 @@ class PublishPipelineReq(BaseModel):
 
 
 @app.post("/qa/batch_async")
-def qa_batch_async(req: EnqueueQABatchReq, user=Depends(verified_user)):
+def qa_batch_async(
+    req: EnqueueQABatchReq,
+    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+):
     jid = enqueue("qa_batch", req.dict())
     return {"job_id": jid}
 
@@ -1995,7 +2085,10 @@ def package(req: PackageReq):
     }
 
 @app.post("/package/master", tags=["Packager"])
-def package_master(req: PackageReqV2, user=Depends(verified_user)):
+def package_master(
+    req: PackageReqV2,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Build final mastered MP4:
     - loops req.loop_path until >= duration_ms
@@ -2120,8 +2213,24 @@ class KeyUpsertReq(BaseModel):
 class VerifyEmailReq(BaseModel):
     code: str
 
-class AccessGroupUpdateReq(BaseModel):
-    access_group: str
+class RoleUpdateReq(BaseModel):
+    role: str
+    user_id: Optional[int] = None
+
+
+class SMTPConfigUpdate(BaseModel):
+    host: Optional[str] = None
+    port: Optional[int] = None
+    use_tls: Optional[bool] = True
+    username: Optional[str] = None
+    password: Optional[str] = None
+    from_address: Optional[str] = None
+
+
+class SMTPTestRequest(BaseModel):
+    to: EmailStr
+    subject: Optional[str] = "Creator Toolkit SMTP Test"
+    body: Optional[str] = "This is a test email from Creator Toolkit."
 
 @app.post("/auth/register")
 def auth_register(req: RegisterReq):
@@ -2160,21 +2269,14 @@ def auth_login(req: LoginReq):
     email = u["email"]
 
     # store sub as a string, not an int
-    token = pyjwt.encode(
-        {"sub": str(user_id), "email": email},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
-
-    # safety in case PyJWT returns bytes
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
+    token = create_access_token(user_id, email)
 
     resp = JSONResponse(
         {
             "token": token,
             "user": _user_payload(u),
             "requires_verification": not bool(u.get("is_verified")),
+            "must_change_password": bool(u.get("must_change_password")),
         }
     )
     resp.set_cookie(
@@ -2288,41 +2390,131 @@ def profile_password_change(req: PasswordChangeReq, user=Depends(current_user)):
             status_code=400,
             content={"error": "Current password incorrect"},
         )
-    update_password_hash(user["id"], hash_password(req.new_password))
-    return {"ok": True}
-
-@app.post("/profile/access-group")
-def profile_access_group(req: AccessGroupUpdateReq, user=Depends(current_user)):
-    desired = req.access_group.strip().title()
-    if desired not in {"User", "Dev"}:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "access_group must be 'User' or 'Dev'"},
-        )
-    update_access_group(user["id"], desired)
+    update_password_hash(
+        user["id"],
+        hash_password(req.new_password),
+        must_change_password=False,
+    )
+    set_must_change_password(user["id"], False)
     refreshed = get_user_by_id(user["id"]) or user
-    logger.info("User %s switched access group to %s", user["id"], desired)
     return {"ok": True, "user": _user_payload(refreshed)}
 
+@app.post("/profile/role")
+def profile_role_update(
+    req: RoleUpdateReq,
+    user=Depends(require_role(["admin"], require_verified=True)),
+):
+    desired = (req.role or "").strip().lower()
+    valid_roles = {"admin", "owner", "editor", "viewer"}
+    if desired not in valid_roles:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "role must be one of admin, owner, editor, viewer"},
+        )
+
+    target_id = req.user_id or user["id"]
+    update_role(target_id, desired)
+    refreshed = get_user_by_id(target_id)
+    if not refreshed:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    logger.info(
+        "User %s updated role for user_id=%s to %s",
+        user["id"],
+        target_id,
+        desired,
+    )
+    return {"ok": True, "user": _user_payload(refreshed)}
+
+
+@app.post("/profile/access-group")
+def profile_access_group_deprecated():
+    raise HTTPException(status_code=410, detail="Deprecated: use /profile/role")
+
+
+@admin_router.get("/smtp")
+def admin_get_smtp_settings(
+    user=Depends(require_role(["admin"], require_verified=True)),
+):
+    return get_public_smtp_settings()
+
+
+@admin_router.post("/smtp")
+def admin_update_smtp_settings(
+    config: SMTPConfigUpdate,
+    user=Depends(require_role(["admin"], require_verified=True)),
+):
+    payload = config.dict(exclude_unset=True)
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        update_smtp_settings(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    refreshed = get_public_smtp_settings()
+    return {"ok": True, "settings": refreshed}
+
+
+@admin_router.post("/smtp/test")
+def admin_test_smtp(
+    req: SMTPTestRequest,
+    user=Depends(require_role(["admin"], require_verified=True)),
+):
+    settings = resolve_smtp_settings()
+    host = settings.get("host")
+    from_address = settings.get("from_address") or settings.get("username")
+    if not host or not from_address:
+        raise HTTPException(status_code=400, detail="SMTP configuration incomplete")
+
+    msg = EmailMessage()
+    msg["Subject"] = req.subject or "Creator Toolkit SMTP Test"
+    msg["From"] = from_address
+    msg["To"] = req.to
+    msg.set_content(req.body or "This is a test email from Creator Toolkit.")
+
+    try:
+        with smtplib.SMTP(host, int(settings.get("port") or 0), timeout=SMTP_TIMEOUT) as smtp:
+            if bool(settings.get("use_tls", True)):
+                try:
+                    smtp.starttls()
+                except smtplib.SMTPException:
+                    logger.debug("SMTP server did not accept STARTTLS during test send")
+            username = settings.get("username")
+            password = settings.get("password")
+            if username and password:
+                smtp.login(username, password)
+            smtp.send_message(msg)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"SMTP send failed: {exc}") from exc
+
+    return {"ok": True}
+
 @app.get("/profile/keys")
-def profile_keys_list(user=Depends(verified_user)):
+def profile_keys_list(user=Depends(require_role(["admin", "owner"], require_verified=True))):
     raw = list_user_keys(user["id"])
     # we do NOT return the decrypted secrets, just providers
     return {"providers": list(raw.keys())}
 
 @app.post("/profile/keys")
-def profile_keys_upsert(req: KeyUpsertReq, user=Depends(verified_user)):
+def profile_keys_upsert(
+    req: KeyUpsertReq,
+    user=Depends(require_role(["admin", "owner"], require_verified=True)),
+):
     cipher = encrypt_value(req.secret)
     upsert_user_key(user["id"], req.provider.lower(), cipher)
     return {"ok": True}
 
 @app.delete("/profile/keys/{provider}")
-def profile_keys_delete(provider: str, user=Depends(verified_user)):
+def profile_keys_delete(
+    provider: str,
+    user=Depends(require_role(["admin", "owner"], require_verified=True)),
+):
     delete_user_key(user["id"], provider.lower())
     return {"ok": True, "deleted": provider.lower()}
 
 @app.post("/pipeline/publish_lofi", tags=["Pipeline"])
-def pipeline_publish_lofi(req: PublishPipelineReq, user=Depends(verified_user)):
+def pipeline_publish_lofi(
+    req: PublishPipelineReq,
+    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
+):
     """
     One-shot pipeline:
     1. (optional) generate narration via ElevenLabs
@@ -2394,7 +2586,10 @@ def pipeline_publish_lofi(req: PublishPipelineReq, user=Depends(verified_user)):
     }
 
 @app.get("/generate/video/status", tags=["Generate"])
-def get_video_status(job_id: str, user=Depends(verified_user)):
+def get_video_status(
+    job_id: str,
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+):
     """
     Check status of a Sora 2 video job by its ID returned from /generate/video.
     If finished, attempt to download the binary and save it locally.
@@ -2515,3 +2710,6 @@ def get_video_status(job_id: str, user=Depends(verified_user)):
         "status": status,
         "meta": meta,
     }
+
+
+app.include_router(admin_router)
