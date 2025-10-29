@@ -39,6 +39,12 @@ body {
   flex: 1;
 }
 
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .user-actions {
   display: flex;
   align-items: center;
@@ -91,6 +97,18 @@ body {
   background: rgba(248, 113, 113, 0.18);
   border-color: #fca5a5;
   color: #fee2e2;
+}
+
+.ghost-btn.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ghost-btn.filled:hover {
+  background: rgba(107, 92, 255, 0.85);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .hidden {

@@ -12,6 +12,8 @@ const authTabs = authOverlay ? Array.from(authOverlay.querySelectorAll(".modal-t
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 const authFeedback = document.getElementById("authFeedback");
+const authActions = document.getElementById("authActions");
+const openLoginButton = document.getElementById("openLoginButton");
 
 const loginEmailInput = document.getElementById("loginEmail");
 const loginPasswordInput = document.getElementById("loginPassword");
@@ -650,6 +652,7 @@ function applyUserState() {
     stopDashboardPolling();
     resetDashboardWidgetsForLoggedOut();
     if (userActions) userActions.classList.add("hidden");
+    if (authActions) authActions.classList.remove("hidden");
     if (docsLink) docsLink.classList.add("hidden");
     document.body.classList.remove("dev-mode");
     updateFeatureAvailability({ verified: false, capabilities: ROLE_CAPABILITIES.viewer });
@@ -668,6 +671,7 @@ function applyUserState() {
   authState.capabilities = capabilities;
   updateNavigationForRole(role);
 
+  if (authActions) authActions.classList.add("hidden");
   if (userActions) userActions.classList.remove("hidden");
   if (userGreeting) {
     const firstName = user.full_name ? user.full_name.split(" ")[0] : user.email;
@@ -1194,6 +1198,12 @@ if (smtpTestForm) {
       }
       setFeedback(smtpTestFeedback, "Test email sent.", "success");
     });
+  });
+}
+
+if (openLoginButton) {
+  openLoginButton.addEventListener("click", () => {
+    showAuthOverlay("login");
   });
 }
 
