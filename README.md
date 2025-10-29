@@ -30,6 +30,30 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 - The `/dashboard` page now dynamically fetches and displays this data for a live overview.
 - Users can monitor job progress and service connections in real time.
 
+## Dashboard & Job Monitoring
+
+- The dashboard is now a persistent left-sidebar tab titled **Dashboard**, available to every authenticated role.
+- Panels surface your account details (including role, verification state, and password rotation flag), provider connection status, active job progress/errors, and recent assets.
+- New read-only job endpoints expose background processing state:
+  - `GET /jobs` – Recent jobs (admin/owner/editor only).
+  - `GET /jobs/{job_id}` – Detailed view of a single job (admin/owner/editor only).
+- Jobs include stage, progress, status, error message, and timestamps so operators can track long-running work. Example payload:
+
+  ```json
+  {
+    "id": "abc123",
+    "type": "package_async",
+    "status": "running",
+    "stage": "packaging",
+    "progress": 60,
+    "updated_at": "2025-10-28T00:15:00Z",
+    "error_message": null
+  }
+  ```
+
+- Role-aware navigation keeps mutation controls hidden: viewers see only the Dashboard, editors can access Create tools, and only admins see the System tab for platform settings.
+- The UI polls `/dashboard/data` in the background so the Active Jobs panel reflects live progress without manual refreshes.
+
 ## Installation
 
 1. **Clone & set up Python**
@@ -82,7 +106,7 @@ The `templates/dashboard.html` view now loads its profile, provider, job, and as
 
 ## Testing
 
-We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access) and password rotation behaviour.
+We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access), job lifecycle reporting, and password rotation behaviour.
 
 To execute the tests locally:
 

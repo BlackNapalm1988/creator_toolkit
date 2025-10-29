@@ -41,15 +41,14 @@ def test_dashboard_data_authenticated_success(client):
     users_module.upsert_user_key(user_info["id"], "openai", "cipher-openai")
 
     job_id = jobs_module.enqueue("qa_batch", {"sample": "payload"})
-    jobs_module.set_progress(job_id, 65)
-    jobs_module.set_status(job_id, "running")
+    jobs_module.update_job_status(job_id, stage="qa", status="running", progress=65)
 
     token = _issue_token(user_info["id"], user_info["email"])
     response = client.get("/dashboard/data", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
 
     payload = response.json()
-    assert set(payload.keys()) == {"user", "providers", "recent_jobs", "recent_assets"}
+    assert set(payload.keys()) == {"user", "providers", "recent_jobs", "recent_assets", "active_jobs"}
 
     assert payload["user"]["id"] == user_info["id"]
     assert payload["user"]["display_name"] == "Test User"
@@ -66,12 +65,20 @@ def test_dashboard_data_authenticated_success(client):
     assert any(job["id"] == job_id for job in payload["recent_jobs"])
     job_entry = next(job for job in payload["recent_jobs"] if job["id"] == job_id)
     assert job_entry["status"] == "running"
+    assert job_entry["stage"] in {"qa", "running"}
     assert job_entry["progress"] == 65
     # ``updated_at`` should be an ISO timestamp string when available.
     assert isinstance(job_entry["updated_at"], str)
     # Ensure ISO-8601 structure (YYYY-MM-DDT...).
     current_year = datetime.now(timezone.utc).year
     assert job_entry["updated_at"].startswith(str(current_year))
+
+    active_jobs = payload["active_jobs"]
+    assert any(job["id"] == job_id for job in active_jobs)
+    active_entry = next(job for job in active_jobs if job["id"] == job_id)
+    assert active_entry["status"] == "running"
+    assert active_entry["stage"] in {"qa", "running"}
+    assert active_entry["error_message"] is None
 
 
 def test_dashboard_data_rejects_unauthenticated(client):

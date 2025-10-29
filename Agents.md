@@ -51,19 +51,21 @@ Typical job types include (examples):
 - `qa_batch_async`: bulk QA over many prompts/script rows
 - `package_async`: bundle scenes, audio, video, metadata into deliverables
 
-**Key Responsibilities:**  
-- Load the job payload from `jobs.db`.  
-- Mark the job as `running`, call the correct handler, capture output or error.  
-- Write progress, stage, and final status (`complete` / `failed`) back to the DB.  
+**Key Responsibilities:**
+- Load the job payload from `jobs.db`.
+- Mark the job as `running`, call the correct handler, capture output or error.
+- Write progress, stage, and final status (`complete` / `failed`) back to the DB.
+- Emit incremental `stage`, `progress`, `status`, and `updated_at` changes during long-running work, and capture a human-readable `error_message` when a job fails.
 - Prevent the API Server from blocking on long work, or from hitting provider rate limits directly in-request.
 
-**Quality / Testing (Worker Agent):**  
-- Add tests for each new job handler to confirm workflow:  
-  - Job is picked up and marked `running`.  
-  - Output or error is written.  
-  - Final status is updated (`complete` / `failed`).  
-- Progress reporting logic (if present) should be asserted in tests (e.g. `progress` moves 0→100 or stages update).  
-- Job handlers MUST NOT depend on live external services in tests. Use fakes/mocks/dummy payloads.  
+**Quality / Testing (Worker Agent):**
+- Add tests for each new job handler to confirm workflow:
+  - Job is picked up and marked `running`.
+  - Output or error is written.
+  - Final status is updated (`complete` / `failed`).
+- Progress reporting logic (if present) should be asserted in tests (e.g. `progress` moves 0→100 or stages update).
+- Tests must assert that stage/progress/status fields update over time and that `error_message` is populated on failure paths.
+- Job handlers MUST NOT depend on live external services in tests. Use fakes/mocks/dummy payloads.
 - If the worker’s schema or job payload format changes, update README.md (section on “Job Queue / Background Worker”) so contributors know what a job is supposed to look like.
 
 ---
@@ -179,17 +181,20 @@ Human control center.
 - Surfaces recently packaged/generated assets for review.  
 - Gives non-technical users situational awareness without looking at the DB or logs.
 
-**Key Responsibilities:**  
-- Fetch `/dashboard/data` and render it dynamically in the browser.  
-- Display clear “connected / missing” states for provider integrations.  
-- Display job status and error state in a human-readable way.  
+**Key Responsibilities:**
+- Fetch `/dashboard/data` and render it dynamically in the browser.
+- Display clear “connected / missing” states for provider integrations.
+- Display job status and error state in a human-readable way.
+- Render a persistent left-hand sidebar with Dashboard/Create/System navigation, hiding Create for viewers and System for non-admin roles.
+- Surface live job progress using `/dashboard/data.active_jobs` (progress bars, failure banners) without exposing secrets.
 - Never leak secrets (keys/tokens) to the DOM.
 
-**Quality / Testing (Dashboard / Visibility Layer):**  
-- Add backend tests for `/dashboard/data`:  
-  - Authenticated request returns 200 with `user`, `providers`, `recent_jobs`, `recent_assets`.  
-  - Unauthenticated request is rejected.  
-- When logic changes (e.g. adding job `progress` or `stage`), update both the endpoint tests and the README “Dashboard Data Binding” section.  
+**Quality / Testing (Dashboard / Visibility Layer):**
+- Add backend tests for `/dashboard/data`:
+  - Authenticated request returns 200 with `user`, `providers`, `recent_jobs`, `recent_assets`, and `active_jobs`.
+  - Unauthenticated request is rejected.
+- Tests should assert that `/dashboard/data.user.role` and `.must_change_password` are present so the UI can enforce role-aware navigation.
+- When logic changes (e.g. adding job `progress` or `stage`), update both the endpoint tests and the README “Dashboard Data Binding” section.
 - Front-end behavior should degrade gracefully if `/dashboard/data` fetch fails (e.g. display an error message instead of leaving the page blank).
 
 ---

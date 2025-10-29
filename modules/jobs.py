@@ -9,10 +9,32 @@ import threading
 import time
 import traceback
 import uuid
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "jobs.db")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stage TEXT,
+    progress INTEGER,
+    result TEXT,
+    error_message TEXT,
+    logs TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    duration_ms INTEGER,
+    project_id TEXT
+)
+"""
+
+
+UNSET = object()
 
 
 def _conn() -> sqlite3.Connection:
@@ -22,24 +44,86 @@ def _conn() -> sqlite3.Connection:
 
 
 def init_jobs_db() -> None:
-    """Create the ``jobs`` table if it does not already exist."""
+    """Ensure the ``jobs`` table exists with the expected columns."""
 
     with _conn() as conn:
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS jobs (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL,
-                payload TEXT NOT NULL,
-                status TEXT NOT NULL,
-                progress INTEGER NOT NULL,
-                result TEXT,
-                error TEXT,
-                logs TEXT,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )"""
+        existing_table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'"
+        ).fetchone()
+
+        if not existing_table:
+            conn.execute(CREATE_TABLE_SQL)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
+            )
+            return
+
+        info_rows = conn.execute("PRAGMA table_info(jobs)").fetchall()
+        columns = {row[1]: row for row in info_rows}
+
+        progress_not_nullable = columns.get("progress", (None, None, None, 0))[3] == 1
+        missing_stage = "stage" not in columns
+        missing_error_message = "error_message" not in columns
+        missing_duration = "duration_ms" not in columns
+        missing_project = "project_id" not in columns
+        legacy_error_column = "error" in columns and missing_error_message
+
+        needs_migration = (
+            progress_not_nullable
+            or missing_stage
+            or missing_error_message
+            or missing_duration
+            or missing_project
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
+
+        if needs_migration:
+            conn.execute("ALTER TABLE jobs RENAME TO jobs_legacy")
+            conn.execute(CREATE_TABLE_SQL)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
+            )
+
+            stage_select = "stage" if not missing_stage else "status"
+            error_select = "error" if legacy_error_column else "error_message"
+
+            conn.execute(
+                f"""
+                INSERT INTO jobs (
+                    id, type, payload, status, stage, progress, result,
+                    error_message, logs, created_at, updated_at, duration_ms, project_id
+                )
+                SELECT
+                    id,
+                    type,
+                    payload,
+                    status,
+                    {stage_select} AS stage,
+                    progress,
+                    result,
+                    {error_select} AS error_message,
+                    logs,
+                    created_at,
+                    updated_at,
+                    NULL AS duration_ms,
+                    NULL AS project_id
+                FROM jobs_legacy
+                """
+            )
+            conn.execute("DROP TABLE jobs_legacy")
+        else:
+            # ensure indexes exist for existing installs
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
+            )
 
 
 def now() -> int:
@@ -54,15 +138,34 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
 
-def enqueue(job_type: str, payload: Dict[str, Any]) -> str:
+def enqueue(job_type: str, payload: Dict[str, Any], *, project_id: str | None = None) -> str:
     """Persist a job in ``queued`` state and return the job ID."""
 
     job_id = new_id(job_type)
     with _conn() as conn:
         conn.execute(
-            """INSERT INTO jobs (id, type, payload, status, progress, result, error, logs, created_at, updated_at)
-                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (job_id, job_type, json.dumps(payload), "queued", 0, None, None, "", now(), now()),
+            """
+            INSERT INTO jobs (
+                id, type, payload, status, stage, progress, result,
+                error_message, logs, created_at, updated_at, duration_ms, project_id
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                job_id,
+                job_type,
+                json.dumps(payload),
+                "queued",
+                "queued",
+                0,
+                None,
+                None,
+                "",
+                now(),
+                now(),
+                None,
+                project_id,
+            ),
         )
     return job_id
 
@@ -72,7 +175,24 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
 
     with _conn() as conn:
         row = conn.execute(
-            "SELECT id, type, payload, status, progress, result, error, logs, created_at, updated_at FROM jobs WHERE id=?",
+            """
+            SELECT
+                id,
+                type,
+                payload,
+                status,
+                stage,
+                progress,
+                result,
+                error_message,
+                logs,
+                created_at,
+                updated_at,
+                duration_ms,
+                project_id
+            FROM jobs
+            WHERE id=?
+            """,
             (job_id,),
         ).fetchone()
     if not row:
@@ -82,34 +202,57 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
         "type": row[1],
         "payload": json.loads(row[2]),
         "status": row[3],
-        "progress": row[4],
-        "result": json.loads(row[5]) if row[5] else None,
-        "error": row[6],
-        "logs": row[7],
-        "created_at": row[8],
-        "updated_at": row[9],
+        "stage": row[4],
+        "progress": row[5],
+        "result": json.loads(row[6]) if row[6] else None,
+        "error_message": row[7],
+        "logs": row[8],
+        "created_at": row[9],
+        "updated_at": row[10],
+        "duration_ms": row[11],
+        "project_id": row[12],
     }
 
 
-def list_jobs(limit: int = 50) -> List[Dict[str, Any]]:
-    """Return the most recently created jobs."""
+def list_jobs(limit: int = 50, statuses: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+    """Return recent jobs optionally filtered by ``statuses``."""
+
+    query = (
+        "SELECT id, type, status, stage, progress, error_message, created_at, updated_at, duration_ms "
+        "FROM jobs"
+    )
+    params: List[Any] = []
+    if statuses:
+        status_list = list(statuses)
+        placeholders = ",".join(["?"] * len(status_list))
+        query += f" WHERE status IN ({placeholders})"
+        params.extend(status_list)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
 
     with _conn() as conn:
-        rows = conn.execute(
-            "SELECT id, type, status, progress, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
+
     return [
         {
             "id": row[0],
             "type": row[1],
             "status": row[2],
-            "progress": row[3],
-            "created_at": row[4],
-            "updated_at": row[5],
+            "stage": row[3],
+            "progress": row[4],
+            "error_message": row[5],
+            "created_at": row[6],
+            "updated_at": row[7],
+            "duration_ms": row[8],
         }
         for row in rows
     ]
+
+
+def list_active_jobs(limit: int = 20) -> List[Dict[str, Any]]:
+    """Return jobs that are currently running, queued, or recently failed."""
+
+    return list_jobs(limit=limit, statuses=["queued", "running", "failed"])
 
 
 def _update(job_id: str, **kwargs: Any) -> None:
@@ -134,10 +277,42 @@ def set_status(job_id: str, status: str) -> None:
     _update(job_id, status=status)
 
 
-def set_progress(job_id: str, progress: int) -> None:
+def set_progress(job_id: str, progress: Optional[int]) -> None:
     """Update ``progress`` while clamping it between 0 and 100."""
 
+    if progress is None:
+        _update(job_id, progress=None)
+        return
     _update(job_id, progress=max(0, min(100, int(progress))))
+
+
+def update_job_status(
+    job_id: str,
+    *,
+    stage: Any = UNSET,
+    progress: Any = UNSET,
+    error_message: Any = UNSET,
+    status: Any = UNSET,
+    duration_ms: Any = UNSET,
+) -> None:
+    """Update job metadata in one call while touching ``updated_at``."""
+
+    updates: Dict[str, Any] = {}
+    if stage is not UNSET:
+        updates["stage"] = stage
+    if progress is not UNSET:
+        if progress is None:
+            updates["progress"] = None
+        else:
+            updates["progress"] = max(0, min(100, int(progress)))
+    if error_message is not UNSET:
+        updates["error_message"] = error_message
+    if status is not UNSET:
+        updates["status"] = status
+    if duration_ms is not UNSET:
+        updates["duration_ms"] = duration_ms
+    if updates:
+        _update(job_id, **updates)
 
 
 def append_log(job_id: str, line: str) -> None:
@@ -150,16 +325,39 @@ def append_log(job_id: str, line: str) -> None:
         conn.execute("UPDATE jobs SET logs=?, updated_at=? WHERE id=?", (new_logs, now(), job_id))
 
 
-def set_result(job_id: str, result: Dict[str, Any]) -> None:
+def set_result(job_id: str, result: Dict[str, Any], *, duration_ms: Optional[int] = None) -> None:
     """Persist a successful result payload."""
 
-    _update(job_id, result=result, status="done", progress=100)
+    update_kwargs: Dict[str, Any] = {
+        "result": result,
+        "status": "complete",
+        "stage": "complete",
+        "progress": 100,
+        "error_message": None,
+    }
+    if duration_ms is not None:
+        update_kwargs["duration_ms"] = duration_ms
+    _update(job_id, **update_kwargs)
 
 
-def set_error(job_id: str, error: str) -> None:
+def set_error(
+    job_id: str,
+    error: str,
+    *,
+    progress: Optional[int] = None,
+    duration_ms: Optional[int] = None,
+) -> None:
     """Record an error state for the job."""
 
-    _update(job_id, error=error, status="error", progress=100)
+    update_kwargs: Dict[str, Any] = {
+        "error_message": error,
+        "status": "failed",
+        "stage": "failed",
+        "progress": progress,
+    }
+    if duration_ms is not None:
+        update_kwargs["duration_ms"] = duration_ms
+    _update(job_id, **update_kwargs)
 
 
 class QueueWorker(threading.Thread):
@@ -187,7 +385,7 @@ class QueueWorker(threading.Thread):
                         continue
                     job_id, job_type, payload_json = row
                     conn.execute(
-                        "UPDATE jobs SET status='running', updated_at=? WHERE id=?",
+                        "UPDATE jobs SET status='running', stage='running', progress=0, updated_at=? WHERE id=?",
                         (now(), job_id),
                     )
 
@@ -198,11 +396,20 @@ class QueueWorker(threading.Thread):
                     continue
 
                 append_log(job_id, f"Starting job {job_id} ({job_type})")
+                started = time.time()
                 try:
                     handler(job_id, payload)
+                    duration_ms = int((time.time() - started) * 1000)
+                    update_job_status(job_id, duration_ms=duration_ms)
                 except Exception as exc:  # pragma: no cover - defensive logging
                     append_log(job_id, traceback.format_exc())
-                    set_error(job_id, f"{type(exc).__name__}: {exc}")
+                    duration_ms = int((time.time() - started) * 1000)
+                    set_error(
+                        job_id,
+                        f"{type(exc).__name__}: {exc}",
+                        progress=None,
+                        duration_ms=duration_ms,
+                    )
             except Exception:
                 time.sleep(self.poll_interval)
 
