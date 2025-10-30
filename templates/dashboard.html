@@ -254,6 +254,23 @@
       <label>YouTube Upload Result</label>
       <pre id="ytResult" class="output-box"></pre>
     </div>
+    <form id="loginForm" class="modal-form active">
+      <label>Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" required />
+      <button type="submit">Log In</button>
+    </form>
+    <form id="registerForm" class="modal-form">
+      <label>Full Name</label>
+      <input id="registerName" type="text" autocomplete="name" required />
+      <label>Email</label>
+      <input id="registerEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="registerPassword" type="password" autocomplete="new-password" required />
+      <button type="submit">Create Account</button>
+    </form>
+    <div id="authFeedback" class="form-feedback"></div>
   </div>
 </section>
 
@@ -269,6 +286,7 @@
     <div class="row">
       <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>
     </div>
+    <div id="verifyFeedback" class="form-feedback"></div>
   </div>
 </section>
 {% endblock %}
