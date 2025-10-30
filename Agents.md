@@ -1,5 +1,8 @@
 # Agents / Services Overview
 
+DO NOT AUTOGENERATE
+This document defines contributor/agent contracts. Changes to this file must be intentional and human-reviewed.
+
 This document explains the main logical agents/services in the Creator Toolkit, how they interact, and what quality/testing standards each one is required to meet.
 
 ---
@@ -269,3 +272,22 @@ The following rules apply to EVERY agent above and ALL future pull requests.
 
 **Every agent now ships with tests, updates README.md when behavior changes, and calls out breaking changes in the PR.**  
 This is the baseline going forward.
+
+---
+
+## 2025-10 Updates (worker, dashboard roles, packaging paths)
+
+1. **Worker startup moved to app startup**
+   - The background Queue Worker is now started from the FastAPI app’s `startup` event.
+   - Any agent, test, or script that enqueues jobs MUST ensure the app has started (e.g. run uvicorn) before asserting job status/progress.
+   - Direct `import main` is no longer guaranteed to start the worker.
+
+2. **Dashboard role visibility is enforced**
+   - Sidebar items (`Imagine`, `Create`, `Publish`, `System`) are now shown/hidden based on the user’s `role` and `is_verified` status returned from `/dashboard/data`.
+   - UI tests MUST authenticate as `admin` or `owner` before asserting the presence of all sidebar items.
+   - Viewer-level users will not see all items; this is expected and should not be “fixed” by agents.
+
+3. **Packaging/job handlers must return output path**
+   - Handlers may now emit unique output filenames (e.g. timestamped) to avoid overwriting previous runs.
+   - Clients and tests MUST read the output path from the job object (DB / API response) instead of assuming `static/uploads/master.mp4`.
+   - When the output schema changes, update tests and README as per the global rules above.
