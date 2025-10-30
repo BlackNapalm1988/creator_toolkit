@@ -107,6 +107,19 @@ The `templates/dashboard.html` view now loads its profile, provider, job, and as
 - Updating the password via `POST /profile/password` clears the rotation requirement. Subsequent logins include the updated status in the profile payload.
 - Administrators can manage SMTP credentials via the new `/admin/system/smtp` endpoints; non-admins receive `403 Forbidden` responses.
 
+### Pre-seeded Test Users
+
+For easier manual testing the app now seeds one verified account per role on startup. Each account uses the shared password `password`:
+
+| Role | Email |
+|------|-------|
+| admin | `user_admin@testing.com` |
+| owner | `user_owner@testing.com` |
+| editor | `user_editor@testing.com` |
+| viewer | `user_viewer@testing.com` |
+
+These users are intended for local development only; be sure to rotate or remove them before deploying to a shared environment.
+
 ## Testing
 
 We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access), job lifecycle reporting, and password rotation behaviour.
