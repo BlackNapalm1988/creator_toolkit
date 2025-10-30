@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 
 from modules.jobs import (
@@ -14,6 +16,37 @@ from modules.jobs import (
     update_job_status,
 )
 from modules.packager import build_master_from_loop, probe_audio_duration
+from modules.storage import project_path
+
+
+def _timestamped_filename(prefix: str, suffix: str) -> str:
+    """Return a predictable timestamped filename."""
+
+    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    return f"{prefix}_{ts}{suffix}"
+
+
+def _resolve_output_path(raw_path: str | None) -> Path:
+    """Resolve and ensure the output directory exists for a packaging job."""
+
+    if raw_path:
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = project_path(*candidate.parts)
+    else:
+        candidate = project_path("static", "uploads", _timestamped_filename("master", ".mp4"))
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+
+def _as_relative_path(path: Path) -> str:
+    """Return a project-relative POSIX path for API responses."""
+
+    try:
+        relative = path.relative_to(project_path())
+    except ValueError:
+        relative = path
+    return relative.as_posix()
 
 
 def job_handle_package(job_id: str, payload: Dict[str, str]) -> None:
@@ -21,23 +54,31 @@ def job_handle_package(job_id: str, payload: Dict[str, str]) -> None:
 
     loop_path = payload["loop_video_path"]
     audio_path = payload["audio_path"]
-    out_path = payload.get("out_path") or os.path.join("static", "uploads", "master.mp4")
+    out_path = _resolve_output_path(payload.get("out_path"))
 
     update_job_status(job_id, stage="packaging", progress=5)
-    append_log(job_id, "Probing audio...")
-    duration_ms = probe_audio_duration(audio_path)
+    append_log(job_id, "Probing audio payload")
+
+    try:
+        duration_ms = probe_audio_duration(audio_path)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        append_log(job_id, f"Audio probe errored: {exc}")
+        set_error(job_id, "Audio probe failed", progress=None)
+        return
+
     if duration_ms <= 0:
-        append_log(job_id, "Audio probe failed; aborting job")
+        append_log(job_id, "Audio probe returned <= 0 duration")
         set_error(job_id, "Invalid audio asset", progress=None)
         return
 
-    update_job_status(job_id, stage="packaging", progress=30)
-    append_log(job_id, "Concatenating & muxing...")
+    update_job_status(job_id, stage="packaging", progress=35)
+    append_log(job_id, "Rendering master video")
+
     try:
         result = build_master_from_loop(
             loop_clip_path=loop_path,
             music_audio_path=audio_path,
-            out_path=out_path,
+            out_path=str(out_path),
             target_ms=duration_ms,
             voiceover_audio_path=None,
         )
@@ -47,10 +88,15 @@ def job_handle_package(job_id: str, payload: Dict[str, str]) -> None:
         return
 
     update_job_status(job_id, stage="packaging", progress=95)
-    append_log(job_id, "Finalizing…")
+    append_log(job_id, "Packaging complete")
+
     set_result(
         job_id,
-        {"master_path": out_path, "audio_ms": duration_ms, "detail": result},
+        {
+            "out_path": _as_relative_path(out_path),
+            "audio_ms": duration_ms,
+            "detail": result,
+        },
         duration_ms=duration_ms,
     )
 
@@ -81,12 +127,14 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
     thresholds = payload.get("thresholds", {"loop": 0.92, "style": 75})  # type: ignore[assignment]
 
     update_job_status(job_id, stage="qa", progress=0)
+    append_log(job_id, f"QA batch starting ({len(paths)} asset(s))")
 
     results = []
     total = max(1, len(paths))
     for index, path in enumerate(paths, start=1):
         if not os.path.exists(path):
             results.append({"path": path, "error": "not found"})
+            append_log(job_id, f"{path} missing on disk")
         else:
             loop_score = compute_loop_score(path)
             style_score = compute_style_score(path, palette)
@@ -111,8 +159,9 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
             )
 
         update_job_status(job_id, stage="qa", progress=int(100 * index / total))
-        if index % 3 == 0:
+        if index % 3 == 0 or index == total:
             append_log(job_id, f"Processed {index}/{total}")
         time.sleep(0.01)
 
+    append_log(job_id, "QA batch complete")
     set_result(job_id, {"results": results})

@@ -85,6 +85,8 @@ def test_dashboard_data_authenticated_success(client):
     assert job_entry["status"] == "running"
     assert job_entry["stage"] in {"qa", "running"}
     assert job_entry["progress"] == 65
+    assert "out_path" in job_entry
+    assert job_entry["out_path"] is None
     # ``updated_at`` should be an ISO timestamp string when available.
     assert isinstance(job_entry["updated_at"], str)
     # Ensure ISO-8601 structure (YYYY-MM-DDT...).
@@ -97,6 +99,7 @@ def test_dashboard_data_authenticated_success(client):
     assert active_entry["status"] == "running"
     assert active_entry["stage"] in {"qa", "running"}
     assert active_entry["error_message"] is None
+    assert "out_path" in active_entry
 
 
 def test_dashboard_data_rejects_unauthenticated(client):

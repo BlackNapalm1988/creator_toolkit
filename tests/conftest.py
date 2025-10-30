@@ -1,12 +1,14 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-# Ensure consistent JWT secret for tests before importing the application.
+# Ensure consistent secrets before importing the application.
 os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("DISABLE_QUEUE_WORKER", "1")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -18,7 +20,36 @@ from modules import users as users_module
 
 
 @pytest.fixture(autouse=True)
-def isolate_databases(tmp_path, monkeypatch):
+def clean_runtime_dirs():
+    """Reset runtime directories (data/static outputs) before each test."""
+
+    runtime_dirs = [
+        PROJECT_ROOT / "static" / "uploads",
+        PROJECT_ROOT / "static" / "reports",
+        PROJECT_ROOT / "static" / "masters",
+    ]
+    for path in runtime_dirs:
+        if path.exists():
+            if path.is_dir():
+                for child in path.iterdir():
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        try:
+                            child.unlink()
+                        except PermissionError:
+                            pass
+            else:
+                try:
+                    path.unlink()
+                except PermissionError:
+                    continue
+        path.mkdir(parents=True, exist_ok=True)
+    yield
+
+
+@pytest.fixture(autouse=True)
+def isolate_databases(clean_runtime_dirs, tmp_path, monkeypatch):
     """Use temporary SQLite databases for auth and jobs during each test."""
 
     auth_db = tmp_path / "auth.db"
@@ -33,6 +64,13 @@ def isolate_databases(tmp_path, monkeypatch):
     jobs_module.init_jobs_db()
     main.bootstrap_default_admin()
     yield
+
+    # Defensive: ensure any lazily-started worker threads are stopped.
+    worker = getattr(main.app.state, "worker", None)
+    if worker:
+        worker.stop()
+        worker.join(timeout=1)
+        main.app.state.worker = None
 
 
 @pytest.fixture

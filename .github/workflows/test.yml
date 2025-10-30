@@ -27,7 +27,8 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest -v --maxfail=1 --disable-warnings
+          export DISABLE_QUEUE_WORKER=1
+          pytest -q --maxfail=1 --disable-warnings
 
       - name: Verify Agents file integrity
         run: |
@@ -37,6 +38,6 @@ jobs:
           for key in ["API Server (FastAPI App)",
                       "Worker Agent (Background Worker)",
                       "Dashboard / Visibility Layer"]:
-              assert key in text, f"❌ Missing core section: {key}"
-          print("✅ Agents.md integrity verified")
+              assert key in text, f"Missing core section: {key}"
+          print("Agents.md integrity verified")
           PY

@@ -3,34 +3,52 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-DB_PATH = os.path.join(DATA_DIR, "projects.json")
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+PathLike = Union[str, Path]
+
+
+def project_path(*parts: PathLike) -> Path:
+    """Return an absolute path rooted at the project base directory."""
+
+    if not parts:
+        return BASE_DIR
+    return BASE_DIR.joinpath(*(str(part) for part in parts))
+
+
+DATA_DIR = project_path("data")
+DB_PATH = DATA_DIR / "projects.json"
 _LOCK = threading.Lock()
 
 DEFAULT_DB = {"projects": [], "presets": []}
 
 
+def _ensure_data_dir() -> None:
+    """Create the data directory lazily."""
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
 def _load() -> Dict[str, Any]:
     """Load the JSON store, creating it with defaults if it doesn't exist."""
 
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(DB_PATH):
-        with open(DB_PATH, "w", encoding="utf-8") as fh:
-            json.dump(DEFAULT_DB, fh, indent=2)
+    _ensure_data_dir()
+    if not DB_PATH.exists():
+        DB_PATH.write_text(json.dumps(DEFAULT_DB, indent=2), encoding="utf-8")
         return DEFAULT_DB.copy()
-    with open(DB_PATH, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    return json.loads(DB_PATH.read_text(encoding="utf-8"))
 
 
 def _save(db: Dict[str, Any]) -> None:
     """Persist the provided database dictionary to disk."""
 
-    with open(DB_PATH, "w", encoding="utf-8") as fh:
-        json.dump(db, fh, indent=2)
+    _ensure_data_dir()
+    DB_PATH.write_text(json.dumps(db, indent=2), encoding="utf-8")
 
 
 def list_projects() -> List[Dict[str, Any]]:

@@ -20,6 +20,9 @@ milestones:
       - All sidebar items render correctly for admin user
       - Worker starts only on app startup (no import-time threads)
       - Agents.md contains 2025-10 updates section
+      - Default admin flow forces password change on first login
+      - Job polling exposes progress, stage, logs, and unique output paths
+      - README.md and CHANGELOG.md document worker/sidebar/packaging/auth updates
       - CI passes on main and dev
     tasks:
       - id: v1.2-env
@@ -27,50 +30,59 @@ milestones:
         type: backend
         status: todo
         description: >
-          Update requirements.txt, ensure .env is created, and pytest runs locally.
+          Update requirements.txt, ensure .env is created from .env.example with secure secrets,
+          and confirm pytest runs locally without starting background workers implicitly.
         done_when:
           - requirements.txt present
           - pytest -q passes
+          - .env contains JWT_SECRET, FERNET_SECRET, JWT_ALG, JWT_EXPIRE_MIN
       - id: v1.2-worker
         name: Move worker to FastAPI startup
         type: backend
         status: todo
         description: >
           Remove import-time worker start from main.py and register a startup event
-          that initializes the QueueWorker with the existing handlers.
+          that initializes the QueueWorker, storing it on app.state and keeping handlers identical.
         done_when:
           - main.py contains @app.on_event("startup")
           - No worker threads appear on simple module import
+          - app.state.worker references the running QueueWorker instance
       - id: v1.2-ui-visibility
         name: Restore sidebar role visibility
         type: ui
         status: todo
         description: >
-          Ensure /dashboard-data (or /me) returns role, is_verified, must_change_password.
-          Update static/app.js to show Imagine/Create/Publish/System for admin/owner/editor,
-          and show banner for unverified users instead of hiding tabs.
+          Ensure /dashboard-data (or /me) returns role, is_verified, must_change_password,
+          and frontend logic reads those keys to toggle Imagine/Create/Publish/System visibility.
+          Update static/app.js to filter by data-roles, remove legacy /ui templates, and show an
+          unverified banner instead of hiding tabs when is_verified is false.
         done_when:
           - admin user sees all tabs
           - viewer user sees only viewer tabs
+          - unverified users get a banner/disabled state without missing tabs
       - id: v1.2-admin
         name: Secure default admin / first run
         type: backend
         status: todo
         description: >
-          On empty user store, create admin@local with force-change-password flag.
+          On empty user store, create admin@local.test with force-change-password flag.
           Login endpoint should surface must_change_password in response.
         done_when:
           - first login requires password change
+          - Login response includes must_change_password
+          - Startup logs warn if JWT secrets are left at insecure defaults
       - id: v1.2-jobs
         name: Stabilize job handlers & polling
         type: backend
         status: todo
         description: >
-          Update job_handlers to produce timestamped outputs, wrap in try/except,
-          and ensure polling endpoint returns status, progress, stage, and logs.
+          Update job_handlers to produce timestamped outputs, wrap in try/except with set_error,
+          and ensure polling endpoint returns status, progress, stage, logs, and result.out_path
+          that clients consume instead of static paths.
         done_when:
           - two consecutive jobs do not overwrite outputs
           - polling shows progress increments
+          - errors populate error_message and logs
       - id: v1.2-storage
         name: Normalize storage paths
         type: backend
@@ -80,6 +92,7 @@ milestones:
         done_when:
           - project_path() exists
           - static/uploads created via helper
+          - job handlers use project_path for outputs
       - id: v1.2-agents
         name: Agents.md alignment
         type: docs
@@ -91,15 +104,51 @@ milestones:
           3) packaging must return real out_path.
         done_when:
           - Agents.md contains the 3 notes
+          - Header clarifies DO NOT AUTOGENERATE and CI test protects core sections
+          - Release notes call out the contract changes
       - id: v1.2-ci
         name: CI guard
         type: ops
         status: todo
         description: >
-          Add .github/workflows/test.yml to run pytest and verify Agents.md integrity.
+          Add .github/workflows/test.yml to run pytest, enforce Agents.md integrity, and fail on missing sections.
         done_when:
           - GitHub Actions run green on push/pr
           - Missing agent sections fail CI
+          - Workflow runs pytest -q
+      - id: v1.2-auth-crypto
+        name: Auth & encryption simplification
+        type: backend
+        status: todo
+        description: >
+          Remove PyJWT fallback in modules/auth.py, rely on python-jose for JWT handling,
+          retain Fernet encryption for SMTP, and document rotation steps.
+        done_when:
+          - modules/auth.py uses python-jose exclusively
+          - README documents JWT rotation and Fernet key handling
+          - Legacy PyJWT imports removed from requirements
+      - id: v1.2-tests
+        name: Tests & fixtures hardening
+        type: tests
+        status: todo
+        description: >
+          Add autouse fixture to isolate data/, expand dashboard/RBAC/job tests to cover worker startup,
+          progress polling, and role visibility regressions.
+        done_when:
+          - tests/conftest.py cleans data/ per test
+          - dashboard, RBAC, and jobs tests assert new response fields
+          - pytest suite passes without side-effect workers
+      - id: v1.2-docs
+        name: Documentation refresh
+        type: docs
+        status: todo
+        description: >
+          Update README.md and CHANGELOG.md with worker startup, sidebar visibility, packaging outputs,
+          default admin rotation, and agent alignment guidance.
+        done_when:
+          - README details new flows and secrets
+          - CHANGELOG highlights v1.2 core restoration items
+          - Release checklist reflects documentation updates
     release:
       tag: v1.2-core-restoration
       notes:
@@ -107,6 +156,8 @@ milestones:
         - Safer background worker startup
         - CI protection for Agents.md
         - Timestamped job outputs
+        - JWT handling simplified with python-jose only
+        - README and CHANGELOG refreshed for v1.2
 
   - name: v1.3 Timeline & Imagine Enhancements
     id: v1.3

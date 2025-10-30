@@ -68,8 +68,10 @@ Typical job types include (examples):
   - Final status is updated (`complete` / `failed`).
 - Progress reporting logic (if present) should be asserted in tests (e.g. `progress` moves 0→100 or stages update).
 - Tests must assert that stage/progress/status fields update over time and that `error_message` is populated on failure paths.
+- Result payloads must expose a timestamped `out_path` (and any other metadata the dashboard consumes). Tests should assert clients read the output path from the job record instead of assuming static filenames.
 - Job handlers MUST NOT depend on live external services in tests. Use fakes/mocks/dummy payloads.
 - If the worker’s schema or job payload format changes, update README.md (section on “Job Queue / Background Worker”) so contributors know what a job is supposed to look like.
+- Use the `DISABLE_QUEUE_WORKER=1` flag when running pytest suites that should not spawn the worker thread.
 
 ---
 
@@ -283,9 +285,9 @@ This is the baseline going forward.
    - Direct `import main` is no longer guaranteed to start the worker.
 
 2. **Dashboard role visibility is enforced**
-   - Sidebar items (`Imagine`, `Create`, `Publish`, `System`) are now shown/hidden based on the user’s `role` and `is_verified` status returned from `/dashboard/data`.
+   - Sidebar items (`Imagine`, `Create`, `Publish`, `System`) now use the template’s `data-roles` attribute. Buttons remain visible for allowed roles, and unverified users see a banner plus “locked” navigation rather than losing the tab.
    - UI tests MUST authenticate as `admin` or `owner` before asserting the presence of all sidebar items.
-   - Viewer-level users will not see all items; this is expected and should not be “fixed” by agents.
+   - Viewer-level users should only see viewer tabs; do not override these guards.
 
 3. **Packaging/job handlers must return output path**
    - Handlers may now emit unique output filenames (e.g. timestamped) to avoid overwriting previous runs.

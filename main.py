@@ -9,6 +9,7 @@ import secrets
 import smtplib
 import uuid
 from email.message import EmailMessage
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -68,6 +69,7 @@ from modules.storage import (
     list_presets,
     upsert_preset,
     delete_preset,
+    project_path,
 )
 
 from modules.users import (
@@ -118,7 +120,8 @@ if not JWT_SECRET:
         "Set JWT_SECRET in your environment for production."
     )
 
-DEFAULT_ADMIN_EMAIL = "admin@local"
+LEGACY_ADMIN_EMAILS = {"admin@local"}
+DEFAULT_ADMIN_EMAIL = "admin@local.test"
 DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"
 
 TEST_USER_PASSWORD = "password"
@@ -135,8 +138,8 @@ PUBLISHER_ROLES = ["admin", "owner"]
 SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT_SECONDS") or 10)
 
 # make sure these dirs exist
-for d in ("static", "static/uploads", "static/reports", "ui", "data", "scenes"):
-    os.makedirs(d, exist_ok=True)
+for rel_path in ("static", "static/uploads", "static/reports", "data", "scenes"):
+    project_path(*Path(rel_path).parts).mkdir(parents=True, exist_ok=True)
 
 auth_scheme = HTTPBearer(auto_error=False)
 
@@ -231,6 +234,30 @@ def bootstrap_default_admin() -> Optional[int]:
     """Ensure a default admin user exists on first run."""
 
     created_admin_id: Optional[int] = None
+
+    # Migrate any legacy admin accounts that used non-RFC compliant emails.
+    for legacy_email in LEGACY_ADMIN_EMAILS:
+        if legacy_email == DEFAULT_ADMIN_EMAIL:
+            continue
+        legacy_user = get_user_by_email(legacy_email)
+        if not legacy_user:
+            continue
+        existing_default = get_user_by_email(DEFAULT_ADMIN_EMAIL)
+        if existing_default and existing_default["id"] != legacy_user["id"]:
+            logger.warning(
+                "Legacy admin email %s present but %s already exists; skipping migration",
+                legacy_email,
+                DEFAULT_ADMIN_EMAIL,
+            )
+            continue
+        full_name = legacy_user.get("full_name") or "System Administrator"
+        update_user_profile(legacy_user["id"], full_name, DEFAULT_ADMIN_EMAIL)
+        logger.info(
+            "Migrated legacy admin email from %s to %s",
+            legacy_email,
+            DEFAULT_ADMIN_EMAIL,
+        )
+
     if not count_users():
         password_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
         created_admin_id = create_user(
@@ -348,6 +375,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+app.state.worker = None
 
 admin_router = APIRouter(prefix="/admin/system", tags=["Admin"])
 
@@ -687,6 +715,20 @@ def _to_iso(ts: int | None) -> str | None:
         return None
 
 
+def _extract_result(job: Dict[str, object]) -> Dict[str, object] | None:
+    result = job.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def _extract_out_path(result: Dict[str, object] | None) -> str | None:
+    if not result:
+        return None
+    path = result.get("out_path") or result.get("master_path")
+    if not path:
+        return None
+    return str(path).replace("\\", "/")
+
+
 def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
     raw_progress = job.get("progress")
     try:
@@ -702,6 +744,9 @@ def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
     else:
         updated_value = None
 
+    result_payload = _extract_result(job)
+    out_path = _extract_out_path(result_payload)
+
     return {
         "id": job.get("id"),
         "type": job.get("type"),
@@ -710,6 +755,7 @@ def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
         "progress": progress_value,
         "updated_at": updated_value,
         "error_message": job.get("error_message"),
+        "out_path": out_path,
     }
 
 
@@ -726,6 +772,8 @@ def _serialize_job_detail(job: Dict[str, object]) -> Dict[str, object]:
         {
             "created_at": created_value,
             "duration_ms": job.get("duration_ms"),
+            "result": _extract_result(job),
+            "logs": (job.get("logs") or "").splitlines() if job.get("logs") else [],
         }
     )
     return detail
@@ -1919,14 +1967,46 @@ def youtube_upload_video(
 # JOB QUEUE ENDPOINTS
 # ----------------------------
 
-WORKER = QueueWorker(
-    handlers={
-        "package": job_handle_package,
-        "qa_batch": job_handle_qa_batch,
-    },
-    poll_interval=0.5,
-)
-WORKER.start()
+
+@app.on_event("startup")
+async def start_queue_worker() -> None:
+    """Start the background queue worker once the FastAPI app boots."""
+
+    if getattr(app.state, "worker", None):
+        return
+
+    if os.getenv("DISABLE_QUEUE_WORKER", "").strip().lower() in {"1", "true", "yes"}:
+        logger.info("Queue worker disabled via DISABLE_QUEUE_WORKER flag")
+        app.state.worker = None
+        return
+
+    logger.info("Starting background queue worker")
+    worker = QueueWorker(
+        handlers={
+            "package": job_handle_package,
+            "qa_batch": job_handle_qa_batch,
+        },
+        poll_interval=0.5,
+    )
+    worker.start()
+    app.state.worker = worker
+
+    if JWT_SECRET == "dev_secret_change_me":
+        logger.error(
+            "JWT_SECRET is using the insecure default. Update your environment configuration."
+        )
+
+
+@app.on_event("shutdown")
+async def stop_queue_worker() -> None:
+    """Stop the background queue worker when the app shuts down."""
+
+    worker = getattr(app.state, "worker", None)
+    if worker:
+        worker.stop()
+        worker.join(timeout=2)
+        app.state.worker = None
+
 
 class EnqueuePackageReq(BaseModel):
     loop_video_path: str
@@ -2010,7 +2090,6 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/ui", StaticFiles(directory="ui", html=True), name="ui")
 
 @app.get("/health")
 def health():

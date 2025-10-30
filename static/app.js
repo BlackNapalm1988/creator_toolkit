@@ -90,6 +90,7 @@ const navImagineButton = document.getElementById("navImagine");
 const navCreateButton = document.getElementById("navCreate");
 const navPublishButton = document.getElementById("navPublish");
 const navSystemButton = document.getElementById("navSystem");
+const VERIFY_NAV_HINT = "Verify your email to access this area.";
 const viewSections = Array.from(document.querySelectorAll(".view"));
 const mainContentEl = document.querySelector(".main-content");
 const initialActiveView =
@@ -503,33 +504,44 @@ function changeView(viewId, options = {}) {
   }
 }
 
-function updateNavigationForRole(role) {
-  const capabilities = getRoleCapabilities(role);
-  const canCreate = capabilities.generate || capabilities.publish;
-  const canImagine = capabilities.generate;
-  const canPublish = capabilities.publish;
-  if (navDashboardButton) navDashboardButton.classList.remove("hidden");
-  if (navImagineButton) navImagineButton.classList.toggle("hidden", !canImagine);
-  if (navCreateButton) navCreateButton.classList.toggle("hidden", !canCreate);
-  if (navPublishButton) navPublishButton.classList.toggle("hidden", !canPublish);
-  if (navSystemButton) navSystemButton.classList.toggle("hidden", !capabilities.admin);
-
+function updateNavigationForRole(role, { verified = true } = {}) {
+  const roleKey = (role || "viewer").toLowerCase();
   const visibleViews = new Set();
-  if (navDashboardButton && !navDashboardButton.classList.contains("hidden")) {
-    visibleViews.add("dashboard-view");
-  }
-  if (navImagineButton && !navImagineButton.classList.contains("hidden")) {
-    visibleViews.add("imagine-view");
-  }
-  if (navCreateButton && !navCreateButton.classList.contains("hidden")) {
-    visibleViews.add("create-view");
-  }
-  if (navPublishButton && !navPublishButton.classList.contains("hidden")) {
-    visibleViews.add("publish-view");
-  }
-  if (navSystemButton && !navSystemButton.classList.contains("hidden")) {
-    visibleViews.add("system-view");
-  }
+
+  navButtons.forEach(btn => {
+    if (!btn) return;
+    const allowedRoles = (btn.dataset.roles || "")
+      .split(/\s+/)
+      .map(r => r.trim().toLowerCase())
+      .filter(Boolean);
+    const canSee = allowedRoles.length === 0 || allowedRoles.includes(roleKey);
+    btn.classList.toggle("hidden", !canSee);
+    if (!canSee) {
+      if (btn.dataset.locked) {
+        delete btn.dataset.locked;
+      }
+      btn.classList.remove("locked");
+      if (btn.title === VERIFY_NAV_HINT) {
+        btn.removeAttribute("title");
+      }
+      return;
+    }
+
+    visibleViews.add(btn.dataset.view);
+
+    if (!verified && btn.dataset.view !== "dashboard-view") {
+      btn.dataset.locked = "verify";
+      btn.classList.add("locked");
+      btn.title = VERIFY_NAV_HINT;
+    } else if (btn.dataset.locked === "verify") {
+      delete btn.dataset.locked;
+      btn.classList.remove("locked");
+      if (btn.title === VERIFY_NAV_HINT) {
+        btn.removeAttribute("title");
+      }
+    }
+  });
+
   if (!visibleViews.has(activeViewId)) {
     changeView("dashboard-view", { replace: true });
   }
@@ -709,7 +721,7 @@ function applyUserState() {
     setApiKeyFormEnabled(false);
     if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
     authState.capabilities = ROLE_CAPABILITIES.viewer;
-    updateNavigationForRole("viewer");
+    updateNavigationForRole("viewer", { verified: false });
     changeView("dashboard-view", { replace: true });
     return;
   }
@@ -717,7 +729,8 @@ function applyUserState() {
   const role = (user.role || "viewer").toLowerCase();
   const capabilities = getRoleCapabilities(role);
   authState.capabilities = capabilities;
-  updateNavigationForRole(role);
+  const verified = !!user.is_verified;
+  updateNavigationForRole(role, { verified });
 
   if (authActions) authActions.classList.add("hidden");
   if (userActions) userActions.classList.remove("hidden");
@@ -729,7 +742,6 @@ function applyUserState() {
   document.body.classList.toggle("dev-mode", capabilities.admin);
   if (docsLink) docsLink.classList.toggle("hidden", !capabilities.admin);
 
-  const verified = !!user.is_verified;
   updateFeatureAvailability({ verified, capabilities });
   if (verificationBanner) verificationBanner.classList.toggle("hidden", verified);
   if (verified) {
@@ -1394,6 +1406,15 @@ navButtons.forEach(btn => {
     if (btn.classList.contains("hidden")) return;
     const target = btn.dataset.view;
     if (!target) return;
+
+    if (btn.dataset.locked === "verify") {
+      if (event) event.preventDefault();
+      showVerificationOverlay();
+      if (verificationBanner) {
+        verificationBanner.classList.remove("hidden");
+      }
+      return;
+    }
 
     if (event) {
       event.preventDefault();
