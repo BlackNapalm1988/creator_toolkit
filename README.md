@@ -164,4 +164,4 @@ Pull requests are welcome! Please:
 
 ## License
 
-MIT License
+No license has been specified. Assume all rights reserved unless the repository owner states otherwise.
