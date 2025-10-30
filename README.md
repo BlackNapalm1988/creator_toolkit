@@ -33,6 +33,7 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 ## Dashboard & Job Monitoring
 
 - The left sidebar now exposes dedicated **Dashboard**, **Imagine**, and **Create** workspaces (with **System** reserved for admins), and availability is driven by user role.
+- Each workspace can be deep-linked via `/dashboard`, `/imagine`, `/create`, and `/system`, ensuring the same shell loads with the expected tab pre-selected.
 - Panels surface your account details (including role, verification state, and password rotation flag), provider connection status, active job progress/errors, and recent assets.
 - New read-only job endpoints expose background processing state:
   - `GET /jobs` – Recent jobs (admin/owner/editor only).

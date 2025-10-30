@@ -90,6 +90,15 @@ const navImagineButton = document.getElementById("navImagine");
 const navCreateButton = document.getElementById("navCreate");
 const navSystemButton = document.getElementById("navSystem");
 const viewSections = Array.from(document.querySelectorAll(".app-view"));
+const mainContentEl = document.querySelector(".main-content");
+const initialActiveView =
+  (mainContentEl && mainContentEl.dataset.activeView) || "view-dashboard";
+const VIEW_PATHS = {
+  "view-dashboard": "/dashboard",
+  "view-imagine": "/imagine",
+  "view-create": "/create",
+  "view-system": "/system",
+};
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -465,6 +474,31 @@ function setActiveView(viewId) {
     const target = btn.dataset.view;
     btn.classList.toggle("active", target === viewId);
   });
+  if (mainContentEl) {
+    mainContentEl.dataset.activeView = viewId;
+  }
+}
+
+function changeView(viewId, options = {}) {
+  if (!viewId) return;
+  const { path, replace = false } = options;
+  setActiveView(viewId);
+
+  const targetPath = path || VIEW_PATHS[viewId] || window.location.pathname;
+  const state = { viewId };
+  if (!window.history) {
+    return;
+  }
+
+  try {
+    if (replace && window.history.replaceState) {
+      window.history.replaceState(state, "", targetPath);
+    } else if (window.history.pushState) {
+      window.history.pushState(state, "", targetPath);
+    }
+  } catch (err) {
+    console.warn("navigation state update failed", err);
+  }
 }
 
 function updateNavigationForRole(role) {
@@ -490,7 +524,7 @@ function updateNavigationForRole(role) {
     visibleViews.add("view-system");
   }
   if (!visibleViews.has(activeViewId)) {
-    setActiveView("view-dashboard");
+    changeView("view-dashboard", { replace: true });
   }
 }
 
@@ -669,7 +703,7 @@ function applyUserState() {
     if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
     authState.capabilities = ROLE_CAPABILITIES.viewer;
     updateNavigationForRole("viewer");
-    setActiveView("view-dashboard");
+    changeView("view-dashboard", { replace: true });
     return;
   }
 
@@ -1349,16 +1383,30 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 navButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", event => {
     if (btn.classList.contains("hidden")) return;
     const target = btn.dataset.view;
-    if (target) {
-      setActiveView(target);
-      if (target === "view-dashboard") {
-        loadDashboardData(true, { silent: true });
-      }
+    if (!target) return;
+
+    if (event) {
+      event.preventDefault();
+    }
+
+    const href = btn.getAttribute("href") || VIEW_PATHS[target];
+    changeView(target, { path: href });
+    if (target === "view-dashboard") {
+      loadDashboardData(true, { silent: true });
     }
   });
+});
+
+window.addEventListener("popstate", event => {
+  const state = event.state || {};
+  const targetView = state.viewId || initialActiveView;
+  setActiveView(targetView);
+  if (targetView === "view-dashboard") {
+    loadDashboardData(true, { silent: true });
+  }
 });
 
 if (refreshJobsButton) {
@@ -1367,7 +1415,10 @@ if (refreshJobsButton) {
   });
 }
 
-setActiveView("view-dashboard");
+changeView(initialActiveView, {
+  path: window.location.pathname,
+  replace: true,
+});
 
 // =========================
 // IMAGINE TAB

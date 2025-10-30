@@ -32,16 +32,38 @@
     <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
   </div>
 
+  {% set nav_active = active_view or 'view-dashboard' %}
+
   <div class="app-shell">
     <aside class="sidebar" id="sidebarNav">
       <nav class="sidebar-menu">
-        <button class="sidebar-link active" id="navDashboard" data-view="view-dashboard">Dashboard</button>
-        <button class="sidebar-link" id="navImagine" data-view="view-imagine">Imagine</button>
-        <button class="sidebar-link" id="navCreate" data-view="view-create">Create</button>
-        <button class="sidebar-link" id="navSystem" data-view="view-system">System</button>
+        <a
+          class="sidebar-link {% if nav_active == 'view-dashboard' %}active{% endif %}"
+          id="navDashboard"
+          data-view="view-dashboard"
+          href="/dashboard"
+        >Dashboard</a>
+        <a
+          class="sidebar-link {% if nav_active == 'view-imagine' %}active{% endif %}"
+          id="navImagine"
+          data-view="view-imagine"
+          href="/imagine"
+        >Imagine</a>
+        <a
+          class="sidebar-link {% if nav_active == 'view-create' %}active{% endif %}"
+          id="navCreate"
+          data-view="view-create"
+          href="/create"
+        >Create</a>
+        <a
+          class="sidebar-link {% if nav_active == 'view-system' %}active{% endif %}"
+          id="navSystem"
+          data-view="view-system"
+          href="/system"
+        >System</a>
       </nav>
     </aside>
-    <main class="main-content">
+    <main class="main-content" data-active-view="{{ nav_active }}">
       {% block content %}{% endblock %}
     </main>
   </div>

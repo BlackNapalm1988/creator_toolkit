@@ -634,13 +634,41 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [t.strip() for t in tags_raw.split(",") if t.strip()]
 
 
+def _dashboard_shell(request: Request, *, active_view: str = "view-dashboard") -> HTMLResponse:
+    """Render the dashboard shell with the requested active view highlighted."""
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "active_view": active_view},
+    )
+
+
 @app.get("/dashboard", response_class=HTMLResponse, tags=["UI"])
 def dashboard_page(request: Request):
-    """
-    Basic UI shell with 3 tabs: Imagine / Create / Publish.
-    Frontend JS will call the API routes.
-    """
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    """Render the dashboard shell with the main dashboard view active."""
+
+    return _dashboard_shell(request, active_view="view-dashboard")
+
+
+@app.get("/imagine", response_class=HTMLResponse, tags=["UI"])
+def imagine_page(request: Request):
+    """Render the dashboard shell focused on the Imagine workspace."""
+
+    return _dashboard_shell(request, active_view="view-imagine")
+
+
+@app.get("/create", response_class=HTMLResponse, tags=["UI"])
+def create_page(request: Request):
+    """Render the dashboard shell focused on the Create workspace."""
+
+    return _dashboard_shell(request, active_view="view-create")
+
+
+@app.get("/system", response_class=HTMLResponse, tags=["UI"])
+def system_page(request: Request):
+    """Render the dashboard shell with the System panel selected."""
+
+    return _dashboard_shell(request, active_view="view-system")
 
 
 def _to_iso(ts: int | None) -> str | None:
