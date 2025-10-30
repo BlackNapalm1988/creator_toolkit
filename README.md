@@ -30,6 +30,30 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 - The `/dashboard` page now dynamically fetches and displays this data for a live overview.
 - Users can monitor job progress and service connections in real time.
 
+## Dashboard & Job Monitoring
+
+- The left sidebar now exposes dedicated **Dashboard**, **Imagine**, and **Create** workspaces (with **System** reserved for admins), and availability is driven by user role.
+- Panels surface your account details (including role, verification state, and password rotation flag), provider connection status, active job progress/errors, and recent assets.
+- New read-only job endpoints expose background processing state:
+  - `GET /jobs` – Recent jobs (admin/owner/editor only).
+  - `GET /jobs/{job_id}` – Detailed view of a single job (admin/owner/editor only).
+- Jobs include stage, progress, status, error message, and timestamps so operators can track long-running work. Example payload:
+
+  ```json
+  {
+    "id": "abc123",
+    "type": "package_async",
+    "status": "running",
+    "stage": "packaging",
+    "progress": 60,
+    "updated_at": "2025-10-28T00:15:00Z",
+    "error_message": null
+  }
+  ```
+
+- Role-aware navigation keeps mutation controls hidden: viewers see only the Dashboard, while editors/owners/admins unlock the Imagine and Create workspaces, with the System tab reserved for admins.
+- The UI polls `/dashboard/data` in the background so the Active Jobs panel reflects live progress without manual refreshes.
+
 ## Installation
 
 1. **Clone & set up Python**
@@ -64,6 +88,9 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 uvicorn main:app --reload
 ```
 
+If `JWT_SECRET` is not set the server will fall back to an insecure development default so local runs succeed, but you should
+still define a unique secret in production or when sharing environments.
+
 The FastAPI app automatically starts a background `QueueWorker` so common jobs run without launching a separate process. For dedicated job execution you can also run:
 
 ```bash
@@ -80,9 +107,22 @@ The `templates/dashboard.html` view now loads its profile, provider, job, and as
 - Updating the password via `POST /profile/password` clears the rotation requirement. Subsequent logins include the updated status in the profile payload.
 - Administrators can manage SMTP credentials via the new `/admin/system/smtp` endpoints; non-admins receive `403 Forbidden` responses.
 
+### Pre-seeded Test Users
+
+For easier manual testing the app now seeds one verified account per role on startup. Each account uses the shared password `password`:
+
+| Role | Email |
+|------|-------|
+| admin | `user_admin@testing.com` |
+| owner | `user_owner@testing.com` |
+| editor | `user_editor@testing.com` |
+| viewer | `user_viewer@testing.com` |
+
+These users are intended for local development only; be sure to rotate or remove them before deploying to a shared environment.
+
 ## Testing
 
-We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access) and password rotation behaviour.
+We use pytest-style tests stored in the `tests/` directory. The suite boots a FastAPI `TestClient` and uses temporary SQLite databases so it can run without touching your local `data/` files. Recent additions cover role-based access control (admin-only SMTP, publish permissions, viewer access), job lifecycle reporting, and password rotation behaviour.
 
 To execute the tests locally:
 

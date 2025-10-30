@@ -1,118 +1,101 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Creator Toolkit</title>
-  <link rel="stylesheet" href="/static/style.css" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
+{% extends "base.html" %}
 
-  <!-- Top bar -->
-  <header class="topbar">
-    <div class="brand">Creator Toolkit</div>
-    <div class="spacer"></div>
-    <div class="user-actions hidden" id="userActions">
-      <span id="userGreeting" class="user-greeting"></span>
-      <a id="docsLink" class="ghost-btn hidden" href="/docs" target="_blank" rel="noopener">Docs</a>
-      <button id="profileButton" class="ghost-btn">Profile</button>
-      <button id="logoutButton" class="ghost-btn">Log Out</button>
+{% block content %}
+<section id="view-dashboard" class="app-view active">
+  <div class="view-intro">
+    <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p>
+    <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="card account-card">
+      <div class="card-header">
+        <h2>Your Account</h2>
+        <span id="dashboardRoleBadge" class="role-pill">Viewer</span>
+      </div>
+      <ul id="dashboardProfileList" class="dashboard-list">
+        <li class="dashboard-placeholder">Sign in to view your profile.</li>
+      </ul>
     </div>
-  </header>
 
-  <div id="verificationBanner" class="verification-banner hidden">
-    <span>Email verification required to unlock all creator features.</span>
-    <button id="openVerificationButton" class="ghost-btn">Verify Now</button>
+    <div class="card status-card">
+      <div class="card-header">
+        <h2>Provider Status</h2>
+      </div>
+      <div id="dashboardProviders" class="status-grid">
+        <p class="dashboard-placeholder">Sign in to view connected services.</p>
+      </div>
+    </div>
   </div>
 
-  <div id="passwordResetBanner" class="verification-banner warning hidden">
-    <span>Password update required. Update it from your profile to continue.</span>
-    <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
+  <div class="card active-jobs-card">
+    <div class="card-header with-action">
+      <h2>Active Jobs</h2>
+      <button id="refreshJobsButton" class="ghost-btn small">Refresh</button>
+    </div>
+    <div id="activeJobsList" class="jobs-list">
+      <p class="dashboard-placeholder">No active jobs yet.</p>
+    </div>
   </div>
 
-  <!-- Tab buttons -->
+  <div class="card recent-jobs-card">
+    <h2>Recent Jobs</h2>
+    <div class="table-wrapper">
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Stage</th>
+            <th>Progress</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="recentJobsBody">
+          <tr>
+            <td colspan="6" class="dashboard-placeholder">Sign in to view recent jobs.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card recent-assets-card">
+    <h2>Recent Assets</h2>
+    <ul id="recentAssetsList" class="dashboard-list">
+      <li class="dashboard-placeholder">Sign in to view recent assets.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="view-imagine" class="app-view">
+  <h2>IMAGINE · Chat / Prompt R&amp;D</h2>
+
+  <div class="card">
+    <div class="row">
+      <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
+    </div>
+    <div class="row">
+      <button id="imagineSendBtn">Send to Chat</button>
+    </div>
+    <div class="row">
+      <label>Assistant Response</label>
+      <pre id="imagineOutput" class="output-box"></pre>
+    </div>
+  </div>
+</section>
+
+<section id="view-create" class="app-view">
   <nav class="tabs">
-    <button class="tab-btn active" data-target="tab-imagine">IMAGINE</button>
-    <button class="tab-btn" data-target="tab-create">CREATE</button>
+    <button class="tab-btn active" data-target="tab-create">CREATE</button>
     <button class="tab-btn" data-target="tab-publish">PUBLISH</button>
   </nav>
 
   <main class="tab-container">
-
-    <!-- ========== IMAGINE TAB ========== -->
-    <section id="tab-imagine" class="tab-panel active">
-      <h2>IMAGINE · Chat / Prompt R&D</h2>
-
-      <div class="card dashboard-overview">
-        <h3>Dashboard Overview</h3>
-        <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p>
-        <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p>
-
-        <div class="dashboard-columns">
-          <div class="dashboard-column">
-            <h4>Your Profile</h4>
-            <ul id="dashboardProfileList" class="dashboard-list">
-              <li class="dashboard-placeholder">Sign in to view your profile.</li>
-            </ul>
-          </div>
-          <div class="dashboard-column">
-            <h4>Connected Services</h4>
-            <div id="dashboardProviders" class="status-grid">
-              <p class="dashboard-placeholder">Sign in to view connected services.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="dashboard-subsection">
-          <h4>Recent Jobs</h4>
-          <div class="table-wrapper">
-            <table class="dashboard-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
-              <tbody id="recentJobsBody">
-                <tr>
-                  <td colspan="5" class="dashboard-placeholder">Sign in to view recent jobs.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="dashboard-subsection">
-          <h4>Recent Assets</h4>
-          <ul id="recentAssetsList" class="dashboard-list">
-            <li class="dashboard-placeholder">Sign in to view recent assets.</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="row">
-          <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
-        </div>
-        <div class="row">
-          <button id="imagineSendBtn">Send to Chat</button>
-        </div>
-        <div class="row">
-          <label>Assistant Response</label>
-          <pre id="imagineOutput" class="output-box"></pre>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ========== CREATE TAB ========== -->
-    <section id="tab-create" class="tab-panel">
+    <section id="tab-create" class="tab-panel active">
       <h2>CREATE · Video / Music / Master</h2>
 
-      <!-- Video generation -->
       <div class="card">
         <h3>Generate Video (Sora 2)</h3>
 
@@ -157,7 +140,6 @@
         </div>
       </div>
 
-      <!-- Music generation -->
       <div class="card">
         <h3>Generate Music (ElevenLabs)</h3>
 
@@ -196,7 +178,6 @@
         </div>
       </div>
 
-      <!-- Master / mux -->
       <div class="card">
         <h3>Master Final Video (Loop + Music)</h3>
 
@@ -228,10 +209,8 @@
           <video id="masterPreview" controls class="preview-video"></video>
         </div>
       </div>
-
     </section>
 
-    <!-- ========== PUBLISH TAB ========== -->
     <section id="tab-publish" class="tab-panel">
       <h2>PUBLISH · Upload to YouTube</h2>
 
@@ -286,165 +265,174 @@
         </div>
       </div>
     </section>
-
   </main>
+</section>
 
-  <div id="authOverlay" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2 class="modal-title">Welcome to Creator Toolkit</h2>
-      <p class="modal-subtitle">Log in to continue or create a new account to get started.</p>
-      <div class="modal-tabs">
-        <button class="modal-tab active" data-mode="login">Log In</button>
-        <button class="modal-tab" data-mode="register">Register</button>
-      </div>
-      <form id="loginForm" class="modal-form active">
-        <label>Email</label>
-        <input id="loginEmail" type="email" autocomplete="email" required />
-        <label>Password</label>
-        <input id="loginPassword" type="password" autocomplete="current-password" required />
-        <button type="submit">Log In</button>
-      </form>
-      <form id="registerForm" class="modal-form">
-        <label>Full Name</label>
-        <input id="registerName" type="text" autocomplete="name" required />
-        <label>Email</label>
-        <input id="registerEmail" type="email" autocomplete="email" required />
-        <label>Password</label>
-        <input id="registerPassword" type="password" autocomplete="new-password" required />
-        <button type="submit">Create Account</button>
-      </form>
-      <div id="authFeedback" class="form-feedback"></div>
+<section id="view-system" class="app-view">
+  <div class="card">
+    <h2>System Controls</h2>
+    <p class="help-text">Admin-only platform settings will appear here. Use the Profile modal to manage SMTP and API keys today.</p>
+    <ul class="dashboard-list">
+      <li>Review SMTP configuration used for verification and notifications.</li>
+      <li>Audit stored API keys before enabling publishing flows.</li>
+      <li>Monitor account password rotation requirements.</li>
+    </ul>
+    <div class="row">
+      <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>
     </div>
   </div>
+</section>
+{% endblock %}
 
-  <div id="verificationOverlay" class="modal-overlay hidden">
-    <div class="modal-card small">
-      <h2 class="modal-title">Verify Your Email</h2>
-      <p class="modal-subtitle">Enter the 6-digit code sent to your email to unlock API integrations.</p>
-      <form id="verifyForm" class="modal-form active">
-        <label>Verification Code</label>
-        <input id="verifyCode" type="text" inputmode="numeric" maxlength="6" required />
-        <button type="submit">Verify Email</button>
-      </form>
-      <button id="resendCodeButton" class="ghost-btn full">Resend Code</button>
-      <div class="modal-actions inline">
-        <button id="verifyOpenProfile" type="button" class="ghost-btn small">Open Profile</button>
-        <button id="verifyLogout" type="button" class="ghost-btn small danger">Log Out</button>
-      </div>
-      <div id="verifyFeedback" class="form-feedback"></div>
+{% block modals %}
+<div id="authOverlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h2 class="modal-title">Welcome to Creator Toolkit</h2>
+    <p class="modal-subtitle">Log in to continue or create a new account to get started.</p>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-mode="login">Log In</button>
+      <button class="modal-tab" data-mode="register">Register</button>
     </div>
+    <form id="loginForm" class="modal-form active">
+      <label>Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" required />
+      <button type="submit">Log In</button>
+    </form>
+    <form id="registerForm" class="modal-form">
+      <label>Full Name</label>
+      <input id="registerName" type="text" autocomplete="name" required />
+      <label>Email</label>
+      <input id="registerEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="registerPassword" type="password" autocomplete="new-password" required />
+      <button type="submit">Create Account</button>
+    </form>
+    <div id="authFeedback" class="form-feedback"></div>
   </div>
+</div>
 
-  <div id="profileModal" class="modal-overlay hidden">
-    <div class="modal-card wide">
-      <button class="close-modal" id="closeProfileModal" aria-label="Close profile">&times;</button>
-      <h2 class="modal-title">Your Profile</h2>
-      <p class="modal-subtitle">Manage account details, roles, and API keys.</p>
+<div id="verificationOverlay" class="modal-overlay hidden">
+  <div class="modal-card small">
+    <h2 class="modal-title">Verify Your Email</h2>
+    <p class="modal-subtitle">Enter the 6-digit code sent to your email to unlock API integrations.</p>
+    <form id="verifyForm" class="modal-form active">
+      <label>Verification Code</label>
+      <input id="verifyCode" type="text" inputmode="numeric" maxlength="6" required />
+      <button type="submit">Verify Email</button>
+    </form>
+    <button id="resendCodeButton" class="ghost-btn full">Resend Code</button>
+    <div class="modal-actions inline">
+      <button id="verifyOpenProfile" type="button" class="ghost-btn small">Open Profile</button>
+      <button id="verifyLogout" type="button" class="ghost-btn small danger">Log Out</button>
+    </div>
+    <div id="verifyFeedback" class="form-feedback"></div>
+  </div>
+</div>
 
-      <section class="modal-section">
-        <h3>Account Information</h3>
+<div id="profileModal" class="modal-overlay hidden">
+  <div class="modal-card wide">
+    <button class="close-modal" id="closeProfileModal" aria-label="Close profile">&times;</button>
+    <h2 class="modal-title">Your Profile</h2>
+    <p class="modal-subtitle">Manage account details, roles, and API keys.</p>
+
+    <section class="modal-section">
+      <h3>Account Information</h3>
       <form id="profileForm" class="modal-form inline active">
-          <div class="two-col">
-            <label>Full Name
-              <input id="profileName" type="text" required />
-            </label>
-            <label>Email
-              <input id="profileEmail" type="email" required />
-            </label>
-          </div>
-          <button type="submit">Save Profile</button>
-        </form>
-        <div id="profileFormFeedback" class="form-feedback"></div>
-        <div class="profile-meta">
-          <span id="profileVerificationStatus"></span>
-          <span id="profileRole"></span>
-        </div>
-      </section>
-
-      <section class="modal-section">
-        <h3>Change Password</h3>
-      <form id="passwordForm" class="modal-form inline active">
-          <div class="two-col">
-            <label>Current Password
-              <input id="currentPassword" type="password" autocomplete="current-password" required />
-            </label>
-            <label>New Password
-              <input id="newPassword" type="password" autocomplete="new-password" required />
-            </label>
-          </div>
-          <button type="submit">Update Password</button>
-        </form>
-        <div id="passwordFormFeedback" class="form-feedback"></div>
-      </section>
-
-      <section class="modal-section">
-        <h3>Role &amp; Permissions</h3>
-        <div class="profile-role-overview">
-          <p id="profileRole" class="profile-role-label"></p>
-          <ul id="rolePermissionsList" class="help-text"></ul>
-        </div>
-        <p class="help-text">Role assignments are managed by administrators.</p>
-      </section>
-
-      <section class="modal-section">
-        <h3>API Keys</h3>
-        <div id="apiKeysList" class="api-keys-list"></div>
-        <div id="apiKeysFeedback" class="form-feedback"></div>
-        <form id="apiKeyForm" class="modal-form inline active">
-          <div class="two-col">
-            <label>Provider
-              <input id="apiKeyProvider" type="text" placeholder="openai" required />
-            </label>
-            <label>Secret
-              <input id="apiKeySecret" type="text" placeholder="sk-..." required />
-            </label>
-          </div>
-          <button type="submit">Save API Key</button>
-        </form>
-        <p class="help-text">Stored keys are encrypted. You can reset any provider by removing and adding it again.</p>
-      </section>
-
-      <section class="modal-section hidden" id="smtpConfigSection">
-        <h3>SMTP Settings (Admin Only)</h3>
-        <p class="help-text">Configure outgoing email for verification and other system messages.</p>
-        <form id="smtpConfigForm" class="modal-form inline active">
-          <div class="two-col">
-            <label>Host
-              <input id="smtpHost" type="text" placeholder="smtp.example.com" />
-            </label>
-            <label>Port
-              <input id="smtpPort" type="number" min="0" placeholder="587" />
-            </label>
-          </div>
-          <div class="two-col">
-            <label>Username
-              <input id="smtpUsername" type="text" />
-            </label>
-            <label>From Address
-              <input id="smtpFromAddress" type="email" placeholder="no-reply@example.com" />
-            </label>
-          </div>
-          <div class="two-col">
-            <label><input id="smtpUseTls" type="checkbox" checked /> Use TLS</label>
-            <label>Password
-              <input id="smtpPassword" type="password" placeholder="Leave blank to keep existing" />
-            </label>
-          </div>
-          <button type="submit">Save SMTP Settings</button>
-        </form>
-        <div id="smtpConfigFeedback" class="form-feedback"></div>
-        <form id="smtpTestForm" class="modal-form inline">
-          <label>Test Recipient
-            <input id="smtpTestRecipient" type="email" placeholder="admin@example.com" required />
+        <div class="two-col">
+          <label>Full Name
+            <input id="profileName" type="text" required />
           </label>
-          <button type="submit">Send Test Email</button>
-        </form>
-        <div id="smtpTestFeedback" class="form-feedback"></div>
-        <p class="help-text">Passwords are stored encrypted when a Fernet key is configured.</p>
-      </section>
-    </div>
-  </div>
+          <label>Email
+            <input id="profileEmail" type="email" required />
+          </label>
+        </div>
+        <button type="submit">Save Profile</button>
+      </form>
+      <div id="profileFormFeedback" class="form-feedback"></div>
+      <div class="profile-meta">
+        <span id="profileVerificationStatus"></span>
+        <span id="profileRole"></span>
+      </div>
+    </section>
 
-  <script src="/static/app.js"></script>
-</body>
-</html>
+    <section class="modal-section">
+      <h3>Change Password</h3>
+      <form id="passwordForm" class="modal-form inline active">
+        <div class="two-col">
+          <label>Current Password
+            <input id="currentPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <label>New Password
+            <input id="newPassword" type="password" autocomplete="new-password" required />
+          </label>
+        </div>
+        <button type="submit">Update Password</button>
+      </form>
+      <div id="passwordFormFeedback" class="form-feedback"></div>
+    </section>
+
+    <section class="modal-section">
+      <h3>Role &amp; Permissions</h3>
+      <div class="profile-role-overview">
+        <p id="profileRole" class="profile-role-label"></p>
+        <ul id="rolePermissionsList" class="help-text"></ul>
+      </div>
+      <p class="help-text">Role assignments are managed by administrators.</p>
+    </section>
+
+    <section class="modal-section">
+      <h3>API Keys</h3>
+      <div id="apiKeysList" class="api-keys-list"></div>
+      <div id="apiKeysFeedback" class="form-feedback"></div>
+      <form id="apiKeyForm" class="modal-form inline active">
+        <div class="two-col">
+          <label>Provider
+            <input id="apiKeyProvider" type="text" placeholder="openai" required />
+          </label>
+          <label>Secret
+            <input id="apiKeySecret" type="text" placeholder="sk-..." required />
+          </label>
+        </div>
+        <button type="submit">Add / Update Key</button>
+      </form>
+    </section>
+
+    <section class="modal-section hidden" id="smtpConfigSection">
+      <h3>SMTP Settings</h3>
+      <form id="smtpConfigForm" class="modal-form inline active">
+        <div class="two-col">
+          <label>SMTP Host
+            <input id="smtpHost" type="text" placeholder="smtp.example.com" />
+          </label>
+          <label>Port
+            <input id="smtpPort" type="number" min="0" placeholder="587" />
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Username
+            <input id="smtpUsername" type="text" />
+          </label>
+          <label>From Address
+            <input id="smtpFromAddress" type="email" placeholder="no-reply@example.com" />
+          </label>
+        </div>
+        <label><input id="smtpUseTls" type="checkbox" checked /> Use TLS</label>
+        <label>SMTP Password (leave blank to keep existing)
+          <input id="smtpPassword" type="password" placeholder="Leave blank to keep existing" />
+        </label>
+        <button type="submit">Save SMTP Settings</button>
+      </form>
+      <div id="smtpConfigFeedback" class="form-feedback"></div>
+      <form id="smtpTestForm" class="modal-form inline">
+        <label>Test Email Recipient
+          <input id="smtpTestRecipient" type="email" placeholder="admin@example.com" required />
+        </label>
+        <button type="submit">Send Test Email</button>
+      </form>
+      <div id="smtpTestFeedback" class="form-feedback"></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
