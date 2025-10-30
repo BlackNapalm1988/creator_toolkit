@@ -111,7 +111,12 @@ logger = logging.getLogger(__name__)
 # --- critical config ---
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET missing. Set it in your .env")
+    JWT_SECRET = "dev_secret_change_me"
+    os.environ.setdefault("JWT_SECRET", JWT_SECRET)
+    logger.warning(
+        "JWT_SECRET missing; using insecure development default. "
+        "Set JWT_SECRET in your environment for production."
+    )
 
 DEFAULT_ADMIN_EMAIL = "admin@local"
 DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"

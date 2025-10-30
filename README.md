@@ -88,6 +88,9 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 uvicorn main:app --reload
 ```
 
+If `JWT_SECRET` is not set the server will fall back to an insecure development default so local runs succeed, but you should
+still define a unique secret in production or when sharing environments.
+
 The FastAPI app automatically starts a background `QueueWorker` so common jobs run without launching a separate process. For dedicated job execution you can also run:
 
 ```bash
