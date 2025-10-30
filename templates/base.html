@@ -32,15 +32,49 @@
     <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
   </div>
 
+  {% set nav_active = active_view or 'dashboard-view' %}
+
   <div class="app-shell">
     <aside class="sidebar" id="sidebarNav">
       <nav class="sidebar-menu">
-        <button class="sidebar-link active" id="navDashboard" data-view="view-dashboard">Dashboard</button>
-        <button class="sidebar-link" id="navCreate" data-view="view-create">Create</button>
-        <button class="sidebar-link" id="navSystem" data-view="view-system">System</button>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'dashboard-view' %}active{% endif %}"
+          id="navDashboard"
+          data-view="dashboard-view"
+          data-roles="admin owner editor viewer"
+          href="/dashboard"
+        >Dashboard</a>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'imagine-view' %}active{% endif %}"
+          id="navImagine"
+          data-view="imagine-view"
+          data-roles="admin owner editor"
+          href="/imagine"
+        >Imagine</a>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'create-view' %}active{% endif %}"
+          id="navCreate"
+          data-view="create-view"
+          data-roles="admin owner editor"
+          href="/create"
+        >Create</a>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'publish-view' %}active{% endif %}"
+          id="navPublish"
+          data-view="publish-view"
+          data-roles="admin owner"
+          href="/publish"
+        >Publish</a>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'system-view' %}active{% endif %}"
+          id="navSystem"
+          data-view="system-view"
+          data-roles="admin"
+          href="/system"
+        >System</a>
       </nav>
     </aside>
-    <main class="main-content">
+    <main class="main-content" data-active-view="{{ nav_active }}">
       {% block content %}{% endblock %}
     </main>
   </div>

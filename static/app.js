@@ -72,6 +72,7 @@ const userGreeting = document.getElementById("userGreeting");
 const docsLink = document.getElementById("docsLink");
 const verificationBanner = document.getElementById("verificationBanner");
 const openVerificationButton = document.getElementById("openVerificationButton");
+const openSystemProfileButton = document.getElementById("openSystemProfileButton");
 
 const dashboardInfo = document.getElementById("dashboardInfo");
 const dashboardError = document.getElementById("dashboardError");
@@ -83,11 +84,23 @@ const activeJobsList = document.getElementById("activeJobsList");
 const refreshJobsButton = document.getElementById("refreshJobsButton");
 const dashboardRoleBadge = document.getElementById("dashboardRoleBadge");
 
-const navButtons = Array.from(document.querySelectorAll(".sidebar-link"));
+const navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
 const navDashboardButton = document.getElementById("navDashboard");
+const navImagineButton = document.getElementById("navImagine");
 const navCreateButton = document.getElementById("navCreate");
+const navPublishButton = document.getElementById("navPublish");
 const navSystemButton = document.getElementById("navSystem");
-const viewSections = Array.from(document.querySelectorAll(".app-view"));
+const viewSections = Array.from(document.querySelectorAll(".view"));
+const mainContentEl = document.querySelector(".main-content");
+const initialActiveView =
+  (mainContentEl && mainContentEl.dataset.activeView) || "dashboard-view";
+const VIEW_PATHS = {
+  "dashboard-view": "/dashboard",
+  "imagine-view": "/imagine",
+  "create-view": "/create",
+  "publish-view": "/publish",
+  "system-view": "/system",
+};
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -134,7 +147,7 @@ function getRoleCapabilities(role) {
 let lastDashboardUserId = null;
 let dashboardLoading = false;
 let dashboardPollHandle = null;
-let activeViewId = "view-dashboard";
+let activeViewId = "dashboard-view";
 
 function setDashboardMessage(message) {
   if (!dashboardInfo) return;
@@ -463,27 +476,62 @@ function setActiveView(viewId) {
     const target = btn.dataset.view;
     btn.classList.toggle("active", target === viewId);
   });
+  if (mainContentEl) {
+    mainContentEl.dataset.activeView = viewId;
+  }
+}
+
+function changeView(viewId, options = {}) {
+  if (!viewId) return;
+  const { path, replace = false } = options;
+  setActiveView(viewId);
+
+  const targetPath = path || VIEW_PATHS[viewId] || window.location.pathname;
+  const state = { viewId };
+  if (!window.history) {
+    return;
+  }
+
+  try {
+    if (replace && window.history.replaceState) {
+      window.history.replaceState(state, "", targetPath);
+    } else if (window.history.pushState) {
+      window.history.pushState(state, "", targetPath);
+    }
+  } catch (err) {
+    console.warn("navigation state update failed", err);
+  }
 }
 
 function updateNavigationForRole(role) {
   const capabilities = getRoleCapabilities(role);
   const canCreate = capabilities.generate || capabilities.publish;
+  const canImagine = capabilities.generate;
+  const canPublish = capabilities.publish;
   if (navDashboardButton) navDashboardButton.classList.remove("hidden");
+  if (navImagineButton) navImagineButton.classList.toggle("hidden", !canImagine);
   if (navCreateButton) navCreateButton.classList.toggle("hidden", !canCreate);
+  if (navPublishButton) navPublishButton.classList.toggle("hidden", !canPublish);
   if (navSystemButton) navSystemButton.classList.toggle("hidden", !capabilities.admin);
 
   const visibleViews = new Set();
   if (navDashboardButton && !navDashboardButton.classList.contains("hidden")) {
-    visibleViews.add("view-dashboard");
+    visibleViews.add("dashboard-view");
+  }
+  if (navImagineButton && !navImagineButton.classList.contains("hidden")) {
+    visibleViews.add("imagine-view");
   }
   if (navCreateButton && !navCreateButton.classList.contains("hidden")) {
-    visibleViews.add("view-create");
+    visibleViews.add("create-view");
+  }
+  if (navPublishButton && !navPublishButton.classList.contains("hidden")) {
+    visibleViews.add("publish-view");
   }
   if (navSystemButton && !navSystemButton.classList.contains("hidden")) {
-    visibleViews.add("view-system");
+    visibleViews.add("system-view");
   }
   if (!visibleViews.has(activeViewId)) {
-    setActiveView("view-dashboard");
+    changeView("dashboard-view", { replace: true });
   }
 }
 
@@ -662,7 +710,7 @@ function applyUserState() {
     if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
     authState.capabilities = ROLE_CAPABILITIES.viewer;
     updateNavigationForRole("viewer");
-    setActiveView("view-dashboard");
+    changeView("dashboard-view", { replace: true });
     return;
   }
 
@@ -1217,6 +1265,16 @@ if (profileButton) {
   });
 }
 
+if (openSystemProfileButton) {
+  openSystemProfileButton.addEventListener("click", () => {
+    if (!authState.user) {
+      showAuthOverlay("login");
+      return;
+    }
+    openProfileModal();
+  });
+}
+
 if (closeProfileModalBtn) {
   closeProfileModalBtn.addEventListener("click", () => {
     closeProfileModal();
@@ -1332,16 +1390,30 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 navButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", event => {
     if (btn.classList.contains("hidden")) return;
     const target = btn.dataset.view;
-    if (target) {
-      setActiveView(target);
-      if (target === "view-dashboard") {
-        loadDashboardData(true, { silent: true });
-      }
+    if (!target) return;
+
+    if (event) {
+      event.preventDefault();
+    }
+
+    const href = btn.getAttribute("href") || VIEW_PATHS[target];
+    changeView(target, { path: href });
+    if (target === "dashboard-view") {
+      loadDashboardData(true, { silent: true });
     }
   });
+});
+
+window.addEventListener("popstate", event => {
+  const state = event.state || {};
+  const targetView = state.viewId || initialActiveView;
+  setActiveView(targetView);
+  if (targetView === "dashboard-view") {
+    loadDashboardData(true, { silent: true });
+  }
 });
 
 if (refreshJobsButton) {
@@ -1350,7 +1422,10 @@ if (refreshJobsButton) {
   });
 }
 
-setActiveView("view-dashboard");
+changeView(initialActiveView, {
+  path: window.location.pathname,
+  replace: true,
+});
 
 // =========================
 // IMAGINE TAB

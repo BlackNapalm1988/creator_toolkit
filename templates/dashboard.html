@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section id="view-dashboard" class="app-view active">
+<section id="dashboard-view" class="view app-view active">
   <div class="view-intro">
     <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p>
     <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p>
@@ -69,210 +69,224 @@
   </div>
 </section>
 
-<section id="view-create" class="app-view">
-  <nav class="tabs">
-    <button class="tab-btn active" data-target="tab-imagine">IMAGINE</button>
-    <button class="tab-btn" data-target="tab-create">CREATE</button>
-    <button class="tab-btn" data-target="tab-publish">PUBLISH</button>
-  </nav>
+<section id="imagine-view" class="view app-view">
+  <h2>IMAGINE · Chat / Prompt R&amp;D</h2>
 
-  <main class="tab-container">
-    <section id="tab-imagine" class="tab-panel active">
-      <h2>IMAGINE · Chat / Prompt R&amp;D</h2>
-
-      <div class="card">
-        <div class="row">
-          <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
-        </div>
-        <div class="row">
-          <button id="imagineSendBtn">Send to Chat</button>
-        </div>
-        <div class="row">
-          <label>Assistant Response</label>
-          <pre id="imagineOutput" class="output-box"></pre>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-create" class="tab-panel">
-      <h2>CREATE · Video / Music / Master</h2>
-
-      <div class="card">
-        <h3>Generate Video (Sora 2)</h3>
-
-        <div class="row">
-          <label>Visual Prompt</label>
-          <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
-        </div>
-
-        <div class="row two-col">
-          <div>
-            <label>Duration (sec)</label>
-            <select id="videoDuration">
-              <option value="4">4 seconds</option>
-              <option value="8" selected>8 seconds</option>
-              <option value="12">12 seconds</option>
-            </select>
-          </div>
-          <div>
-            <label>Size</label>
-            <select id="videoSize">
-              <option value="1280x720">1280 x 720 (Landscape)</option>
-              <option value="720x1280" selected>720 x 1280 (Portrait)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row">
-          <label><input id="videoLoop" type="checkbox" checked /> Seamless loop</label>
-        </div>
-
-        <div class="row">
-          <button id="videoGenerateBtn">Generate Video</button>
-        </div>
-
-        <div class="row">
-          <label>Video Job / Result</label>
-          <pre id="videoResult" class="output-box"></pre>
-        </div>
-
-        <div class="row">
-          <video id="videoPreview" controls class="preview-video"></video>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Generate Music (ElevenLabs)</h3>
-
-        <div class="row">
-          <label>Music Prompt</label>
-          <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
-        </div>
-
-        <div class="row two-col">
-          <div>
-            <label>Duration (sec)</label>
-            <input id="musicDuration" type="number" value="180" min="10" />
-          </div>
-          <div>
-            <label>Mood</label>
-            <input id="musicMood" type="text" value="chill" />
-          </div>
-        </div>
-
-        <div class="row">
-          <label>Genre</label>
-          <input id="musicGenre" type="text" value="lofi" />
-        </div>
-
-        <div class="row">
-          <button id="musicGenerateBtn">Generate Music</button>
-        </div>
-
-        <div class="row">
-          <label>Music Job / Result</label>
-          <pre id="musicResult" class="output-box"></pre>
-        </div>
-
-        <div class="row">
-          <audio id="musicPreview" controls class="preview-audio"></audio>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Master Final Video (Loop + Music)</h3>
-
-        <div class="row">
-          <label>Loop Video Path (from above)</label>
-          <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
-        </div>
-
-        <div class="row">
-          <label>Song Path (from above)</label>
-          <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
-        </div>
-
-        <div class="row">
-          <label>Voiceover Path (optional)</label>
-          <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
-        </div>
-
-        <div class="row">
-          <button id="masterBuildBtn">Build Final Video</button>
-        </div>
-
-        <div class="row">
-          <label>Master Result</label>
-          <pre id="masterResult" class="output-box"></pre>
-        </div>
-
-        <div class="row">
-          <video id="masterPreview" controls class="preview-video"></video>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-publish" class="tab-panel">
-      <h2>PUBLISH · Upload to YouTube</h2>
-
-      <div class="card">
-        <div class="row">
-          <label>Final MP4 Path (from Master)</label>
-          <input id="ytVideoPath" type="text" placeholder="static/final/finished.mp4" />
-        </div>
-
-        <div class="row">
-          <label>Title</label>
-          <input id="ytTitle" type="text" placeholder="lofi beats to study to 🌧️" />
-        </div>
-
-        <div class="row">
-          <label>Description</label>
-          <textarea id="ytDesc" placeholder="relaxing rainy-late-night study beat with looping neon visuals..."></textarea>
-        </div>
-
-        <div class="row">
-          <label>Tags (comma separated)</label>
-          <input id="ytTags" type="text" value="lofi, chill, study music" />
-        </div>
-
-        <div class="row two-col">
-          <div>
-            <label>Visibility</label>
-            <select id="ytVisibility">
-              <option value="public">Public</option>
-              <option value="unlisted" selected>Unlisted</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-          <div>
-            <label>Schedule Date (optional)
-              <input id="ytPublishDate" type="date" />
-            </label>
-            <label>Schedule Time
-              <input id="ytPublishTime" type="time" step="60" />
-            </label>
-          </div>
-        </div>
-        <p class="help-text" id="ytScheduleHint">Scheduling is available only when visibility is Public.</p>
-
-        <div class="row">
-          <button id="ytUploadBtn">Upload to YouTube</button>
-        </div>
-
-        <div class="row">
-          <label>YouTube Upload Result</label>
-          <pre id="ytResult" class="output-box"></pre>
-        </div>
-      </div>
-    </section>
-  </main>
+  <div class="card">
+    <div class="row">
+      <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
+    </div>
+    <div class="row">
+      <button id="imagineSendBtn">Send to Chat</button>
+    </div>
+    <div class="row">
+      <label>Assistant Response</label>
+      <pre id="imagineOutput" class="output-box"></pre>
+    </div>
+  </div>
 </section>
 
-<section id="view-system" class="app-view">
+<section id="create-view" class="view app-view">
+  <div class="card">
+    <h2>CREATE · Video / Music / Master</h2>
+
+    <div class="row">
+      <label>Visual Prompt</label>
+      <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
+    </div>
+
+    <div class="row two-col">
+      <div>
+        <label>Duration (sec)</label>
+        <select id="videoDuration">
+          <option value="4">4 seconds</option>
+          <option value="8" selected>8 seconds</option>
+          <option value="12">12 seconds</option>
+        </select>
+      </div>
+      <div>
+        <label>Size</label>
+        <select id="videoSize">
+          <option value="1280x720">1280 x 720 (Landscape)</option>
+          <option value="720x1280" selected>720 x 1280 (Portrait)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <label><input id="videoLoop" type="checkbox" checked /> Seamless loop</label>
+    </div>
+
+    <div class="row">
+      <button id="videoGenerateBtn">Generate Video</button>
+    </div>
+
+    <div class="row">
+      <label>Video Job / Result</label>
+      <pre id="videoResult" class="output-box"></pre>
+    </div>
+
+    <div class="row">
+      <video id="videoPreview" controls class="preview-video"></video>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Generate Music (ElevenLabs)</h3>
+
+    <div class="row">
+      <label>Music Prompt</label>
+      <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
+    </div>
+
+    <div class="row two-col">
+      <div>
+        <label>Duration (sec)</label>
+        <input id="musicDuration" type="number" value="180" min="10" />
+      </div>
+      <div>
+        <label>Mood</label>
+        <input id="musicMood" type="text" value="chill" />
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Genre</label>
+      <input id="musicGenre" type="text" value="lofi" />
+    </div>
+
+    <div class="row">
+      <button id="musicGenerateBtn">Generate Music</button>
+    </div>
+
+    <div class="row">
+      <label>Music Job / Result</label>
+      <pre id="musicResult" class="output-box"></pre>
+    </div>
+
+    <div class="row">
+      <audio id="musicPreview" controls class="preview-audio"></audio>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Master Final Video (Loop + Music)</h3>
+
+    <div class="row">
+      <label>Loop Video Path (from above)</label>
+      <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
+    </div>
+
+    <div class="row">
+      <label>Song Path (from above)</label>
+      <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
+    </div>
+
+    <div class="row">
+      <label>Voiceover Path (optional)</label>
+      <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
+    </div>
+
+    <div class="row">
+      <button id="masterBuildBtn">Build Final Video</button>
+    </div>
+
+    <div class="row">
+      <label>Master Result</label>
+      <pre id="masterResult" class="output-box"></pre>
+    </div>
+
+    <div class="row">
+      <video id="masterPreview" controls class="preview-video"></video>
+    </div>
+  </div>
+</section>
+
+<section id="publish-view" class="view app-view">
+  <div class="card">
+    <h2>PUBLISH · Upload to YouTube</h2>
+
+    <div class="row">
+      <label>Final MP4 Path (from Master)</label>
+      <input id="ytVideoPath" type="text" placeholder="static/final/finished.mp4" />
+    </div>
+
+    <div class="row">
+      <label>Title</label>
+      <input id="ytTitle" type="text" placeholder="lofi beats to study to 🌧️" />
+    </div>
+
+    <div class="row">
+      <label>Description</label>
+      <textarea id="ytDesc" placeholder="relaxing rainy-late-night study beat with looping neon visuals..."></textarea>
+    </div>
+
+    <div class="row">
+      <label>Tags (comma separated)</label>
+      <input id="ytTags" type="text" value="lofi, chill, study music" />
+    </div>
+
+    <div class="row two-col">
+      <div>
+        <label>Visibility</label>
+        <select id="ytVisibility">
+          <option value="public">Public</option>
+          <option value="unlisted" selected>Unlisted</option>
+          <option value="private">Private</option>
+        </select>
+      </div>
+      <div>
+        <label>Schedule Date (optional)
+          <input id="ytPublishDate" type="date" />
+        </label>
+        <label>Schedule Time
+          <input id="ytPublishTime" type="time" step="60" />
+        </label>
+      </div>
+    </div>
+    <p class="help-text" id="ytScheduleHint">Scheduling is available only when visibility is Public.</p>
+
+    <div class="row">
+      <button id="ytUploadBtn">Upload to YouTube</button>
+    </div>
+
+    <div class="row">
+      <label>YouTube Upload Result</label>
+      <pre id="ytResult" class="output-box"></pre>
+    </div>
+    <form id="loginForm" class="modal-form active">
+      <label>Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" required />
+      <button type="submit">Log In</button>
+    </form>
+    <form id="registerForm" class="modal-form">
+      <label>Full Name</label>
+      <input id="registerName" type="text" autocomplete="name" required />
+      <label>Email</label>
+      <input id="registerEmail" type="email" autocomplete="email" required />
+      <label>Password</label>
+      <input id="registerPassword" type="password" autocomplete="new-password" required />
+      <button type="submit">Create Account</button>
+    </form>
+    <div id="authFeedback" class="form-feedback"></div>
+  </div>
+</section>
+
+<section id="system-view" class="view app-view">
   <div class="card">
     <h2>System Controls</h2>
     <p class="help-text">Admin-only platform settings will appear here. Use the Profile modal to manage SMTP and API keys today.</p>
+    <ul class="dashboard-list">
+      <li>Review SMTP configuration used for verification and notifications.</li>
+      <li>Audit stored API keys before enabling publishing flows.</li>
+      <li>Monitor account password rotation requirements.</li>
+    </ul>
+    <div class="row">
+      <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>
+    </div>
+    <div id="verifyFeedback" class="form-feedback"></div>
   </div>
 </section>
 {% endblock %}

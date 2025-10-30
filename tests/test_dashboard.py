@@ -34,6 +34,24 @@ def _create_sample_user(
     return {"id": user_id, "email": email}
 
 
+def test_dashboard_shell_routes_expose_active_view(client):
+    """Each UI shell route should flag the intended active view."""
+
+    routes = {
+        "/dashboard": "dashboard-view",
+        "/imagine": "imagine-view",
+        "/create": "create-view",
+        "/publish": "publish-view",
+        "/system": "system-view",
+    }
+
+    for path, expected in routes.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        body = response.text
+        assert f'data-active-view="{expected}"' in body
+
+
 def test_dashboard_data_authenticated_success(client):
     """Authenticated requests should receive the aggregated dashboard payload."""
 

@@ -45,6 +45,7 @@ from modules.jobs import (
     enqueue,
     get_job,
     list_jobs,
+    list_active_jobs,
     QueueWorker,
 )
 from modules.job_handlers import job_handle_package, job_handle_qa_batch
@@ -110,7 +111,12 @@ logger = logging.getLogger(__name__)
 # --- critical config ---
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET missing. Set it in your .env")
+    JWT_SECRET = "dev_secret_change_me"
+    os.environ.setdefault("JWT_SECRET", JWT_SECRET)
+    logger.warning(
+        "JWT_SECRET missing; using insecure development default. "
+        "Set JWT_SECRET in your environment for production."
+    )
 
 DEFAULT_ADMIN_EMAIL = "admin@local"
 DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"
@@ -628,13 +634,101 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [t.strip() for t in tags_raw.split(",") if t.strip()]
 
 
+def _dashboard_shell(request: Request, *, active_view: str = "dashboard-view") -> HTMLResponse:
+    """Render the dashboard shell with the requested active view highlighted."""
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "active_view": active_view},
+    )
+
+
 @app.get("/dashboard", response_class=HTMLResponse, tags=["UI"])
 def dashboard_page(request: Request):
-    """
-    Basic UI shell with 3 tabs: Imagine / Create / Publish.
-    Frontend JS will call the API routes.
-    """
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    """Render the dashboard shell with the main dashboard view active."""
+
+    return _dashboard_shell(request, active_view="dashboard-view")
+
+
+@app.get("/imagine", response_class=HTMLResponse, tags=["UI"])
+def imagine_page(request: Request):
+    """Render the dashboard shell focused on the Imagine workspace."""
+
+    return _dashboard_shell(request, active_view="imagine-view")
+
+
+@app.get("/create", response_class=HTMLResponse, tags=["UI"])
+def create_page(request: Request):
+    """Render the dashboard shell focused on the Create workspace."""
+
+    return _dashboard_shell(request, active_view="create-view")
+
+
+@app.get("/publish", response_class=HTMLResponse, tags=["UI"])
+def publish_page(request: Request):
+    """Render the dashboard shell focused on the Publish workspace."""
+
+    return _dashboard_shell(request, active_view="publish-view")
+
+
+@app.get("/system", response_class=HTMLResponse, tags=["UI"])
+def system_page(request: Request):
+    """Render the dashboard shell with the System panel selected."""
+
+    return _dashboard_shell(request, active_view="system-view")
+
+
+def _to_iso(ts: int | None) -> str | None:
+    if not ts:
+        return None
+    try:
+        return datetime.datetime.fromtimestamp(int(ts), tz=datetime.timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
+    raw_progress = job.get("progress")
+    try:
+        progress_value = int(raw_progress) if raw_progress is not None else None
+    except (TypeError, ValueError):
+        progress_value = None
+
+    updated_raw = job.get("updated_at")
+    if isinstance(updated_raw, (int, float)):
+        updated_value = _to_iso(int(updated_raw))
+    elif isinstance(updated_raw, str):
+        updated_value = updated_raw
+    else:
+        updated_value = None
+
+    return {
+        "id": job.get("id"),
+        "type": job.get("type"),
+        "status": job.get("status"),
+        "stage": job.get("stage"),
+        "progress": progress_value,
+        "updated_at": updated_value,
+        "error_message": job.get("error_message"),
+    }
+
+
+def _serialize_job_detail(job: Dict[str, object]) -> Dict[str, object]:
+    detail = _serialize_job(job)
+    created_raw = job.get("created_at")
+    if isinstance(created_raw, (int, float)):
+        created_value = _to_iso(int(created_raw))
+    elif isinstance(created_raw, str):
+        created_value = created_raw
+    else:
+        created_value = None
+    detail.update(
+        {
+            "created_at": created_value,
+            "duration_ms": job.get("duration_ms"),
+        }
+    )
+    return detail
 
 
 @app.get("/dashboard/data", tags=["Dashboard"])
@@ -658,33 +752,9 @@ def dashboard_data(user=Depends(current_user)):
     for provider in ("openai", "elevenlabs", "youtube"):
         providers[provider] = "connected" if stored_keys.get(provider) else "missing"
 
-    # --- recent jobs ---
-    def _to_iso(ts: int | None) -> str | None:
-        if not ts:
-            return None
-        try:
-            return datetime.datetime.fromtimestamp(
-                int(ts), tz=datetime.timezone.utc
-            ).isoformat()
-        except Exception:
-            return None
+    recent_jobs = [_serialize_job(job) for job in list_jobs(limit=10)]
 
-    recent_jobs = []
-    for job in list_jobs(limit=10):
-        raw_progress = job.get("progress")
-        try:
-            progress_value = int(raw_progress) if raw_progress is not None else None
-        except (TypeError, ValueError):
-            progress_value = None
-        recent_jobs.append(
-            {
-                "id": job.get("id"),
-                "type": job.get("type"),
-                "status": job.get("status"),
-                "progress": progress_value,
-                "updated_at": _to_iso(job.get("updated_at")),
-            }
-        )
+    active_jobs = [_serialize_job(job) for job in list_active_jobs(limit=10)]
 
     # --- assets placeholder ---
     recent_assets: List[Dict[str, str]] = []
@@ -693,6 +763,7 @@ def dashboard_data(user=Depends(current_user)):
         "user": user_summary,
         "providers": providers,
         "recent_jobs": recent_jobs,
+        "active_jobs": active_jobs,
         "recent_assets": recent_assets,
     }
 
@@ -1909,15 +1980,21 @@ def qa_batch_async(
     return {"job_id": jid}
 
 @app.get("/jobs/{jid}")
-def jobs_get(jid: str):
+def jobs_get(
+    jid: str,
+    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+):
     job = get_job(jid)
     if not job:
-        return JSONResponse(status_code=404, content={"error": "not found"})
-    return job
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _serialize_job_detail(job)
+
 
 @app.get("/jobs")
-def jobs_list():
-    return {"jobs": list_jobs()}
+def jobs_list(
+    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+):
+    return {"jobs": [_serialize_job(job) for job in list_jobs(limit=25)]}
 
 
 # ----------------------------
