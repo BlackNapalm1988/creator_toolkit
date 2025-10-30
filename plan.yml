@@ -1,0 +1,159 @@
+version: 1
+project: Creator Toolkit
+owner: andruromin
+repo: BlackNapalm1988/creator_toolkit
+ci:
+  file: .github/workflows/test.yml
+  required: true
+
+milestones:
+  - name: v1.2 Core Restoration
+    id: v1.2
+    status: in_progress
+    description: >
+      Restore core dashboard functionality (Imagine/Create/Publish visibility),
+      move the background worker to FastAPI startup, align Agents.md with the new behavior,
+      and ensure CI is protecting the repo before a release to main.
+    branch: feature/core-restoration
+    depends_on: []
+    acceptance:
+      - All sidebar items render correctly for admin user
+      - Worker starts only on app startup (no import-time threads)
+      - Agents.md contains 2025-10 updates section
+      - CI passes on main and dev
+    tasks:
+      - id: v1.2-env
+        name: Environment & requirements
+        type: backend
+        status: todo
+        description: >
+          Update requirements.txt, ensure .env is created, and pytest runs locally.
+        done_when:
+          - requirements.txt present
+          - pytest -q passes
+      - id: v1.2-worker
+        name: Move worker to FastAPI startup
+        type: backend
+        status: todo
+        description: >
+          Remove import-time worker start from main.py and register a startup event
+          that initializes the QueueWorker with the existing handlers.
+        done_when:
+          - main.py contains @app.on_event("startup")
+          - No worker threads appear on simple module import
+      - id: v1.2-ui-visibility
+        name: Restore sidebar role visibility
+        type: ui
+        status: todo
+        description: >
+          Ensure /dashboard-data (or /me) returns role, is_verified, must_change_password.
+          Update static/app.js to show Imagine/Create/Publish/System for admin/owner/editor,
+          and show banner for unverified users instead of hiding tabs.
+        done_when:
+          - admin user sees all tabs
+          - viewer user sees only viewer tabs
+      - id: v1.2-admin
+        name: Secure default admin / first run
+        type: backend
+        status: todo
+        description: >
+          On empty user store, create admin@local with force-change-password flag.
+          Login endpoint should surface must_change_password in response.
+        done_when:
+          - first login requires password change
+      - id: v1.2-jobs
+        name: Stabilize job handlers & polling
+        type: backend
+        status: todo
+        description: >
+          Update job_handlers to produce timestamped outputs, wrap in try/except,
+          and ensure polling endpoint returns status, progress, stage, and logs.
+        done_when:
+          - two consecutive jobs do not overwrite outputs
+          - polling shows progress increments
+      - id: v1.2-storage
+        name: Normalize storage paths
+        type: backend
+        status: todo
+        description: >
+          Add modules/storage.py with project_path helper and refactor static/uploads usages.
+        done_when:
+          - project_path() exists
+          - static/uploads created via helper
+      - id: v1.2-agents
+        name: Agents.md alignment
+        type: docs
+        status: todo
+        description: >
+          Update Agents.md with 2025-10 updates:
+          1) worker starts on app startup,
+          2) dashboard role visibility enforced,
+          3) packaging must return real out_path.
+        done_when:
+          - Agents.md contains the 3 notes
+      - id: v1.2-ci
+        name: CI guard
+        type: ops
+        status: todo
+        description: >
+          Add .github/workflows/test.yml to run pytest and verify Agents.md integrity.
+        done_when:
+          - GitHub Actions run green on push/pr
+          - Missing agent sections fail CI
+    release:
+      tag: v1.2-core-restoration
+      notes:
+        - Restored dashboard and creator tabs for admin roles
+        - Safer background worker startup
+        - CI protection for Agents.md
+        - Timestamped job outputs
+
+  - name: v1.3 Timeline & Imagine Enhancements
+    id: v1.3
+    status: planned
+    description: >
+      Start building the 'Imagine-first' workflow inside the existing UI:
+      prompt drafting/optimization, scene YAML generation, and early timeline hooks
+      for future video editor integration.
+    depends_on:
+      - v1.2
+    branch: feature/v1.3-imagine-timeline
+    acceptance:
+      - Imagine tab supports prompt templates and reference image fields
+      - Scene YAML can be generated and stored in /scenes
+      - Admin can configure which model/providers are shown in Imagine
+    tasks:
+      - id: v1.3-imagine-ui
+        name: Expand Imagine tab UI
+        type: ui
+        status: todo
+        description: >
+          Add fields for prompt, negative prompt, style preset, reference image URL,
+          and a preview JSON/YAML panel.
+      - id: v1.3-scene-gen
+        name: Scene YAML generator
+        type: backend
+        status: todo
+        description: >
+          Add a backend endpoint that takes prompt + reference and returns a scene YAML
+          consistent with our Sora / Veo usage.
+      - id: v1.3-provider-config
+        name: Imagine provider config (admin)
+        type: backend
+        status: todo
+        description: >
+          Extend System/Settings to let admin pick available AI backends (Sora, ElevenLabs music,
+          internal job handlers) exposed in Imagine.
+      - id: v1.3-tests
+        name: Tests for Imagine flow
+        type: tests
+        status: todo
+        description: >
+          Add pytest tests for the new endpoint and UI serialization to prevent regressions
+          like we saw in the sidebar.
+    release:
+      tag: v1.3-imagine-timeline
+      notes:
+        - Imagine tab is now a real prompt-workbench
+        - Scene YAML export enabled
+        - Admin-configurable providers
