@@ -84,20 +84,22 @@ const activeJobsList = document.getElementById("activeJobsList");
 const refreshJobsButton = document.getElementById("refreshJobsButton");
 const dashboardRoleBadge = document.getElementById("dashboardRoleBadge");
 
-const navButtons = Array.from(document.querySelectorAll(".sidebar-link"));
+const navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
 const navDashboardButton = document.getElementById("navDashboard");
 const navImagineButton = document.getElementById("navImagine");
 const navCreateButton = document.getElementById("navCreate");
+const navPublishButton = document.getElementById("navPublish");
 const navSystemButton = document.getElementById("navSystem");
-const viewSections = Array.from(document.querySelectorAll(".app-view"));
+const viewSections = Array.from(document.querySelectorAll(".view"));
 const mainContentEl = document.querySelector(".main-content");
 const initialActiveView =
-  (mainContentEl && mainContentEl.dataset.activeView) || "view-dashboard";
+  (mainContentEl && mainContentEl.dataset.activeView) || "dashboard-view";
 const VIEW_PATHS = {
-  "view-dashboard": "/dashboard",
-  "view-imagine": "/imagine",
-  "view-create": "/create",
-  "view-system": "/system",
+  "dashboard-view": "/dashboard",
+  "imagine-view": "/imagine",
+  "create-view": "/create",
+  "publish-view": "/publish",
+  "system-view": "/system",
 };
 
 const generateControls = [
@@ -145,7 +147,7 @@ function getRoleCapabilities(role) {
 let lastDashboardUserId = null;
 let dashboardLoading = false;
 let dashboardPollHandle = null;
-let activeViewId = "view-dashboard";
+let activeViewId = "dashboard-view";
 
 function setDashboardMessage(message) {
   if (!dashboardInfo) return;
@@ -505,26 +507,31 @@ function updateNavigationForRole(role) {
   const capabilities = getRoleCapabilities(role);
   const canCreate = capabilities.generate || capabilities.publish;
   const canImagine = capabilities.generate;
+  const canPublish = capabilities.publish;
   if (navDashboardButton) navDashboardButton.classList.remove("hidden");
   if (navImagineButton) navImagineButton.classList.toggle("hidden", !canImagine);
   if (navCreateButton) navCreateButton.classList.toggle("hidden", !canCreate);
+  if (navPublishButton) navPublishButton.classList.toggle("hidden", !canPublish);
   if (navSystemButton) navSystemButton.classList.toggle("hidden", !capabilities.admin);
 
   const visibleViews = new Set();
   if (navDashboardButton && !navDashboardButton.classList.contains("hidden")) {
-    visibleViews.add("view-dashboard");
+    visibleViews.add("dashboard-view");
   }
   if (navImagineButton && !navImagineButton.classList.contains("hidden")) {
-    visibleViews.add("view-imagine");
+    visibleViews.add("imagine-view");
   }
   if (navCreateButton && !navCreateButton.classList.contains("hidden")) {
-    visibleViews.add("view-create");
+    visibleViews.add("create-view");
+  }
+  if (navPublishButton && !navPublishButton.classList.contains("hidden")) {
+    visibleViews.add("publish-view");
   }
   if (navSystemButton && !navSystemButton.classList.contains("hidden")) {
-    visibleViews.add("view-system");
+    visibleViews.add("system-view");
   }
   if (!visibleViews.has(activeViewId)) {
-    changeView("view-dashboard", { replace: true });
+    changeView("dashboard-view", { replace: true });
   }
 }
 
@@ -703,7 +710,7 @@ function applyUserState() {
     if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
     authState.capabilities = ROLE_CAPABILITIES.viewer;
     updateNavigationForRole("viewer");
-    changeView("view-dashboard", { replace: true });
+    changeView("dashboard-view", { replace: true });
     return;
   }
 
@@ -1394,7 +1401,7 @@ navButtons.forEach(btn => {
 
     const href = btn.getAttribute("href") || VIEW_PATHS[target];
     changeView(target, { path: href });
-    if (target === "view-dashboard") {
+    if (target === "dashboard-view") {
       loadDashboardData(true, { silent: true });
     }
   });
@@ -1404,7 +1411,7 @@ window.addEventListener("popstate", event => {
   const state = event.state || {};
   const targetView = state.viewId || initialActiveView;
   setActiveView(targetView);
-  if (targetView === "view-dashboard") {
+  if (targetView === "dashboard-view") {
     loadDashboardData(true, { silent: true });
   }
 });

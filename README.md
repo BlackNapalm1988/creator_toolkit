@@ -32,8 +32,8 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 
 ## Dashboard & Job Monitoring
 
-- The left sidebar now exposes dedicated **Dashboard**, **Imagine**, and **Create** workspaces (with **System** reserved for admins), and availability is driven by user role.
-- Each workspace can be deep-linked via `/dashboard`, `/imagine`, `/create`, and `/system`, ensuring the same shell loads with the expected tab pre-selected.
+- The left sidebar now exposes dedicated **Dashboard**, **Imagine**, **Create**, and **Publish** workspaces (with **System** reserved for admins), and availability is driven by user role.
+- Each workspace can be deep-linked via `/dashboard`, `/imagine`, `/create`, `/publish`, and `/system`, ensuring the same shell loads with the expected tab pre-selected.
 - Panels surface your account details (including role, verification state, and password rotation flag), provider connection status, active job progress/errors, and recent assets.
 - New read-only job endpoints expose background processing state:
   - `GET /jobs` – Recent jobs (admin/owner/editor only).
@@ -52,7 +52,7 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
   }
   ```
 
-- Role-aware navigation keeps mutation controls hidden: viewers see only the Dashboard, while editors/owners/admins unlock the Imagine and Create workspaces, with the System tab reserved for admins.
+- Role-aware navigation keeps mutation controls hidden: viewers see only the Dashboard, editors gain Imagine/Create, owners also unlock Publish, and admins gain full access including System.
 - The UI polls `/dashboard/data` in the background so the Active Jobs panel reflects live progress without manual refreshes.
 
 ## Installation

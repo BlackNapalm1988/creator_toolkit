@@ -634,7 +634,7 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [t.strip() for t in tags_raw.split(",") if t.strip()]
 
 
-def _dashboard_shell(request: Request, *, active_view: str = "view-dashboard") -> HTMLResponse:
+def _dashboard_shell(request: Request, *, active_view: str = "dashboard-view") -> HTMLResponse:
     """Render the dashboard shell with the requested active view highlighted."""
 
     return templates.TemplateResponse(
@@ -647,28 +647,35 @@ def _dashboard_shell(request: Request, *, active_view: str = "view-dashboard") -
 def dashboard_page(request: Request):
     """Render the dashboard shell with the main dashboard view active."""
 
-    return _dashboard_shell(request, active_view="view-dashboard")
+    return _dashboard_shell(request, active_view="dashboard-view")
 
 
 @app.get("/imagine", response_class=HTMLResponse, tags=["UI"])
 def imagine_page(request: Request):
     """Render the dashboard shell focused on the Imagine workspace."""
 
-    return _dashboard_shell(request, active_view="view-imagine")
+    return _dashboard_shell(request, active_view="imagine-view")
 
 
 @app.get("/create", response_class=HTMLResponse, tags=["UI"])
 def create_page(request: Request):
     """Render the dashboard shell focused on the Create workspace."""
 
-    return _dashboard_shell(request, active_view="view-create")
+    return _dashboard_shell(request, active_view="create-view")
+
+
+@app.get("/publish", response_class=HTMLResponse, tags=["UI"])
+def publish_page(request: Request):
+    """Render the dashboard shell focused on the Publish workspace."""
+
+    return _dashboard_shell(request, active_view="publish-view")
 
 
 @app.get("/system", response_class=HTMLResponse, tags=["UI"])
 def system_page(request: Request):
     """Render the dashboard shell with the System panel selected."""
 
-    return _dashboard_shell(request, active_view="view-system")
+    return _dashboard_shell(request, active_view="system-view")
 
 
 def _to_iso(ts: int | None) -> str | None:

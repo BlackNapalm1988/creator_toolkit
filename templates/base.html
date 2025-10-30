@@ -32,33 +32,44 @@
     <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
   </div>
 
-  {% set nav_active = active_view or 'view-dashboard' %}
+  {% set nav_active = active_view or 'dashboard-view' %}
 
   <div class="app-shell">
     <aside class="sidebar" id="sidebarNav">
       <nav class="sidebar-menu">
         <a
-          class="sidebar-link {% if nav_active == 'view-dashboard' %}active{% endif %}"
+          class="sidebar-link nav-item {% if nav_active == 'dashboard-view' %}active{% endif %}"
           id="navDashboard"
-          data-view="view-dashboard"
+          data-view="dashboard-view"
+          data-roles="admin owner editor viewer"
           href="/dashboard"
         >Dashboard</a>
         <a
-          class="sidebar-link {% if nav_active == 'view-imagine' %}active{% endif %}"
+          class="sidebar-link nav-item {% if nav_active == 'imagine-view' %}active{% endif %}"
           id="navImagine"
-          data-view="view-imagine"
+          data-view="imagine-view"
+          data-roles="admin owner editor"
           href="/imagine"
         >Imagine</a>
         <a
-          class="sidebar-link {% if nav_active == 'view-create' %}active{% endif %}"
+          class="sidebar-link nav-item {% if nav_active == 'create-view' %}active{% endif %}"
           id="navCreate"
-          data-view="view-create"
+          data-view="create-view"
+          data-roles="admin owner editor"
           href="/create"
         >Create</a>
         <a
-          class="sidebar-link {% if nav_active == 'view-system' %}active{% endif %}"
+          class="sidebar-link nav-item {% if nav_active == 'publish-view' %}active{% endif %}"
+          id="navPublish"
+          data-view="publish-view"
+          data-roles="admin owner"
+          href="/publish"
+        >Publish</a>
+        <a
+          class="sidebar-link nav-item {% if nav_active == 'system-view' %}active{% endif %}"
           id="navSystem"
-          data-view="view-system"
+          data-view="system-view"
+          data-roles="admin"
           href="/system"
         >System</a>
       </nav>

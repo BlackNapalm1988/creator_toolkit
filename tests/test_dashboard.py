@@ -38,10 +38,11 @@ def test_dashboard_shell_routes_expose_active_view(client):
     """Each UI shell route should flag the intended active view."""
 
     routes = {
-        "/dashboard": "view-dashboard",
-        "/imagine": "view-imagine",
-        "/create": "view-create",
-        "/system": "view-system",
+        "/dashboard": "dashboard-view",
+        "/imagine": "imagine-view",
+        "/create": "create-view",
+        "/publish": "publish-view",
+        "/system": "system-view",
     }
 
     for path, expected in routes.items():
