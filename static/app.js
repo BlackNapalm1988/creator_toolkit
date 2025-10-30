@@ -12,6 +12,8 @@ const authTabs = authOverlay ? Array.from(authOverlay.querySelectorAll(".modal-t
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 const authFeedback = document.getElementById("authFeedback");
+const authActions = document.getElementById("authActions");
+const openLoginButton = document.getElementById("openLoginButton");
 
 const loginEmailInput = document.getElementById("loginEmail");
 const loginPasswordInput = document.getElementById("loginPassword");
@@ -77,6 +79,15 @@ const dashboardProfileList = document.getElementById("dashboardProfileList");
 const dashboardProviders = document.getElementById("dashboardProviders");
 const recentJobsBody = document.getElementById("recentJobsBody");
 const recentAssetsList = document.getElementById("recentAssetsList");
+const activeJobsList = document.getElementById("activeJobsList");
+const refreshJobsButton = document.getElementById("refreshJobsButton");
+const dashboardRoleBadge = document.getElementById("dashboardRoleBadge");
+
+const navButtons = Array.from(document.querySelectorAll(".sidebar-link"));
+const navDashboardButton = document.getElementById("navDashboard");
+const navCreateButton = document.getElementById("navCreate");
+const navSystemButton = document.getElementById("navSystem");
+const viewSections = Array.from(document.querySelectorAll(".app-view"));
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -122,6 +133,8 @@ function getRoleCapabilities(role) {
 
 let lastDashboardUserId = null;
 let dashboardLoading = false;
+let dashboardPollHandle = null;
+let activeViewId = "view-dashboard";
 
 function setDashboardMessage(message) {
   if (!dashboardInfo) return;
@@ -173,6 +186,16 @@ function resetDashboardWidgetsForLoggedOut() {
     assetItem.textContent = "Sign in to view recent assets.";
     recentAssetsList.appendChild(assetItem);
   }
+  if (activeJobsList) {
+    activeJobsList.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "dashboard-placeholder";
+    p.textContent = "Sign in to view job activity.";
+    activeJobsList.appendChild(p);
+  }
+  if (dashboardRoleBadge) {
+    dashboardRoleBadge.textContent = "Viewer";
+  }
   setDashboardMessage("Sign in to view your account overview.");
   clearDashboardError();
   dashboardLoading = false;
@@ -198,12 +221,17 @@ function renderDashboardData(payload) {
   if (!payload) return;
 
   const profile = payload.user || {};
+  const role = (profile.role || "viewer").toString();
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+  if (dashboardRoleBadge) {
+    dashboardRoleBadge.textContent = roleLabel;
+  }
   if (dashboardProfileList) {
     dashboardProfileList.innerHTML = "";
     const entries = [
       { label: "Display Name", value: profile.display_name || "—" },
       { label: "User ID", value: profile.id !== undefined && profile.id !== null ? profile.id : "—" },
-      { label: "Role", value: (profile.role || "viewer").toString().charAt(0).toUpperCase() + (profile.role || "viewer").toString().slice(1) },
+      { label: "Role", value: roleLabel },
       { label: "Email Verified", value: profile.email_verified ? "Yes" : "No" },
       { label: "Password Change Required", value: profile.must_change_password ? "Yes" : "No" },
     ];
@@ -242,13 +270,77 @@ function renderDashboardData(payload) {
     });
   }
 
+  if (activeJobsList) {
+    activeJobsList.innerHTML = "";
+    const jobs = Array.isArray(payload.active_jobs) ? payload.active_jobs : [];
+    if (!jobs.length) {
+      const empty = document.createElement("p");
+      empty.className = "dashboard-placeholder";
+      empty.textContent = "No active jobs.";
+      activeJobsList.appendChild(empty);
+    } else {
+      jobs.forEach(job => {
+        const item = document.createElement("div");
+        item.className = "job-item";
+        const status = (job.status || "").toString().toLowerCase();
+        if (status === "failed") item.classList.add("failed");
+
+        const header = document.createElement("div");
+        header.className = "job-header";
+        const title = document.createElement("div");
+        title.textContent = `${job.type || "Job"} · ${job.id || "—"}`;
+        const statusBadge = document.createElement("span");
+        statusBadge.className = `job-status ${status}`;
+        statusBadge.textContent = status || "unknown";
+        header.appendChild(title);
+        header.appendChild(statusBadge);
+        item.appendChild(header);
+
+        const meta = document.createElement("div");
+        meta.className = "job-meta";
+        const stageText = job.stage ? `Stage: ${job.stage}` : "Stage: —";
+        const progressText = `Progress: ${formatProgress(job.progress)}`;
+        const updatedText = `Updated: ${formatTimestamp(job.updated_at)}`;
+        [stageText, progressText, updatedText].forEach(text => {
+          const span = document.createElement("span");
+          span.textContent = text;
+          meta.appendChild(span);
+        });
+        item.appendChild(meta);
+
+        const progressWrap = document.createElement("div");
+        progressWrap.className = "progress-wrap";
+        const progressFill = document.createElement("div");
+        progressFill.className = "progress-bar";
+        const pct = job.progress === null || job.progress === undefined ? 0 : Math.max(0, Math.min(100, Number(job.progress)));
+        progressFill.style.width = `${pct}%`;
+        progressWrap.appendChild(progressFill);
+        item.appendChild(progressWrap);
+
+        const progressLabel = document.createElement("div");
+        progressLabel.className = "progress-label";
+        progressLabel.textContent = job.progress === null || job.progress === undefined ? "Progress: —" : `Progress: ${Math.round(pct)}%`;
+        item.appendChild(progressLabel);
+
+        if (job.error_message) {
+          const error = document.createElement("div");
+          error.className = "job-error";
+          error.textContent = job.error_message;
+          item.appendChild(error);
+        }
+
+        activeJobsList.appendChild(item);
+      });
+    }
+  }
+
   if (recentJobsBody) {
     recentJobsBody.innerHTML = "";
     const jobs = Array.isArray(payload.recent_jobs) ? payload.recent_jobs : [];
     if (!jobs.length) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
-      cell.colSpan = 5;
+      cell.colSpan = 6;
       cell.className = "dashboard-placeholder";
       cell.textContent = "No recent jobs.";
       row.appendChild(cell);
@@ -260,6 +352,7 @@ function renderDashboardData(payload) {
           job.id || "—",
           job.type || "—",
           job.status || "—",
+          job.stage || "—",
           formatProgress(job.progress),
           formatTimestamp(job.updated_at),
         ];
@@ -302,7 +395,8 @@ function renderDashboardData(payload) {
   }
 }
 
-async function loadDashboardData(force = false) {
+async function loadDashboardData(force = false, options = {}) {
+  const { silent = false } = options;
   const hasDashboard = dashboardProfileList || dashboardProviders || recentJobsBody || recentAssetsList;
   if (!hasDashboard) return;
 
@@ -318,14 +412,14 @@ async function loadDashboardData(force = false) {
 
   lastDashboardUserId = currentUserId;
   dashboardLoading = true;
-  setDashboardMessage("Loading dashboard data...");
+  if (!silent) setDashboardMessage("Loading dashboard data...");
   clearDashboardError();
 
   try {
     const resp = await getJSON("/dashboard/data");
     if (!resp.ok || !resp.data) {
       showDashboardError("Unable to load dashboard data");
-      setDashboardMessage("");
+      if (!silent) setDashboardMessage("");
       lastDashboardUserId = null;
       return;
     }
@@ -338,6 +432,58 @@ async function loadDashboardData(force = false) {
     lastDashboardUserId = null;
   } finally {
     dashboardLoading = false;
+  }
+}
+
+function stopDashboardPolling() {
+  if (dashboardPollHandle) {
+    clearInterval(dashboardPollHandle);
+    dashboardPollHandle = null;
+  }
+}
+
+function startDashboardPolling() {
+  stopDashboardPolling();
+  if (!authState.user) return;
+  dashboardPollHandle = setInterval(() => {
+    if (!authState.user) {
+      stopDashboardPolling();
+      return;
+    }
+    loadDashboardData(true, { silent: true });
+  }, 6000);
+}
+
+function setActiveView(viewId) {
+  activeViewId = viewId;
+  viewSections.forEach(section => {
+    section.classList.toggle("active", section.id === viewId);
+  });
+  navButtons.forEach(btn => {
+    const target = btn.dataset.view;
+    btn.classList.toggle("active", target === viewId);
+  });
+}
+
+function updateNavigationForRole(role) {
+  const capabilities = getRoleCapabilities(role);
+  const canCreate = capabilities.generate || capabilities.publish;
+  if (navDashboardButton) navDashboardButton.classList.remove("hidden");
+  if (navCreateButton) navCreateButton.classList.toggle("hidden", !canCreate);
+  if (navSystemButton) navSystemButton.classList.toggle("hidden", !capabilities.admin);
+
+  const visibleViews = new Set();
+  if (navDashboardButton && !navDashboardButton.classList.contains("hidden")) {
+    visibleViews.add("view-dashboard");
+  }
+  if (navCreateButton && !navCreateButton.classList.contains("hidden")) {
+    visibleViews.add("view-create");
+  }
+  if (navSystemButton && !navSystemButton.classList.contains("hidden")) {
+    visibleViews.add("view-system");
+  }
+  if (!visibleViews.has(activeViewId)) {
+    setActiveView("view-dashboard");
   }
 }
 
@@ -503,8 +649,10 @@ function updateFeatureAvailability({ verified, capabilities }) {
 function applyUserState() {
   const user = authState.user;
   if (!user) {
+    stopDashboardPolling();
     resetDashboardWidgetsForLoggedOut();
     if (userActions) userActions.classList.add("hidden");
+    if (authActions) authActions.classList.remove("hidden");
     if (docsLink) docsLink.classList.add("hidden");
     document.body.classList.remove("dev-mode");
     updateFeatureAvailability({ verified: false, capabilities: ROLE_CAPABILITIES.viewer });
@@ -513,13 +661,17 @@ function applyUserState() {
     setApiKeyFormEnabled(false);
     if (smtpConfigSection) smtpConfigSection.classList.add("hidden");
     authState.capabilities = ROLE_CAPABILITIES.viewer;
+    updateNavigationForRole("viewer");
+    setActiveView("view-dashboard");
     return;
   }
 
   const role = (user.role || "viewer").toLowerCase();
   const capabilities = getRoleCapabilities(role);
   authState.capabilities = capabilities;
+  updateNavigationForRole(role);
 
+  if (authActions) authActions.classList.add("hidden");
   if (userActions) userActions.classList.remove("hidden");
   if (userGreeting) {
     const firstName = user.full_name ? user.full_name.split(" ")[0] : user.email;
@@ -545,6 +697,7 @@ function applyUserState() {
 
   populateProfileSummary();
   loadDashboardData(true);
+  startDashboardPolling();
 }
 
 function populateProfileSummary() {
@@ -1048,6 +1201,12 @@ if (smtpTestForm) {
   });
 }
 
+if (openLoginButton) {
+  openLoginButton.addEventListener("click", () => {
+    showAuthOverlay("login");
+  });
+}
+
 if (profileButton) {
   profileButton.addEventListener("click", () => {
     if (!authState.user) {
@@ -1171,6 +1330,27 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     });
   });
 });
+
+navButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("hidden")) return;
+    const target = btn.dataset.view;
+    if (target) {
+      setActiveView(target);
+      if (target === "view-dashboard") {
+        loadDashboardData(true, { silent: true });
+      }
+    }
+  });
+});
+
+if (refreshJobsButton) {
+  refreshJobsButton.addEventListener("click", () => {
+    loadDashboardData(true);
+  });
+}
+
+setActiveView("view-dashboard");
 
 // =========================
 // IMAGINE TAB

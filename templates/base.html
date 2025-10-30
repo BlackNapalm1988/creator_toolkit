@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Creator Toolkit</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Creator Toolkit</div>
+    <div class="spacer"></div>
+    <div class="auth-actions" id="authActions">
+      <button id="openLoginButton" class="ghost-btn filled">Log In</button>
+    </div>
+    <div class="user-actions hidden" id="userActions">
+      <span id="userGreeting" class="user-greeting"></span>
+      <a id="docsLink" class="ghost-btn hidden" href="/docs" target="_blank" rel="noopener">Docs</a>
+      <button id="profileButton" class="ghost-btn">Profile</button>
+      <button id="logoutButton" class="ghost-btn">Log Out</button>
+    </div>
+  </header>
+
+  <div id="verificationBanner" class="verification-banner hidden">
+    <span>Email verification required to unlock all creator features.</span>
+    <button id="openVerificationButton" class="ghost-btn">Verify Now</button>
+  </div>
+
+  <div id="passwordResetBanner" class="verification-banner warning hidden">
+    <span>Password update required. Update it from your profile to continue.</span>
+    <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarNav">
+      <nav class="sidebar-menu">
+        <button class="sidebar-link active" id="navDashboard" data-view="view-dashboard">Dashboard</button>
+        <button class="sidebar-link" id="navCreate" data-view="view-create">Create</button>
+        <button class="sidebar-link" id="navSystem" data-view="view-system">System</button>
+      </nav>
+    </aside>
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {% block modals %}{% endblock %}
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

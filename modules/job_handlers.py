@@ -7,7 +7,12 @@ import os
 import time
 from typing import Dict, List
 
-from modules.jobs import append_log, set_error, set_progress, set_result
+from modules.jobs import (
+    append_log,
+    set_error,
+    set_result,
+    update_job_status,
+)
 from modules.packager import build_master_from_loop, probe_audio_duration
 
 
@@ -18,32 +23,35 @@ def job_handle_package(job_id: str, payload: Dict[str, str]) -> None:
     audio_path = payload["audio_path"]
     out_path = payload.get("out_path") or os.path.join("static", "uploads", "master.mp4")
 
-    set_progress(job_id, 5)
+    update_job_status(job_id, stage="packaging", progress=5)
     append_log(job_id, "Probing audio...")
     duration_ms = probe_audio_duration(audio_path)
     if duration_ms <= 0:
-        set_error(job_id, "Invalid audio file (duration <= 0)")
+        append_log(job_id, "Audio probe failed; aborting job")
+        set_error(job_id, "Invalid audio asset", progress=None)
         return
 
-    set_progress(job_id, 20)
+    update_job_status(job_id, stage="packaging", progress=30)
     append_log(job_id, "Concatenating & muxing...")
-    result = build_master_from_loop(
-        loop_clip_path=loop_path,
-        music_audio_path=audio_path,
-        out_path=out_path,
-        target_ms=duration_ms,
-        voiceover_audio_path=None,
-    )
-
-    if "error" in result:
-        set_error(job_id, f"Packaging failed: {result}")
+    try:
+        result = build_master_from_loop(
+            loop_clip_path=loop_path,
+            music_audio_path=audio_path,
+            out_path=out_path,
+            target_ms=duration_ms,
+            voiceover_audio_path=None,
+        )
+    except Exception as exc:
+        append_log(job_id, f"Packaging failed: {exc}")
+        set_error(job_id, "Packaging pipeline failed", progress=None)
         return
 
-    set_progress(job_id, 95)
+    update_job_status(job_id, stage="packaging", progress=95)
     append_log(job_id, "Finalizing…")
     set_result(
         job_id,
         {"master_path": out_path, "audio_ms": duration_ms, "detail": result},
+        duration_ms=duration_ms,
     )
 
 
@@ -71,6 +79,8 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
     paths = payload["paths"]  # type: ignore[index]
     palette = payload.get("palette", [])  # type: ignore[assignment]
     thresholds = payload.get("thresholds", {"loop": 0.92, "style": 75})  # type: ignore[assignment]
+
+    update_job_status(job_id, stage="qa", progress=0)
 
     results = []
     total = max(1, len(paths))
@@ -100,7 +110,7 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
                 }
             )
 
-        set_progress(job_id, int(100 * index / total))
+        update_job_status(job_id, stage="qa", progress=int(100 * index / total))
         if index % 3 == 0:
             append_log(job_id, f"Processed {index}/{total}")
         time.sleep(0.01)

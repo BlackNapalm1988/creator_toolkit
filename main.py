@@ -115,6 +115,14 @@ if not JWT_SECRET:
 DEFAULT_ADMIN_EMAIL = "admin@local"
 DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"
 
+TEST_USER_PASSWORD = "password"
+TEST_USER_ACCOUNTS = {
+    "admin": "user_admin@testing.com",
+    "owner": "user_owner@testing.com",
+    "editor": "user_editor@testing.com",
+    "viewer": "user_viewer@testing.com",
+}
+
 CREATOR_ROLES = ["admin", "owner", "editor"]
 PUBLISHER_ROLES = ["admin", "owner"]
 
@@ -185,27 +193,56 @@ def _send_verification_email(recipient: str, code: str, full_name: str | None = 
         return False
 
 
+def bootstrap_test_users() -> Dict[str, int]:
+    """Ensure each role has a ready-to-use test account."""
+
+    created: Dict[str, int] = {}
+    for role, email in TEST_USER_ACCOUNTS.items():
+        if get_user_by_email(email):
+            continue
+
+        user_id = create_user(
+            email,
+            f"{role.title()} Test User",
+            hash_password(TEST_USER_PASSWORD),
+            access_group="Testers",
+            is_verified=True,
+            role=role,
+            must_change_password=False,
+        )
+        created[role] = user_id
+
+    if created:
+        created_summary = ", ".join(
+            f"{role}:{TEST_USER_ACCOUNTS[role]}" for role in sorted(created)
+        )
+        logger.info("Bootstrapped test users: %s", created_summary)
+
+    return created
+
+
 def bootstrap_default_admin() -> Optional[int]:
     """Ensure a default admin user exists on first run."""
 
-    if count_users():
-        return None
+    created_admin_id: Optional[int] = None
+    if not count_users():
+        password_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
+        created_admin_id = create_user(
+            DEFAULT_ADMIN_EMAIL,
+            "System Administrator",
+            password_hash,
+            access_group="Dev",
+            is_verified=True,
+            role="admin",
+            must_change_password=True,
+        )
+        logger.info(
+            "Created default admin user %s with temporary password requirement",
+            DEFAULT_ADMIN_EMAIL,
+        )
 
-    password_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
-    admin_id = create_user(
-        DEFAULT_ADMIN_EMAIL,
-        "System Administrator",
-        password_hash,
-        access_group="Dev",
-        is_verified=True,
-        role="admin",
-        must_change_password=True,
-    )
-    logger.info(
-        "Created default admin user %s with temporary password requirement",
-        DEFAULT_ADMIN_EMAIL,
-    )
-    return admin_id
+    bootstrap_test_users()
+    return created_admin_id
 
 
 def current_user(request: Request, credentials=Depends(auth_scheme)):
