@@ -42,6 +42,18 @@ def test_default_admin_bootstrap_present():
     assert admin["must_change_password"] is True
 
 
+def test_test_users_bootstrapped():
+    """All predefined test users should exist with verified status and password."""
+
+    for role, email in main.TEST_USER_ACCOUNTS.items():
+        user = users_module.get_user_by_email(email)
+        assert user is not None, f"Missing test user for role {role}"
+        assert user["role"] == role
+        assert user["is_verified"] is True
+        assert user["must_change_password"] is False
+        assert auth_module.verify_password(main.TEST_USER_PASSWORD, user["password_hash"])
+
+
 def test_admin_only_smtp_endpoints(client):
     admin = users_module.get_user_by_email(main.DEFAULT_ADMIN_EMAIL)
     response = client.get("/admin/system/smtp", headers=_auth_headers(admin))
