@@ -8,6 +8,7 @@ import os
 import secrets
 import smtplib
 import uuid
+from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,7 +39,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 # --- modules ---
 from modules.jobs import (
@@ -369,11 +370,66 @@ ALLOWED_OPENAI_MODELS = [
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
+def _queue_worker_disabled() -> bool:
+    return os.getenv("DISABLE_QUEUE_WORKER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _start_queue_worker(app: FastAPI) -> None:
+    if getattr(app.state, "worker", None):
+        return
+
+    if _queue_worker_disabled():
+        logger.info("Queue worker disabled via DISABLE_QUEUE_WORKER flag")
+        app.state.worker = None
+        return
+
+    logger.info("Starting background queue worker")
+    worker = QueueWorker(
+        handlers={
+            "package": job_handle_package,
+            "qa_batch": job_handle_qa_batch,
+        },
+        poll_interval=0.5,
+    )
+    worker.start()
+    app.state.worker = worker
+
+    if JWT_SECRET == "dev_secret_change_me":
+        logger.error(
+            "JWT_SECRET is using the insecure default. Update your environment configuration."
+        )
+
+
+def _stop_queue_worker(app: FastAPI) -> None:
+    worker = getattr(app.state, "worker", None)
+    if worker:
+        worker.stop()
+        worker.join(timeout=2)
+        app.state.worker = None
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    """Manage startup and shutdown tasks for the FastAPI application."""
+
+    _start_queue_worker(app)
+
+    try:
+        yield
+    finally:
+        _stop_queue_worker(app)
+
+
 app = FastAPI(
     title="Creator Toolkit",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=app_lifespan,
 )
 app.state.worker = None
 
@@ -381,6 +437,18 @@ admin_router = APIRouter(prefix="/admin/system", tags=["Admin"])
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+async def start_queue_worker() -> None:
+    """Compatibility coroutine retained for tests to start the worker manually."""
+
+    _start_queue_worker(app)
+
+
+async def stop_queue_worker() -> None:
+    """Compatibility coroutine retained for tests to stop the worker manually."""
+
+    _stop_queue_worker(app)
 
 
 @app.get("/openapi.json", include_in_schema=False)
@@ -666,6 +734,7 @@ def _dashboard_shell(request: Request, *, active_view: str = "dashboard-view") -
     """Render the dashboard shell with the requested active view highlighted."""
 
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {"request": request, "active_view": active_view},
     )
@@ -982,12 +1051,28 @@ def eleven_list_voices(
     }
 
 
-@app.post("/elevenlabs/generate", tags=["ElevenLabs"])
-def eleven_generate_tts(
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+class ElevenGenerateForm(BaseModel):
+    text: str
+    voice_id: Optional[str] = None
+    model_id: Optional[str] = None
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+def parse_eleven_generate_form(
     text: str = Form(...),
     voice_id: Optional[str] = Form(None),
     model_id: Optional[str] = Form(None),
+) -> ElevenGenerateForm:
+    """Return a validated payload for ElevenLabs TTS generation form data."""
+
+    return ElevenGenerateForm(text=text, voice_id=voice_id, model_id=model_id)
+
+
+@app.post("/elevenlabs/generate", tags=["ElevenLabs"])
+def eleven_generate_tts(
+    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    form_data: ElevenGenerateForm = Depends(parse_eleven_generate_form),
 ):
     """
     Generate speech audio from ElevenLabs for the given text.
@@ -995,6 +1080,10 @@ def eleven_generate_tts(
     """
 
     api_key = _get_eleven_key_for_user(user["id"])
+
+    text = form_data.text
+    voice_id = form_data.voice_id
+    model_id = form_data.model_id
 
     # If no voice_id was provided, try to pick a default by querying /voices
     if not voice_id:
@@ -1967,47 +2056,6 @@ def youtube_upload_video(
 # JOB QUEUE ENDPOINTS
 # ----------------------------
 
-
-@app.on_event("startup")
-async def start_queue_worker() -> None:
-    """Start the background queue worker once the FastAPI app boots."""
-
-    if getattr(app.state, "worker", None):
-        return
-
-    if os.getenv("DISABLE_QUEUE_WORKER", "").strip().lower() in {"1", "true", "yes"}:
-        logger.info("Queue worker disabled via DISABLE_QUEUE_WORKER flag")
-        app.state.worker = None
-        return
-
-    logger.info("Starting background queue worker")
-    worker = QueueWorker(
-        handlers={
-            "package": job_handle_package,
-            "qa_batch": job_handle_qa_batch,
-        },
-        poll_interval=0.5,
-    )
-    worker.start()
-    app.state.worker = worker
-
-    if JWT_SECRET == "dev_secret_change_me":
-        logger.error(
-            "JWT_SECRET is using the insecure default. Update your environment configuration."
-        )
-
-
-@app.on_event("shutdown")
-async def stop_queue_worker() -> None:
-    """Stop the background queue worker when the app shuts down."""
-
-    worker = getattr(app.state, "worker", None)
-    if worker:
-        worker.stop()
-        worker.join(timeout=2)
-        app.state.worker = None
-
-
 class EnqueuePackageReq(BaseModel):
     loop_video_path: str
     audio_path: str
@@ -2023,7 +2071,7 @@ def package_async(
     """Enqueue a video packaging job for background processing."""
 
     # associate job with user in the future; for now just enqueue
-    jid = enqueue("package", req.dict())
+    jid = enqueue("package", req.model_dump())
     return {"job_id": jid}
 
 class EnqueueQABatchReq(BaseModel):
@@ -2056,7 +2104,7 @@ def qa_batch_async(
     req: EnqueueQABatchReq,
     user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
 ):
-    jid = enqueue("qa_batch", req.dict())
+    jid = enqueue("qa_batch", req.model_dump())
     return {"job_id": jid}
 
 @app.get("/jobs/{jid}")
@@ -2638,7 +2686,7 @@ def admin_update_smtp_settings(
     config: SMTPConfigUpdate,
     user=Depends(require_role(["admin"], require_verified=True)),
 ):
-    payload = config.dict(exclude_unset=True)
+    payload = config.model_dump(exclude_unset=True)
     payload = {k: v for k, v in payload.items() if v is not None}
     try:
         update_smtp_settings(payload)

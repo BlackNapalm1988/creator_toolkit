@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -22,7 +22,7 @@ from modules.storage import project_path
 def _timestamped_filename(prefix: str, suffix: str) -> str:
     """Return a predictable timestamped filename."""
 
-    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     return f"{prefix}_{ts}{suffix}"
 
 
