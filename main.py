@@ -2479,7 +2479,6 @@ def auth_login(req: LoginReq):
         samesite="Lax",
         secure=False,          # keep False for http://localhost
         path="/",              # ensure all routes get it
-        domain="localhost",           # or "localhost"
     )
 
     logger.info("/auth/login issued token for user_id=%s", user_id)

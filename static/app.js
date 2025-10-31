@@ -9,11 +9,12 @@ const authState = {
 
 const authOverlay = document.getElementById("authOverlay");
 const authTabs = authOverlay ? Array.from(authOverlay.querySelectorAll(".modal-tab")) : [];
-const loginForm = document.getElementById("loginForm");
-const registerForm = document.getElementById("registerForm");
+const overlayLoginForm = document.getElementById("overlayLoginForm");
+const overlayRegisterForm = document.getElementById("overlayRegisterForm");
 const authFeedback = document.getElementById("authFeedback");
 const authActions = document.getElementById("authActions");
 const openLoginButton = document.getElementById("openLoginButton");
+const openAuthFromPublishButton = document.getElementById("openAuthFromPublish");
 
 const loginEmailInput = document.getElementById("overlayLoginEmail");
 const loginPasswordInput = document.getElementById("overlayLoginPassword");
@@ -577,8 +578,10 @@ function setActiveAuthMode(mode) {
     const isActive = tab.dataset.mode === mode;
     tab.classList.toggle("active", isActive);
   });
-  if (loginForm) loginForm.classList.toggle("active", mode === "login");
-  if (registerForm) registerForm.classList.toggle("active", mode === "register");
+  if (overlayLoginForm)
+    overlayLoginForm.classList.toggle("active", mode === "login");
+  if (overlayRegisterForm)
+    overlayRegisterForm.classList.toggle("active", mode === "register");
   setFeedback(authFeedback, "");
 }
 
@@ -970,72 +973,95 @@ async function loadSmtpSettings() {
   }
 }
 
+async function handleLoginFromForm(formEl) {
+  if (!formEl || !loginEmailInput || !loginPasswordInput) return;
+  const email = loginEmailInput.value.trim();
+  const password = loginPasswordInput.value.trim();
+  const submitBtn = formEl.querySelector("button[type='submit']");
+  await withButtonWorkingState(submitBtn, async () => {
+    const resp = await postJSON("/auth/login", { email, password }, { skipAuthRedirect: true });
+    if (!resp.ok) {
+      const msg =
+        resp.data && (resp.data.error || resp.data.detail)
+          ? resp.data.error || resp.data.detail
+          : "Login failed.";
+      setFeedback(authFeedback, msg, "error");
+      return;
+    }
+
+    const { token, user, requires_verification, must_change_password } = resp.data || {};
+    if (!token || !user) {
+      setFeedback(authFeedback, "Unexpected login response.", "error");
+      return;
+    }
+
+    if (typeof must_change_password !== "undefined") {
+      user.must_change_password = must_change_password;
+    }
+
+    setToken(token);
+    authState.user = user;
+    applyUserState();
+    setFeedback(authFeedback, "Logged in successfully.", "success");
+    hideAuthOverlay();
+
+    if (requires_verification) {
+      showVerificationOverlay();
+    } else {
+      await refreshSession();
+    }
+  });
+}
+
+function wireAuthUI() {
+  if (overlayLoginForm) {
+    overlayLoginForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      await handleLoginFromForm(overlayLoginForm);
+    });
+  }
+
+  if (overlayRegisterForm) {
+    overlayRegisterForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!registerNameInput || !registerEmailInput || !registerPasswordInput) return;
+      const payload = {
+        full_name: registerNameInput.value.trim(),
+        email: registerEmailInput.value.trim(),
+        password: registerPasswordInput.value.trim(),
+      };
+      const submitBtn = overlayRegisterForm.querySelector("button[type='submit']");
+      await withButtonWorkingState(submitBtn, async () => {
+        const resp = await postJSON("/auth/register", payload, { skipAuthRedirect: true });
+        if (!resp.ok) {
+          const msg =
+            resp.data && (resp.data.error || resp.data.detail)
+              ? resp.data.error || resp.data.detail
+              : "Registration failed.";
+          setFeedback(authFeedback, msg, "error");
+          return;
+        }
+
+        const message =
+          resp.data && resp.data.message
+            ? resp.data.message
+            : "Account created. Log in to continue.";
+        const emailSent =
+          resp.data && Object.prototype.hasOwnProperty.call(resp.data, "email_sent")
+            ? !!resp.data.email_sent
+            : true;
+        setActiveAuthMode("login");
+        setFeedback(authFeedback, message, emailSent ? "success" : "error");
+      });
+    });
+  }
+}
+
 authTabs.forEach(tab => {
   tab.addEventListener("click", () => {
     setActiveAuthMode(tab.dataset.mode || "login");
   });
 });
-
-if (loginForm) {
-  loginForm.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    if (!loginEmailInput || !loginPasswordInput) return;
-    const email = loginEmailInput.value.trim();
-    const password = loginPasswordInput.value.trim();
-    const submitBtn = loginForm.querySelector("button[type='submit']");
-    await withButtonWorkingState(submitBtn, async () => {
-      const resp = await postJSON("/auth/login", { email, password }, { skipAuthRedirect: true });
-      if (!resp.ok) {
-        const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Login failed.";
-        setFeedback(authFeedback, msg, "error");
-        return;
-      }
-      const { token, user, requires_verification, must_change_password } = resp.data || {};
-      if (!token || !user) {
-        setFeedback(authFeedback, "Unexpected login response.", "error");
-        return;
-      }
-      if (typeof must_change_password !== "undefined") {
-        user.must_change_password = must_change_password;
-      }
-      setToken(token);
-      authState.user = user;
-      applyUserState();
-      setFeedback(authFeedback, "Logged in successfully.", "success");
-      hideAuthOverlay();
-      if (requires_verification) {
-        showVerificationOverlay();
-      } else {
-        await refreshSession();
-      }
-    });
-  });
-}
-
-if (registerForm) {
-  registerForm.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    if (!registerNameInput || !registerEmailInput || !registerPasswordInput) return;
-    const payload = {
-      full_name: registerNameInput.value.trim(),
-      email: registerEmailInput.value.trim(),
-      password: registerPasswordInput.value.trim(),
-    };
-    const submitBtn = registerForm.querySelector("button[type='submit']");
-    await withButtonWorkingState(submitBtn, async () => {
-      const resp = await postJSON("/auth/register", payload, { skipAuthRedirect: true });
-      if (!resp.ok) {
-        const msg = resp.data && (resp.data.error || resp.data.detail) ? (resp.data.error || resp.data.detail) : "Registration failed.";
-        setFeedback(authFeedback, msg, "error");
-        return;
-      }
-      const message = resp.data && resp.data.message ? resp.data.message : "Account created. Log in to continue.";
-      const emailSent = resp.data && Object.prototype.hasOwnProperty.call(resp.data, "email_sent") ? !!resp.data.email_sent : true;
-      setActiveAuthMode("login");
-      setFeedback(authFeedback, message, emailSent ? "success" : "error");
-    });
-  });
-}
 
 if (verifyForm) {
   verifyForm.addEventListener("submit", async (ev) => {
@@ -1267,6 +1293,12 @@ if (openLoginButton) {
   });
 }
 
+if (openAuthFromPublishButton) {
+  openAuthFromPublishButton.addEventListener("click", () => {
+    showAuthOverlay("login");
+  });
+}
+
 if (profileButton) {
   profileButton.addEventListener("click", () => {
     if (!authState.user) {
@@ -1366,6 +1398,7 @@ function initializeAuth() {
 }
 
 
+wireAuthUI();
 setActiveAuthMode("login");
 initializeAuth();
 
