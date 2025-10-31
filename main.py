@@ -11,7 +11,7 @@ import uuid
 from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 
 from dotenv import load_dotenv
 from urllib.parse import urlencode
@@ -1060,13 +1060,17 @@ class ElevenGenerateForm(BaseModel):
 
 
 def parse_eleven_generate_form(
-    text: str = Form(...),
-    voice_id: Optional[str] = Form(None),
-    model_id: Optional[str] = Form(None),
+    text: Annotated[str, Form(...)],
+    voice_id: Annotated[Optional[str], Form()] = None,
+    model_identifier: Annotated[Optional[str], Form(alias="model_id")] = None,
 ) -> ElevenGenerateForm:
     """Return a validated payload for ElevenLabs TTS generation form data."""
 
-    return ElevenGenerateForm(text=text, voice_id=voice_id, model_id=model_id)
+    return ElevenGenerateForm(
+        text=text,
+        voice_id=voice_id,
+        model_id=model_identifier,
+    )
 
 
 @app.post("/elevenlabs/generate", tags=["ElevenLabs"])
