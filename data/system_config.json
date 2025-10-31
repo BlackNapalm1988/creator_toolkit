@@ -1,0 +1,9 @@
+{
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "use_tls": true,
+    "username": "andruromin@gmail.com",
+    "from_address": "andruromin@gmail.com"
+  }
+}

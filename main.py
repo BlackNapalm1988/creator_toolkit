@@ -122,7 +122,7 @@ if not JWT_SECRET:
 
 LEGACY_ADMIN_EMAILS = {"admin@local"}
 DEFAULT_ADMIN_EMAIL = "admin@local.test"
-DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_NOW"
+DEFAULT_ADMIN_PASSWORD = "admin"
 
 TEST_USER_PASSWORD = "password"
 TEST_USER_ACCOUNTS = {
@@ -2479,7 +2479,6 @@ def auth_login(req: LoginReq):
         samesite="Lax",
         secure=False,          # keep False for http://localhost
         path="/",              # ensure all routes get it
-        domain="localhost",           # or "localhost"
     )
 
     logger.info("/auth/login issued token for user_id=%s", user_id)
