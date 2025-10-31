@@ -15,11 +15,11 @@ const authFeedback = document.getElementById("authFeedback");
 const authActions = document.getElementById("authActions");
 const openLoginButton = document.getElementById("openLoginButton");
 
-const loginEmailInput = document.getElementById("loginEmail");
-const loginPasswordInput = document.getElementById("loginPassword");
-const registerNameInput = document.getElementById("registerName");
-const registerEmailInput = document.getElementById("registerEmail");
-const registerPasswordInput = document.getElementById("registerPassword");
+const loginEmailInput = document.getElementById("overlayLoginEmail");
+const loginPasswordInput = document.getElementById("overlayLoginPassword");
+const registerNameInput = document.getElementById("overlayRegisterName");
+const registerEmailInput = document.getElementById("overlayRegisterEmail");
+const registerPasswordInput = document.getElementById("overlayRegisterPassword");
 
 const verificationOverlay = document.getElementById("verificationOverlay");
 const verifyForm = document.getElementById("verifyForm");
@@ -1322,8 +1322,21 @@ if (authOverlay) {
 }
 
 function initializeAuth() {
-  if (userActions) userActions.classList.add("hidden");
-  updateProtectedUI(true);
+  // 1) Start from a "logged-out" UI
+  if (typeof userActions !== "undefined" && userActions) {
+    userActions.classList.add("hidden");
+  }
+
+  // 2) Apply whatever we currently know about the user (likely "viewer")
+  if (typeof applyUserState === "function") {
+    // pass true if your version uses "initial" flag
+    applyUserState(true);
+  } else if (typeof updateProtectedUI === "function") {
+    // backward-compat; some older builds used this name
+    updateProtectedUI();
+  }
+
+  // 3) Try to restore token from localStorage (if we ever saved it)
   try {
     const stored = localStorage.getItem(STORAGE_TOKEN_KEY);
     if (stored) {
@@ -1332,12 +1345,26 @@ function initializeAuth() {
   } catch (err) {
     console.warn("could not restore token", err);
   }
-  refreshSession().then(() => {
-    if (!authState.user) {
+
+  // 4) Ask the backend "who am I?" using the cookie/token
+  refreshSession()
+    .then(() => {
+      // if backend says "nope", show the login overlay
+      if (!authState.user) {
+        showAuthOverlay("login");
+      } else {
+        // if we DO have a user, make sure the UI reflects it
+        if (typeof applyUserState === "function") {
+          applyUserState(false);
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn("auth refresh failed", err);
       showAuthOverlay("login");
-    }
-  });
+    });
 }
+
 
 setActiveAuthMode("login");
 initializeAuth();
@@ -1386,6 +1413,7 @@ function normalizePercent(rawValue, lastValue = 0) {
 // =========================
 // TAB SWITCHING
 // =========================
+
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     // update tab button active state

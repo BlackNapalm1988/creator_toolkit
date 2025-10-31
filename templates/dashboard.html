@@ -270,7 +270,12 @@
       <input id="registerPassword" type="password" autocomplete="new-password" required />
       <button type="submit">Create Account</button>
     </form>
-    <div id="authFeedback" class="form-feedback"></div>
+    <div id="publishAuthHint" class="help-text">
+      You must be logged in to publish.
+      <button type="button" id="openAuthFromPublish" class="ghost-btn small">
+        Log in
+      </button>
+    </div>
   </div>
 </section>
 
@@ -300,20 +305,20 @@
       <button class="modal-tab active" data-mode="login">Log In</button>
       <button class="modal-tab" data-mode="register">Register</button>
     </div>
-    <form id="loginForm" class="modal-form active">
+    <form id="overlayLoginForm" class="modal-form active">
       <label>Email</label>
-      <input id="loginEmail" type="email" autocomplete="email" required />
+      <input id="overlayLoginEmail" type="email" autocomplete="email" required />
       <label>Password</label>
-      <input id="loginPassword" type="password" autocomplete="current-password" required />
+      <input id="overlayLoginPassword" type="password" autocomplete="current-password" required />
       <button type="submit">Log In</button>
     </form>
-    <form id="registerForm" class="modal-form">
+    <form id="overlayRegisterForm" class="modal-form">
       <label>Full Name</label>
-      <input id="registerName" type="text" autocomplete="name" required />
+      <input id="overlayRegisterName" type="text" autocomplete="name" required />
       <label>Email</label>
-      <input id="registerEmail" type="email" autocomplete="email" required />
+      <input id="overlayRegisterEmail" type="email" autocomplete="email" required />
       <label>Password</label>
-      <input id="registerPassword" type="password" autocomplete="new-password" required />
+      <input id="overlayRegisterPassword" type="password" autocomplete="new-password" required />
       <button type="submit">Create Account</button>
     </form>
     <div id="authFeedback" class="form-feedback"></div>

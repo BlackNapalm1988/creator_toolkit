@@ -2473,12 +2473,15 @@ def auth_login(req: LoginReq):
         }
     )
     resp.set_cookie(
-        "token",
-        token,
+        key="token",
+        value=token,
         httponly=True,
         samesite="Lax",
-        secure=False,  # set True when HTTPS
+        secure=False,          # keep False for http://localhost
+        path="/",              # ensure all routes get it
+        domain="localhost",           # or "localhost"
     )
+
     logger.info("/auth/login issued token for user_id=%s", user_id)
     return resp
 
