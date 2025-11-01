@@ -84,11 +84,3 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 | 🧪 Tests | 21 total tests passing, 0 failures |
 | 🧱 Docs | Added BranchingGuide and Codex prompt templates |
 | 🚀 CI | Added branch protection and CI gating for merges |
-
----
-
-### 🏷️ Tag Command (for release)
-```bash
-git tag -a v0.1.2-alpha.1 -m "Release v0.1.2-alpha.1"
-git push origin v0.1.2-alpha.1
-```
