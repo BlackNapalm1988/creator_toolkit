@@ -8,7 +8,9 @@ import math
 import os
 import secrets
 import smtplib
+import tempfile
 import uuid
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
@@ -19,83 +21,86 @@ from urllib.parse import urlencode
 import requests
 from dotenv import load_dotenv
 from fastapi import (
-    FastAPI,
     APIRouter,
-    UploadFile,
+    Body,
+    Depends,
+    FastAPI,
     File,
     Form,
-    Body,
+    HTTPException,
     Request,
     Response,
-    HTTPException,
-    Depends,
+    UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.security import HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-# ---- local modules ----
-from modules.jobs import (
-    init_jobs_db,
-    enqueue,
-    get_job,
-    list_jobs,
-    list_active_jobs,
-    QueueWorker,
-)
-from modules.job_handlers import job_handle_package, job_handle_qa_batch
-from modules.packager import build_master_from_loop, probe_audio_duration
-from modules.chat import (
-    init_chat_db,
-    create_thread,
-    get_thread,
-    list_threads,
-    add_message,
-    get_messages,
-)
-from modules.storage import (
-    list_projects,
-    get_project,
-    upsert_project,
-    delete_project,
-    list_presets,
-    upsert_preset,
-    delete_preset,
-    project_path,
-)
-from modules.users import (
-    init_db,
-    create_user,
-    get_user_by_email,
-    get_user_by_id,
-    update_user_profile,
-    update_password_hash,
-    upsert_user_key,
-    list_user_keys,
-    delete_user_key,
-    set_verification_code,
-    mark_email_verified,
-    set_must_change_password,
-    count_users,
-    update_role,
-)
 from modules.auth import (
+    create_access_token,
+    decode_access_token,
+    decrypt_value,
+    encrypt_value,
     hash_password,
     verify_password,
-    encrypt_value,
-    decrypt_value,
-    decode_access_token,
-    create_access_token,
+)
+from modules.auth import (
     require_role as base_require_role,
 )
+from modules.chat import (
+    add_message,
+    create_thread,
+    get_messages,
+    get_thread,
+    init_chat_db,
+    list_threads,
+)
+from modules.job_handlers import job_handle_package, job_handle_qa_batch
+
+# ---- local modules ----
+from modules.jobs import (
+    QueueWorker,
+    enqueue,
+    get_job,
+    init_jobs_db,
+    list_active_jobs,
+    list_jobs,
+)
+from modules.packager import build_master_from_loop, probe_audio_duration
+from modules.storage import (
+    delete_preset,
+    delete_project,
+    get_project,
+    list_presets,
+    list_projects,
+    project_path,
+    upsert_preset,
+    upsert_project,
+)
 from modules.system import (
-    resolve_smtp_settings,
     get_public_smtp_settings,
+    resolve_smtp_settings,
     update_smtp_settings,
+)
+from modules.users import (
+    count_users,
+    create_user,
+    delete_user_key,
+    get_user_by_email,
+    get_user_by_id,
+    init_db,
+    list_user_keys,
+    mark_email_verified,
+    set_must_change_password,
+    set_verification_code,
+    update_password_hash,
+    update_role,
+    update_user_profile,
+    upsert_user_key,
 )
 
 # ---- environment setup ----
@@ -279,7 +284,10 @@ def bootstrap_default_admin() -> Optional[int]:
     return created_admin_id
 
 
-def current_user(request: Request, credentials=Depends(auth_scheme)):
+def current_user(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(auth_scheme)],
+):
     """Resolve the authenticated user based on bearer token or cookie."""
 
     # 1. Pull token from Authorization header or cookie
@@ -305,8 +313,8 @@ def current_user(request: Request, credentials=Depends(auth_scheme)):
 
     try:
         uid = int(uid_raw)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Bad id in token")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Bad id in token") from exc
 
     user = get_user_by_id(uid)
     if not user:
@@ -343,7 +351,7 @@ def _user_payload(u: dict) -> dict:
     }
 
 
-def verified_user(user=Depends(current_user)):
+def verified_user(user: Annotated[dict, Depends(current_user)]):
     """Dependency that requires the user to have completed email verification."""
 
     if not user.get("is_verified"):
@@ -351,7 +359,7 @@ def verified_user(user=Depends(current_user)):
     return user
 
 
-def dev_user(user=Depends(verified_user)):
+def dev_user(user: Annotated[dict, Depends(verified_user)]):
     """Dependency restricting access to members of the ``Dev`` access group."""
 
     if (user.get("role") or "").lower() != "admin":
@@ -453,14 +461,14 @@ async def stop_queue_worker() -> None:
 
 
 @app.get("/openapi.json", include_in_schema=False)
-def custom_openapi(user=Depends(dev_user)):
+def custom_openapi(user: Annotated[dict, Depends(dev_user)]):
     """Expose the generated OpenAPI schema to verified developers."""
 
     return JSONResponse(app.openapi())
 
 
 @app.get("/docs", include_in_schema=False)
-def custom_docs(user=Depends(dev_user)):
+def custom_docs(user: Annotated[dict, Depends(dev_user)]):
     """Serve Swagger UI for developers while keeping it hidden from public."""
 
     return get_swagger_ui_html(
@@ -637,7 +645,7 @@ def _youtube_upload_from_disk(
     file_path: str,
     title: str,
     description: str,
-    tags: str,
+    tags: str | Sequence[str],
     privacy_status: str,
     publish_at: Optional[str] = None,
 ) -> dict:
@@ -650,8 +658,17 @@ def _youtube_upload_from_disk(
     with open(file_path, "rb") as f:
         video_bytes = f.read()
 
-    # parse tags
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    # parse tags from either a comma-delimited string or an iterable of strings
+    tag_list: List[str] = []
+    if isinstance(tags, str):
+        tag_list = _parse_tags(tags)
+    elif tags:
+        for tag in tags:
+            if tag is None:
+                continue
+            text = str(tag).strip()
+            if text:
+                tag_list.append(text)
 
     snippet = {
         "title": title,
@@ -720,10 +737,10 @@ def _youtube_upload_from_disk(
 
     try:
         yt_resp = r.json()
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=500, detail="YouTube upload succeeded but JSON parse failed"
-        )
+        ) from exc
 
     return {
         "video_id": yt_resp.get("id"),
@@ -866,7 +883,7 @@ def _serialize_job_detail(job: Dict[str, object]) -> Dict[str, object]:
 
 
 @app.get("/dashboard/data", tags=["Dashboard"])
-def dashboard_data(user=Depends(current_user)):
+def dashboard_data(user: Annotated[dict, Depends(current_user)]):
     """Return aggregated dashboard data for the signed-in user."""
 
     # --- user summary ---
@@ -903,7 +920,9 @@ def dashboard_data(user=Depends(current_user)):
 
 
 @app.get("/imagine/models")
-def imagine_models(user=Depends(require_role(CREATOR_ROLES, require_verified=True))):
+def imagine_models(
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
+):
     """Return the list of allowed OpenAI chat models."""
 
     return {"models": ALLOWED_OPENAI_MODELS, "default": OPENAI_MODEL}
@@ -912,7 +931,7 @@ def imagine_models(user=Depends(require_role(CREATOR_ROLES, require_verified=Tru
 @app.post("/imagine/thread")
 def imagine_thread_create(
     req: ImagineThreadCreateReq,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """Create a new chat thread for brainstorming prompts."""
 
@@ -935,7 +954,7 @@ def imagine_thread_create(
 
 @app.get("/imagine/threads")
 def imagine_threads_list(
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """Return recent imagine threads for the signed-in user."""
 
@@ -945,7 +964,7 @@ def imagine_threads_list(
 @app.get("/imagine/history/{thread_id}")
 def imagine_history(
     thread_id: str,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """Fetch a thread plus the last N messages for review."""
 
@@ -961,7 +980,7 @@ def imagine_history(
 @app.post("/imagine/send")
 def imagine_send(
     req: ImagineSendReq,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """Send a chat message and stream the assistant's reply back."""
 
@@ -997,8 +1016,8 @@ def imagine_send(
             max_tokens=800,
         )
         reply = resp.choices[0].message.content
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI error: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OpenAI error: {exc}") from exc
 
     add_message(req.thread_id, "assistant", reply)
     return {"reply": reply}
@@ -1011,7 +1030,7 @@ def imagine_send(
 
 @app.get("/elevenlabs/voices", tags=["ElevenLabs"])
 def eleven_list_voices(
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Return a clean list of voices the user can pick from:
@@ -1034,10 +1053,10 @@ def eleven_list_voices(
 
     try:
         r = requests.get(url, headers=headers, timeout=30)
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Network error contacting ElevenLabs: {e}"
-        )
+            status_code=500, detail=f"Network error contacting ElevenLabs: {exc}"
+        ) from exc
 
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=r.text)
@@ -1101,8 +1120,8 @@ def parse_eleven_generate_form(
 
 @app.post("/elevenlabs/generate", tags=["ElevenLabs"])
 def eleven_generate_tts(
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
-    form_data: ElevenGenerateForm = Depends(parse_eleven_generate_form),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
+    form_data: Annotated[ElevenGenerateForm, Depends(parse_eleven_generate_form)],
 ):
     """
     Generate speech audio from ElevenLabs for the given text.
@@ -1167,10 +1186,10 @@ def eleven_generate_tts(
             data=json.dumps(payload),
             timeout=60,
         )
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Network error contacting ElevenLabs: {e}"
-        )
+            status_code=500, detail=f"Network error contacting ElevenLabs: {exc}"
+        ) from exc
 
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -1182,8 +1201,10 @@ def eleven_generate_tts(
     try:
         with open(out_path, "wb") as f:
             f.write(audio_bytes)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not save MP3: {e}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Could not save MP3: {exc}"
+        ) from exc
 
     public_url = f"/static/tts/{out_name}"
 
@@ -1261,7 +1282,7 @@ class ImagineChatResp(BaseModel):
 @app.post("/imagine/chat", response_model=ImagineChatResp, tags=["Imagine"])
 def imagine_chat(
     req: ImagineChatReq,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Lightweight 'writer's room' chat.
@@ -1301,11 +1322,11 @@ def imagine_chat(
 
     try:
         r = requests.post(url, headers=headers, json=body, timeout=60)
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Network error contacting OpenAI chat API: {e}",
-        )
+            detail=f"Network error contacting OpenAI chat API: {exc}",
+        ) from exc
 
     if r.status_code >= 400:
         # Bubble back error text so you can see what's wrong in the UI
@@ -1328,7 +1349,7 @@ def imagine_chat(
 @app.post("/generate/music", tags=["Generate"])
 def generate_music(
     req: MusicGenReq,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Kick off ElevenLabs music generation.
@@ -1365,11 +1386,11 @@ def generate_music(
             json=music_payload,
             timeout=120,
         )
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Network error contacting ElevenLabs Music: {e}",
-        )
+            detail=f"Network error contacting ElevenLabs Music: {exc}",
+        ) from exc
 
     if el_resp.status_code >= 400:
         # Super important: this error text will tell us if the field names differ.
@@ -1387,11 +1408,11 @@ def generate_music(
     if "application/json" in ctype:
         try:
             payload = el_resp.json()
-        except Exception:
+        except Exception as exc:
             raise HTTPException(
                 status_code=500,
                 detail="ElevenLabs returned JSON but we couldn't parse it",
-            )
+            ) from exc
 
         status = payload.get("status", "unknown")
 
@@ -1497,7 +1518,7 @@ def generate_music(
 @app.get("/generate/music/status", tags=["Generate"])
 def get_music_status(
     job_id: str,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Poll ElevenLabs about a music generation job.
@@ -1532,10 +1553,10 @@ def get_music_status(
 
     try:
         payload = last_resp.json()
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=500, detail="Music status response was not JSON"
-        )
+        ) from exc
 
     status = payload.get("status", "unknown")
 
@@ -1631,7 +1652,7 @@ def get_music_status(
 @app.post("/generate/video", tags=["Generate"])
 def generate_video(
     req: VideoGenReq,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Ask Sora 2 for a clip and (if possible) request a custom duration + aspect.
@@ -1712,11 +1733,11 @@ def generate_video(
             files=multipart_fields,  # <-- key change
             timeout=120,
         )
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Network error contacting Sora 2 / OpenAI: {e}",
-        )
+            detail=f"Network error contacting Sora 2 / OpenAI: {exc}",
+        ) from exc
 
     if sora_resp.status_code >= 400:
         raise HTTPException(
@@ -1737,11 +1758,11 @@ def generate_video(
     if "application/json" in ctype:
         try:
             payload = sora_resp.json()
-        except Exception:
+        except Exception as exc:
             raise HTTPException(
                 status_code=500,
                 detail="Sora 2 returned JSON but we couldn't parse it",
-            )
+            ) from exc
 
         status = payload.get("status") or payload.get("state") or "unknown"
 
@@ -1845,7 +1866,9 @@ def generate_video(
 
 @app.get("/youtube/auth/url", tags=["YouTube"])
 def youtube_auth_url(
-    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -1892,8 +1915,8 @@ def youtube_oauth2_callback(code: str, request: Request):
 
     try:
         uid = int(uid_raw)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Bad user id in token")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Bad user id in token") from exc
 
     user = get_user_by_id(uid)
     if not user:
@@ -1945,7 +1968,9 @@ def youtube_oauth2_callback(code: str, request: Request):
 
 @app.get("/youtube/channels/me", tags=["YouTube"])
 def youtube_channels_me(
-    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     # 1. Get your encrypted refresh token from DB
     refresh_token = _get_youtube_refresh(user["id"])
@@ -1970,133 +1995,161 @@ def youtube_channels_me(
     return r.json()
 
 
+class YouTubeUploadRequest(BaseModel):
+    """Request payload for JSON-based YouTube uploads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    video_path: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = ""
+    tags: Optional[List[str]] = None
+    privacy_status: Optional[str] = "unlisted"
+    publish_at: Optional[str] = None
+
+
+def _resolve_video_file(video_path_raw: str) -> Path:
+    """Return a concrete file path for ``video_path_raw``.
+
+    The frontend may submit values like ``static/uploads/video.mp4`` (relative)
+    or ``/static/uploads/video.mp4`` (leading slash). We attempt a few
+    reasonable interpretations rooted at the project directory before
+    surfacing a 404.
+    """
+
+    cleaned = video_path_raw.strip()
+    initial = Path(cleaned).expanduser()
+
+    candidates: List[Path] = []
+    seen: set[str] = set()
+
+    def _add_candidate(path: Path) -> None:
+        key = str(path)
+        if key not in seen:
+            candidates.append(path)
+            seen.add(key)
+
+    _add_candidate(initial)
+
+    if cleaned:
+        trimmed = cleaned.lstrip("/\\")
+        if trimmed and trimmed != cleaned:
+            _add_candidate(Path(project_path(trimmed)))
+
+    if not initial.is_absolute():
+        _add_candidate(Path(project_path(initial)))
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    searched = ", ".join(str(path) for path in candidates)
+    raise HTTPException(
+        status_code=404,
+        detail=f"File not found for video_path '{video_path_raw}'. Checked: {searched}",
+    )
+
+
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
-    user=Depends(require_role(["admin", "owner"], require_verified=True)),
-    video_file: UploadFile = File(...),
-    title: str = Form(...),
-    description: str = Form(""),
-    tags: str = Form(""),
-    privacy_status: str = Form("unlisted"),
-    publish_at: str = Form(""),
+    req: YouTubeUploadRequest,
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
-    """
-    Upload a video file to the authorized user's YouTube channel.
-    Returns the videoId on success.
-    """
+    """Upload a rendered video residing on disk using a JSON request payload."""
 
-    # 1. Get user's refresh token and mint an access token
-    refresh_token = _get_youtube_refresh(user["id"])
-    access_token = _youtube_get_access_token(refresh_token)
+    video_path_raw = (req.video_path or "").strip()
+    title_raw = (req.title or "").strip()
 
-    # 2. Read the file bytes (UploadFile is SpooledTemporaryFile, we just read it)
+    if not video_path_raw or not title_raw:
+        raise HTTPException(status_code=400, detail="video_path and title are required")
+
+    file_path = _resolve_video_file(video_path_raw)
+
+    description = (req.description or "").strip()
+    tags = req.tags or []
+    privacy_status_raw = (req.privacy_status or "unlisted").strip()
+    privacy_status = privacy_status_raw or "unlisted"
+    publish_at = (req.publish_at or "").strip() or None
+
+    yt_info = _youtube_upload_from_disk(
+        user_id=user["id"],
+        file_path=str(file_path),
+        title=title_raw,
+        description=description,
+        tags=tags,
+        privacy_status=privacy_status,
+        publish_at=publish_at,
+    )
+
+    return {
+        "ok": True,
+        "video_id": yt_info.get("video_id"),
+        "requested_visibility": yt_info.get("requested_visibility"),
+        "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
+        "youtube_response": yt_info.get("youtube_response"),
+    }
+
+
+@app.post("/youtube/upload-form", tags=["YouTube"])
+def youtube_upload_video_form(
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
+    video_file: Annotated[UploadFile, File(...)],
+    title: Annotated[str, Form(...)],
+    description: Annotated[str, Form()] = "",
+    tags: Annotated[str, Form()] = "",
+    privacy_status: Annotated[str, Form()] = "unlisted",
+    publish_at: Annotated[str, Form()] = "",
+):
+    """Upload a video provided via multipart/form-data for manual testing tools."""
+
     try:
         video_bytes = video_file.file.read()
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
-            status_code=400, detail=f"Could not read uploaded file: {e}"
-        )
+            status_code=400, detail=f"Could not read uploaded file: {exc}"
+        ) from exc
 
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Empty video file")
 
-    # 3. Build metadata YouTube expects
-    # snippet: title, description, tags
-    # status: privacyStatus
-    snippet = {
-        "title": title,
-        "description": description,
-    }
-    parsed_tags = _parse_tags(tags)
-    if parsed_tags:
-        snippet["tags"] = parsed_tags
-
-    desired_visibility = (privacy_status or "unlisted").strip().lower()
-    allowed_visibilities = {"public", "unlisted", "private"}
-    if desired_visibility not in allowed_visibilities:
+    suffix = Path(video_file.filename or "upload.mp4").suffix or ".mp4"
+    temp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(video_bytes)
+            temp_path = Path(tmp.name)
+    except Exception as exc:
         raise HTTPException(
-            status_code=400,
-            detail=f"privacy_status must be one of {', '.join(sorted(allowed_visibilities))}",
-        )
-
-    scheduled_iso = _normalize_publish_at(publish_at)
-    if scheduled_iso and desired_visibility != "public":
-        raise HTTPException(
-            status_code=400,
-            detail="Scheduled publish is only supported when visibility is set to 'public'.",
-        )
-
-    status_obj = {
-        "privacyStatus": desired_visibility if not scheduled_iso else "private"
-    }
-    if scheduled_iso:
-        status_obj["publishAt"] = scheduled_iso
-
-    metadata_obj = {"snippet": snippet, "status": status_obj}
-
-    metadata_json = json.dumps(metadata_obj)
-
-    # 4. Build multipart/related body manually
-    # We create a random boundary and send 2 parts:
-    #   - metadata (application/json; charset=UTF-8)
-    #   - media (video/*)
-    boundary = "==============CREATOR_TOOLKIT_" + uuid.uuid4().hex
-
-    # NOTE: We must use CRLF (\r\n) between MIME segments exactly how YouTube expects.
-    # We'll assemble bytes manually.
-    part1_headers = (
-        f"--{boundary}\r\n"
-        "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-        f"{metadata_json}\r\n"
-    )
-
-    part2_headers = (
-        f"--{boundary}\r\n"
-        f"Content-Type: {video_file.content_type or 'video/mp4'}\r\n\r\n"
-    )
-
-    closing = f"\r\n--{boundary}--\r\n"
-
-    body_bytes = (
-        part1_headers.encode("utf-8")
-        + part2_headers.encode("utf-8")
-        + video_bytes
-        + closing.encode("utf-8")
-    )
-
-    # 5. Send request to YouTube Data API v3 videos.insert
-    # We'll request the snippet+status parts so we can set title, desc, privacy.
-    upload_url = (
-        "https://www.googleapis.com/upload/youtube/v3/videos" "?part=snippet,status"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": f"multipart/related; boundary={boundary}",
-    }
-
-    r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
-
-    # 6. Handle response
-    if r.status_code >= 400:
-        # YouTube gives useful JSON error details.
-        raise HTTPException(status_code=r.status_code, detail=r.text)
+            status_code=500, detail=f"Failed to persist uploaded file: {exc}"
+        ) from exc
 
     try:
-        yt_resp = r.json()
-    except Exception:
-        raise HTTPException(
-            status_code=500, detail="Upload succeeded but could not parse JSON"
+        yt_info = _youtube_upload_from_disk(
+            user_id=user["id"],
+            file_path=str(temp_path),
+            title=title.strip(),
+            description=(description or "").strip(),
+            tags=tags,
+            privacy_status=(privacy_status or "").strip() or "unlisted",
+            publish_at=(publish_at or "").strip() or None,
         )
+    finally:
+        if temp_path:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
-    # YouTube responds with an object containing 'id' which is the new videoId.
-    video_id = yt_resp.get("id")
     return {
         "ok": True,
-        "video_id": video_id,
-        "requested_visibility": desired_visibility,
-        "scheduled_publish_at": scheduled_iso,
-        "youtube_response": yt_resp,
+        "video_id": yt_info.get("video_id"),
+        "requested_visibility": yt_info.get("requested_visibility"),
+        "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
+        "youtube_response": yt_info.get("youtube_response"),
     }
 
 
@@ -2116,7 +2169,9 @@ class EnqueuePackageReq(BaseModel):
 @app.post("/package_async")
 def package_async(
     req: EnqueuePackageReq,
-    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner", "editor"], require_verified=True))
+    ],
 ):
     """Enqueue a video packaging job for background processing."""
 
@@ -2154,7 +2209,9 @@ class PublishPipelineReq(BaseModel):
 @app.post("/qa/batch_async")
 def qa_batch_async(
     req: EnqueueQABatchReq,
-    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner", "editor"], require_verified=True))
+    ],
 ):
     jid = enqueue("qa_batch", req.model_dump())
     return {"job_id": jid}
@@ -2163,7 +2220,9 @@ def qa_batch_async(
 @app.get("/jobs/{jid}")
 def jobs_get(
     jid: str,
-    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner", "editor"], require_verified=True))
+    ],
 ):
     job = get_job(jid)
     if not job:
@@ -2173,7 +2232,9 @@ def jobs_get(
 
 @app.get("/jobs")
 def jobs_list(
-    user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner", "editor"], require_verified=True))
+    ],
 ):
     return {"jobs": [_serialize_job(job) for job in list_jobs(limit=25)]}
 
@@ -2199,7 +2260,7 @@ def health():
 
 
 @app.post("/upload")
-def upload(file: UploadFile = File(...)):
+def upload(file: Annotated[UploadFile, File(...)]):
     out_path = os.path.join("static", "uploads", file.filename)
     with open(out_path, "wb") as f:
         f.write(file.file.read())
@@ -2259,7 +2320,10 @@ def detect_watermark(video_path: str) -> bool:
 
 
 @app.post("/qa")
-def qa(loop_video_path: str = Form(...), palette: str = Form("[]")):
+def qa(
+    loop_video_path: Annotated[str, Form(...)],
+    palette: Annotated[str, Form()] = "[]",
+):
     try:
         pal = json.loads(palette)
     except Exception:
@@ -2271,25 +2335,32 @@ def qa(loop_video_path: str = Form(...), palette: str = Form("[]")):
     }
 
 
+DEFAULT_QA_PALETTE = ["#7359B6", "#1A1C2C", "#F2E9E4"]
+DEFAULT_QA_THRESHOLDS = {"loop": 0.92, "style": 75}
+
+
 @app.post("/qa/batch")
 def api_qa_batch(
-    paths: list = Body(...),
-    palette: list = Body(default=["#7359B6", "#1A1C2C", "#F2E9E4"]),
-    thresholds: dict = Body(default={"loop": 0.92, "style": 75}),
+    paths: Annotated[list, Body(...)],
+    palette: Annotated[Optional[list], Body()] = None,
+    thresholds: Annotated[Optional[dict], Body()] = None,
 ):
     rows = []
     for p in paths:
         if not os.path.exists(p):
             rows.append({"path": p, "error": "not found"})
             continue
+        palette_to_use = palette or DEFAULT_QA_PALETTE
+        threshold_values = thresholds or DEFAULT_QA_THRESHOLDS
+
         loop_score = compute_loop_score(p)
-        style_score = compute_style_score(p, palette)
+        style_score = compute_style_score(p, palette_to_use)
         watermark_flag = detect_watermark(p)
         verdict = (
             "PASS"
             if (
-                loop_score >= thresholds.get("loop", 0.92)
-                and style_score >= thresholds.get("style", 75)
+                loop_score >= threshold_values.get("loop", 0.92)
+                and style_score >= threshold_values.get("style", 75)
                 and not watermark_flag
             )
             else "RETRY"
@@ -2308,9 +2379,9 @@ def api_qa_batch(
 
 @app.post("/qa/batch_csv")
 def api_qa_batch_csv(
-    paths: list = Body(...),
-    palette: list = Body(default=["#7359B6", "#1A1C2C", "#F2E9E4"]),
-    thresholds: dict = Body(default={"loop": 0.92, "style": 75}),
+    paths: Annotated[list, Body(...)],
+    palette: Annotated[Optional[list], Body()] = None,
+    thresholds: Annotated[Optional[dict], Body()] = None,
 ):
     os.makedirs(os.path.join("static", "reports"), exist_ok=True)
     csv_path = os.path.join(
@@ -2379,7 +2450,7 @@ def package(req: PackageReq):
             voiceover_audio_path=None,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"packager failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
     return {
         "master_path": out_path,
@@ -2391,7 +2462,7 @@ def package(req: PackageReq):
 @app.post("/package/master", tags=["Packager"])
 def package_master(
     req: PackageReqV2,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Build final mastered MP4:
@@ -2418,8 +2489,8 @@ def package_master(
             target_ms=req.duration_ms,
             voiceover_audio_path=req.voiceover_path,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"packager failed: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
     public_url = f"/static/masters/{out_file}"
 
@@ -2438,7 +2509,7 @@ def api_list_projects():
 
 
 @app.post("/projects")
-def api_create_or_update_project(payload: dict = Body(...)):
+def api_create_or_update_project(payload: Annotated[dict, Body(...)]):
     proj = {
         "id": payload.get("id"),
         "title": payload.get("title", ""),
@@ -2479,7 +2550,7 @@ def api_list_presets():
 
 
 @app.post("/presets")
-def api_upsert_preset(payload: dict = Body(...)):
+def api_upsert_preset(payload: Annotated[dict, Body(...)]):
     pr = {
         "id": payload.get("id"),
         "scene_yaml": payload.get("scene_yaml"),
@@ -2615,7 +2686,9 @@ def auth_login(req: LoginReq):
 
 
 @app.post("/auth/verify-email")
-def auth_verify_email(req: VerifyEmailReq, user=Depends(current_user)):
+def auth_verify_email(
+    req: VerifyEmailReq, user: Annotated[dict, Depends(current_user)]
+):
     if user.get("is_verified"):
         return {"ok": True, "already_verified": True, "user": _user_payload(user)}
 
@@ -2639,7 +2712,7 @@ def auth_verify_email(req: VerifyEmailReq, user=Depends(current_user)):
 
 
 @app.post("/auth/resend-verification")
-def auth_resend_verification(user=Depends(current_user)):
+def auth_resend_verification(user: Annotated[dict, Depends(current_user)]):
     if user.get("is_verified"):
         return {"ok": True, "already_verified": True, "user": _user_payload(user)}
 
@@ -2670,7 +2743,7 @@ def auth_logout(response: Response):
 
 
 @app.get("/auth/whoami")
-def whoami(user=Depends(current_user)):
+def whoami(user: Annotated[dict, Depends(current_user)]):
     info = _user_payload(user)
     info["created_at"] = user.get("created_at")
     info["verified_at"] = user.get("verified_at")
@@ -2678,7 +2751,7 @@ def whoami(user=Depends(current_user)):
 
 
 @app.get("/me")
-def me(user=Depends(current_user)):
+def me(user: Annotated[dict, Depends(current_user)]):
     info = _user_payload(user)
     info["created_at"] = user.get("created_at")
     info["verified_at"] = user.get("verified_at")
@@ -2686,7 +2759,7 @@ def me(user=Depends(current_user)):
 
 
 @app.post("/profile")
-def profile_update(req: ProfileUpdateReq, user=Depends(current_user)):
+def profile_update(req: ProfileUpdateReq, user: Annotated[dict, Depends(current_user)]):
     existing = get_user_by_email(req.email)
     if existing and existing["id"] != user["id"]:
         return JSONResponse(
@@ -2719,7 +2792,9 @@ def profile_update(req: ProfileUpdateReq, user=Depends(current_user)):
 
 
 @app.post("/profile/password")
-def profile_password_change(req: PasswordChangeReq, user=Depends(current_user)):
+def profile_password_change(
+    req: PasswordChangeReq, user: Annotated[dict, Depends(current_user)]
+):
     # user here includes password_hash (from DB via current_user)
     if not verify_password(req.current_password, user["password_hash"]):
         return JSONResponse(
@@ -2739,7 +2814,7 @@ def profile_password_change(req: PasswordChangeReq, user=Depends(current_user)):
 @app.post("/profile/role")
 def profile_role_update(
     req: RoleUpdateReq,
-    user=Depends(require_role(["admin"], require_verified=True)),
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
 ):
     desired = (req.role or "").strip().lower()
     valid_roles = {"admin", "owner", "editor", "viewer"}
@@ -2770,7 +2845,7 @@ def profile_access_group_deprecated():
 
 @admin_router.get("/smtp")
 def admin_get_smtp_settings(
-    user=Depends(require_role(["admin"], require_verified=True)),
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
 ):
     return get_public_smtp_settings()
 
@@ -2778,7 +2853,7 @@ def admin_get_smtp_settings(
 @admin_router.post("/smtp")
 def admin_update_smtp_settings(
     config: SMTPConfigUpdate,
-    user=Depends(require_role(["admin"], require_verified=True)),
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
 ):
     payload = config.model_dump(exclude_unset=True)
     payload = {k: v for k, v in payload.items() if v is not None}
@@ -2793,7 +2868,7 @@ def admin_update_smtp_settings(
 @admin_router.post("/smtp/test")
 def admin_test_smtp(
     req: SMTPTestRequest,
-    user=Depends(require_role(["admin"], require_verified=True)),
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
 ):
     settings = resolve_smtp_settings()
     host = settings.get("host")
@@ -2829,7 +2904,9 @@ def admin_test_smtp(
 
 @app.get("/profile/keys")
 def profile_keys_list(
-    user=Depends(require_role(["admin", "owner"], require_verified=True))
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner"], require_verified=True))
+    ],
 ):
     raw = list_user_keys(user["id"])
     # we do NOT return the decrypted secrets, just providers
@@ -2839,7 +2916,9 @@ def profile_keys_list(
 @app.post("/profile/keys")
 def profile_keys_upsert(
     req: KeyUpsertReq,
-    user=Depends(require_role(["admin", "owner"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner"], require_verified=True))
+    ],
 ):
     cipher = encrypt_value(req.secret)
     upsert_user_key(user["id"], req.provider.lower(), cipher)
@@ -2849,7 +2928,9 @@ def profile_keys_upsert(
 @app.delete("/profile/keys/{provider}")
 def profile_keys_delete(
     provider: str,
-    user=Depends(require_role(["admin", "owner"], require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(["admin", "owner"], require_verified=True))
+    ],
 ):
     delete_user_key(user["id"], provider.lower())
     return {"ok": True, "deleted": provider.lower()}
@@ -2858,7 +2939,9 @@ def profile_keys_delete(
 @app.post("/pipeline/publish_lofi", tags=["Pipeline"])
 def pipeline_publish_lofi(
     req: PublishPipelineReq,
-    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     """
     One-shot pipeline:
@@ -2904,8 +2987,8 @@ def pipeline_publish_lofi(
             target_ms=req.duration_ms,
             voiceover_audio_path=voiceover_path,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"packager failed: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
     public_url = f"/static/masters/{out_file}"
 
@@ -2937,7 +3020,7 @@ def pipeline_publish_lofi(
 @app.get("/generate/video/status", tags=["Generate"])
 def get_video_status(
     job_id: str,
-    user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
+    user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
     """
     Check status of a Sora 2 video job by its ID returned from /generate/video.
@@ -2965,8 +3048,10 @@ def get_video_status(
 
     try:
         meta = meta_resp.json()
-    except Exception:
-        raise HTTPException(status_code=500, detail="Status response was not JSON")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail="Status response was not JSON"
+        ) from exc
 
     status = meta.get("status", "unknown")
 

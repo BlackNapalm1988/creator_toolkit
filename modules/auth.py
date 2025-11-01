@@ -101,7 +101,7 @@ def require_role(
 
     allowed = {role.lower() for role in allowed_roles}
 
-    def _checker(current_user=Depends(dependency)):
+    def _checker(current_user=Depends(dependency)) -> Dict[str, Any]:  # noqa: B008
         role = (current_user.get("role") or "").lower()
         if require_verified and not current_user.get("is_verified"):
             raise HTTPException(status_code=403, detail="Email verification required")
