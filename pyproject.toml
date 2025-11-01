@@ -1,0 +1,10 @@
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+extend-select = ["B", "C4", "E", "F", "I"]
+fix = false
+exclude = ["venv", "tests/conftest.py"]
