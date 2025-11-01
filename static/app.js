@@ -95,19 +95,27 @@ const INSPECTOR_CARDS = [
   },
 ];
 
-function renderShell() {
+let shellRoot = null;
+let mainContentEl = null;
+let navButtons = [];
+let inspectorActionButton = null;
+let initialActiveView = "dashboard-view";
+const SHELL_MAX_BOOTSTRAP_ATTEMPTS = 10;
+let shellBootstrapAttempts = 0;
+
+function renderShell(activeViewOverride) {
   console.log("[ui-shell] renderShell invoked");
 
   const root = document.getElementById("app");
   if (!root) {
     console.warn("[ui-shell] #app root not found; aborting shell mount");
-    return;
+    return false;
   }
 
   console.log("[ui-shell] root found");
 
   const legacyContent = document.getElementById("legacyContent");
-  const activeView = root.dataset.activeView || "dashboard-view";
+  const activeView = activeViewOverride || root.dataset.activeView || "dashboard-view";
 
   const shell = document.createElement("div");
   shell.id = "ct-shell";
@@ -131,6 +139,11 @@ function renderShell() {
   renderMainWorkspace(legacyContent, activeView);
   renderInspector();
   bindShellControls();
+  refreshShellRefs();
+  bindNavigationHandlers();
+  bindInspectorActions();
+
+  return true;
 }
 
 function renderSidebar(activeView) {
@@ -315,16 +328,106 @@ function bindShellControls() {
   console.log("[ui-shell] shell controls bound");
 }
 
-function initializeShell() {
-  console.log("[ui-shell] initializing shell");
-  renderShell();
+function refreshShellRefs() {
+  shellRoot = document.getElementById("ct-shell");
+  mainContentEl = document.getElementById("ct-main");
+  navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
+  inspectorActionButton = document.getElementById("ct-inspector-action");
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeShell);
-} else {
-  initializeShell();
+function handleNavClick(event) {
+  const btn = event.currentTarget;
+  if (!btn || btn.classList.contains("hidden")) return;
+
+  const target = btn.dataset.view;
+  if (!target) return;
+
+  if (btn.dataset.locked === "verify") {
+    event.preventDefault();
+    showVerificationOverlay();
+    if (verificationBanner) {
+      verificationBanner.classList.remove("hidden");
+    }
+    return;
+  }
+
+  event.preventDefault();
+
+  const href = btn.getAttribute("href") || VIEW_PATHS[target];
+  changeView(target, { path: href });
+  if (target === "dashboard-view") {
+    loadDashboardData(true, { silent: true });
+  }
 }
+
+function bindNavigationHandlers() {
+  navButtons.forEach(btn => {
+    if (!btn || btn.dataset.shellBound === "1") return;
+    btn.dataset.shellBound = "1";
+    btn.addEventListener("click", handleNavClick);
+  });
+}
+
+function bindInspectorActions() {
+  if (!inspectorActionButton || inspectorActionButton.dataset.shellBound === "1") {
+    return;
+  }
+
+  inspectorActionButton.dataset.shellBound = "1";
+  inspectorActionButton.addEventListener("click", () => {
+    changeView("create-view", { path: VIEW_PATHS["create-view"] });
+  });
+}
+
+function initializeShell() {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeShell, { once: true });
+    return;
+  }
+
+  console.log("[ui-shell] initializing shell");
+
+  const root = document.getElementById("app");
+  initialActiveView = (root && root.dataset.active_view) || (root && root.dataset.activeView) || initialActiveView;
+
+  const mounted = renderShell(initialActiveView);
+  if (!mounted) {
+    shellBootstrapAttempts += 1;
+    if (shellBootstrapAttempts >= SHELL_MAX_BOOTSTRAP_ATTEMPTS) {
+      console.error(
+        `[ui-shell] shell mount failed after ${shellBootstrapAttempts} attempts; giving up`
+      );
+      return;
+    }
+
+    console.warn(
+      `[ui-shell] renderShell failed (attempt ${shellBootstrapAttempts}); retrying on next frame`
+    );
+    requestAnimationFrame(initializeShell);
+    return;
+  }
+
+  shellBootstrapAttempts = 0;
+
+  const mountedView = (mainContentEl && mainContentEl.dataset.activeView) || initialActiveView;
+  initialActiveView = mountedView;
+  changeView(mountedView, {
+    path: window.location.pathname,
+    replace: true,
+  });
+
+  if (typeof applyUserState === "function") {
+    try {
+      applyUserState();
+    } catch (err) {
+      console.warn("[ui-shell] applyUserState failed during shell init", err);
+    }
+  }
+
+  console.log("[ui-shell] shell initialized");
+}
+
+initializeShell();
 
 // =========================
 // Authentication / UI state
@@ -413,18 +516,8 @@ const activeJobsList = document.getElementById("activeJobsList");
 const refreshJobsButton = document.getElementById("refreshJobsButton");
 const dashboardRoleBadge = document.getElementById("dashboardRoleBadge");
 
-const navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
-const navDashboardButton = document.getElementById("navDashboard");
-const navImagineButton = document.getElementById("navImagine");
-const navCreateButton = document.getElementById("navCreate");
-const navPublishButton = document.getElementById("navPublish");
-const navSystemButton = document.getElementById("navSystem");
-const inspectorActionButton = document.getElementById("ct-inspector-action");
 const VERIFY_NAV_HINT = "Verify your email to access this area.";
 const viewSections = Array.from(document.querySelectorAll(".view"));
-const mainContentEl = document.getElementById("ct-main");
-const initialActiveView =
-  (mainContentEl && mainContentEl.dataset.activeView) || "dashboard-view";
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -1786,39 +1879,6 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-navButtons.forEach(btn => {
-  btn.addEventListener("click", event => {
-    if (btn.classList.contains("hidden")) return;
-    const target = btn.dataset.view;
-    if (!target) return;
-
-    if (btn.dataset.locked === "verify") {
-      if (event) event.preventDefault();
-      showVerificationOverlay();
-      if (verificationBanner) {
-        verificationBanner.classList.remove("hidden");
-      }
-      return;
-    }
-
-    if (event) {
-      event.preventDefault();
-    }
-
-    const href = btn.getAttribute("href") || VIEW_PATHS[target];
-    changeView(target, { path: href });
-    if (target === "dashboard-view") {
-      loadDashboardData(true, { silent: true });
-    }
-  });
-});
-
-if (inspectorActionButton) {
-  inspectorActionButton.addEventListener("click", () => {
-    changeView("create-view", { path: VIEW_PATHS["create-view"] });
-  });
-}
-
 window.addEventListener("popstate", event => {
   const state = event.state || {};
   const targetView = state.viewId || initialActiveView;
@@ -1833,11 +1893,6 @@ if (refreshJobsButton) {
     loadDashboardData(true);
   });
 }
-
-changeView(initialActiveView, {
-  path: window.location.pathname,
-  replace: true,
-});
 
 // =========================
 // IMAGINE TAB
