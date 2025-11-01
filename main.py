@@ -1994,6 +1994,48 @@ class YouTubeUploadRequest(BaseModel):
     publish_at: Optional[str] = None
 
 
+def _resolve_video_file(video_path_raw: str) -> Path:
+    """Return a concrete file path for ``video_path_raw``.
+
+    The frontend may submit values like ``static/uploads/video.mp4`` (relative)
+    or ``/static/uploads/video.mp4`` (leading slash). We attempt a few
+    reasonable interpretations rooted at the project directory before
+    surfacing a 404.
+    """
+
+    cleaned = video_path_raw.strip()
+    initial = Path(cleaned).expanduser()
+
+    candidates: List[Path] = []
+    seen: set[str] = set()
+
+    def _add_candidate(path: Path) -> None:
+        key = str(path)
+        if key not in seen:
+            candidates.append(path)
+            seen.add(key)
+
+    _add_candidate(initial)
+
+    if cleaned:
+        trimmed = cleaned.lstrip("/\\")
+        if trimmed and trimmed != cleaned:
+            _add_candidate(Path(project_path(trimmed)))
+
+    if not initial.is_absolute():
+        _add_candidate(Path(project_path(initial)))
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    searched = ", ".join(str(path) for path in candidates)
+    raise HTTPException(
+        status_code=404,
+        detail=f"File not found for video_path '{video_path_raw}'. Checked: {searched}",
+    )
+
+
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
     req: YouTubeUploadRequest,
@@ -2007,9 +2049,7 @@ def youtube_upload_video(
     if not video_path_raw or not title_raw:
         raise HTTPException(status_code=400, detail="video_path and title are required")
 
-    file_path = Path(video_path_raw).expanduser()
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    file_path = _resolve_video_file(video_path_raw)
 
     description = (req.description or "").strip()
     tags = req.tags or []

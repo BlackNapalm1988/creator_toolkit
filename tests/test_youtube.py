@@ -116,3 +116,62 @@ def test_youtube_upload_json_missing_file(client):
     assert response.status_code == 404
     detail = response.json()["detail"]
     assert "File not found" in detail
+
+
+def test_youtube_upload_json_leading_slash_path(client, tmp_path, monkeypatch):
+    user = _create_user("yt-leading@example.com")
+
+    relative_path = Path("static/uploads/leading.mp4")
+    project_root = tmp_path / "project-root"
+    project_root.mkdir(parents=True, exist_ok=True)
+    actual_file = project_root / relative_path
+    actual_file.parent.mkdir(parents=True, exist_ok=True)
+    actual_file.write_bytes(b"fake video bytes")
+
+    def fake_project_path(*parts):
+        return project_root.joinpath(*parts)
+
+    monkeypatch.setattr(main, "project_path", fake_project_path)
+
+    expected_payload = {
+        "video_id": "xyz789",
+        "youtube_response": {"id": "xyz789"},
+        "requested_visibility": "unlisted",
+        "scheduled_publish_at": None,
+    }
+
+    def fake_upload_from_disk(
+        *,
+        user_id,
+        file_path,
+        title,
+        description,
+        tags,
+        privacy_status,
+        publish_at,
+    ):
+        assert user_id == user["id"]
+        assert Path(file_path) == actual_file
+        assert title == "Leading"
+        assert description == ""
+        assert tags == []
+        assert privacy_status == "unlisted"
+        assert publish_at is None
+        return expected_payload
+
+    monkeypatch.setattr(main, "_youtube_upload_from_disk", fake_upload_from_disk)
+
+    payload = {
+        "video_path": f"/{relative_path.as_posix()}",
+        "title": "Leading",
+    }
+
+    response = client.post(
+        "/youtube/upload",
+        headers=_auth_headers(user),
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["video_id"] == expected_payload["video_id"]
