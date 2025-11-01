@@ -1,4 +1,289 @@
 // =========================
+// Application Shell Layout
+// =========================
+
+const VIEW_PATHS = {
+  "dashboard-view": "/dashboard",
+  "imagine-view": "/imagine",
+  "create-view": "/create",
+  "publish-view": "/publish",
+  "system-view": "/system",
+};
+
+const NAV_SECTIONS = [
+  {
+    label: "Dashboard",
+    id: "dashboard",
+    navId: "navDashboard",
+    view: "dashboard-view",
+    roles: "admin owner editor viewer",
+  },
+  {
+    label: "Imagine",
+    id: "imagine",
+    navId: "navImagine",
+    view: "imagine-view",
+    roles: "admin owner editor",
+  },
+  {
+    label: "Create",
+    id: "create",
+    navId: "navCreate",
+    view: "create-view",
+    roles: "admin owner editor",
+    children: [
+      { label: "New Project", id: "create-new" },
+      { label: "Image from Text", id: "create-image-text" },
+      { label: "Scene from Text", id: "create-scene-text" },
+      { label: "Video from Text", id: "create-video-text" },
+    ],
+  },
+  {
+    label: "Library",
+    id: "library",
+    children: [
+      { label: "Scenes", id: "library-scenes" },
+      { label: "Video", id: "library-video" },
+      { label: "Audio", id: "library-audio" },
+      { label: "Other", id: "library-other" },
+    ],
+  },
+  {
+    label: "Publish",
+    id: "publish",
+    navId: "navPublish",
+    view: "publish-view",
+    roles: "admin owner",
+    children: [
+      { label: "YouTube", id: "publish-youtube" },
+      { label: "Facebook", id: "publish-facebook" },
+      { label: "Instagram", id: "publish-instagram" },
+      { label: "TikTok", id: "publish-tiktok" },
+    ],
+  },
+  {
+    label: "Jobs",
+    id: "jobs",
+    children: [
+      { label: "Active Jobs", id: "jobs-active" },
+      { label: "History", id: "jobs-history" },
+    ],
+  },
+  {
+    label: "System",
+    id: "system",
+    navId: "navSystem",
+    view: "system-view",
+    roles: "admin",
+  },
+];
+
+const INSPECTOR_CARDS = [
+  {
+    title: "Music created and added to assets",
+    description:
+      "Latest audio generations appear in your Library. Drag them into new edits or share with collaborators.",
+  },
+  {
+    title: "Scene created and added to assets",
+    description:
+      "Keep iterating on your scenes. Refresh prompts, remix scripts, and stage shots before packaging.",
+  },
+  {
+    title: "What would you like to do?",
+    description: "Prompt Imagine with goals or paste scripts to generate beat boards, voiceover, and music cues.",
+  },
+];
+
+function renderShell() {
+  const root = document.getElementById("app");
+  if (!root) return;
+
+  const legacyContent = document.getElementById("legacyContent");
+  const activeView = root.dataset.activeView || "dashboard-view";
+
+  const shell = document.createElement("div");
+  shell.id = "ct-shell";
+  shell.className = "ct-shell ct-shell--sidebar-open ct-shell--inspector-open";
+  shell.innerHTML = `
+    <aside id="ct-sidebar" class="ct-sidebar ct-sidebar--open">
+      <div class="ct-sidebar__inner"></div>
+    </aside>
+    <main id="ct-main" class="ct-main" data-active-view="${activeView}"></main>
+    <aside id="ct-inspector" class="ct-inspector ct-inspector--open">
+      <div class="ct-inspector__inner"></div>
+    </aside>
+  `;
+
+  root.innerHTML = "";
+  root.appendChild(shell);
+
+  renderSidebar(activeView);
+  renderMainWorkspace(legacyContent, activeView);
+  renderInspector();
+  bindShellControls();
+}
+
+function renderSidebar(activeView) {
+  const sidebar = document.getElementById("ct-sidebar");
+  if (!sidebar) return;
+
+  const inner = document.createElement("div");
+  inner.className = "ct-sidebar__inner";
+  inner.innerHTML = `
+    <div class="ct-sidebar__header">
+      <button id="ct-sidebar-toggle" class="ct-sidebar__toggle" aria-label="Collapse navigation" aria-expanded="true">
+        <span aria-hidden="true">‹</span>
+      </button>
+      <span class="ct-sidebar__title">Workspace</span>
+    </div>
+    <nav id="ct-sidebar-nav" class="ct-sidebar__nav"></nav>
+  `;
+
+  sidebar.innerHTML = "";
+  sidebar.appendChild(inner);
+
+  const navEl = inner.querySelector("#ct-sidebar-nav");
+  if (!navEl) return;
+
+  NAV_SECTIONS.forEach(section => {
+    const sectionEl = document.createElement("section");
+    sectionEl.className = "ct-nav-section";
+
+    if (section.view) {
+      const link = document.createElement("a");
+      link.className = "ct-nav-link nav-item";
+      link.href = VIEW_PATHS[section.view] || "#";
+      link.dataset.view = section.view;
+      if (section.roles) {
+        link.dataset.roles = section.roles;
+      }
+      if (section.navId) {
+        link.id = section.navId;
+      }
+      if (section.view === activeView) {
+        link.classList.add("active");
+      }
+      const iconText = section.label.charAt(0).toUpperCase();
+      link.innerHTML = `
+        <span class="ct-nav-link__icon" aria-hidden="true">${iconText}</span>
+        <span class="ct-nav-link__label">${section.label}</span>
+      `;
+      sectionEl.appendChild(link);
+    } else {
+      const heading = document.createElement("h3");
+      heading.className = "ct-nav-heading";
+      heading.textContent = section.label;
+      sectionEl.appendChild(heading);
+    }
+
+    if (Array.isArray(section.children) && section.children.length) {
+      const list = document.createElement("ul");
+      list.className = "ct-nav-children";
+      section.children.forEach(child => {
+        const item = document.createElement("li");
+        item.className = "ct-nav-child";
+        item.dataset.childId = child.id;
+        item.textContent = child.label;
+        list.appendChild(item);
+      });
+      sectionEl.appendChild(list);
+    }
+
+    navEl.appendChild(sectionEl);
+  });
+}
+
+function renderMainWorkspace(legacyContent, activeView) {
+  const main = document.getElementById("ct-main");
+  if (!main) return;
+
+  if (legacyContent) {
+    legacyContent.classList.remove("legacy-content");
+    legacyContent.id = "ct-main-workspace";
+    legacyContent.classList.add("ct-main-workspace");
+    main.appendChild(legacyContent);
+  } else if (!main.querySelector(".ct-main-workspace")) {
+    const workspace = document.createElement("div");
+    workspace.id = "ct-main-workspace";
+    workspace.className = "ct-main-workspace";
+    main.appendChild(workspace);
+  }
+
+  // Future steps (Library, Storyboard, Video Editor) will mount new views inside this workspace.
+  main.dataset.activeView = activeView;
+}
+
+function renderInspector() {
+  const inspector = document.getElementById("ct-inspector");
+  if (!inspector) return;
+
+  const inner = inspector.querySelector(".ct-inspector__inner");
+  if (!inner) return;
+
+  inner.innerHTML = `
+    <button id="ct-inspector-toggle" class="ct-inspector__toggle" aria-label="Collapse Imagine panel" aria-expanded="true">
+      <span aria-hidden="true">›</span>
+    </button>
+    <header class="ct-inspector__header">
+      <h2>IMAGINE</h2>
+      <p class="ct-inspector__subtitle">Prompt tools & creative memory</p>
+    </header>
+    <div id="ct-inspector-body" class="ct-inspector__body"></div>
+    <div class="ct-inspector__footer">
+      <button id="ct-inspector-action" class="ghost-btn full">Create a new video</button>
+    </div>
+  `;
+
+  const body = inner.querySelector("#ct-inspector-body");
+  if (!body) return;
+
+  // Placeholder Imagine activity cards; Step 2+ will replace these with live data.
+  INSPECTOR_CARDS.forEach(card => {
+    const cardEl = document.createElement("article");
+    cardEl.className = "ct-inspector__card";
+    const title = document.createElement("h3");
+    title.textContent = card.title;
+    const description = document.createElement("p");
+    description.textContent = card.description;
+    cardEl.appendChild(title);
+    cardEl.appendChild(description);
+    body.appendChild(cardEl);
+  });
+}
+
+function bindShellControls() {
+  const shell = document.getElementById("ct-shell");
+  const sidebar = document.getElementById("ct-sidebar");
+  const inspector = document.getElementById("ct-inspector");
+  if (!shell || !sidebar || !inspector) return;
+
+  const sidebarToggle = document.getElementById("ct-sidebar-toggle");
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      const isCollapsed = sidebar.classList.toggle("ct-sidebar--collapsed");
+      sidebar.classList.toggle("ct-sidebar--open", !isCollapsed);
+      shell.classList.toggle("ct-shell--sidebar-collapsed", isCollapsed);
+      sidebarToggle.setAttribute("aria-expanded", String(!isCollapsed));
+      sidebarToggle.innerHTML = `<span aria-hidden="true">${isCollapsed ? "›" : "‹"}</span>`;
+    });
+  }
+
+  const inspectorToggle = document.getElementById("ct-inspector-toggle");
+  if (inspectorToggle) {
+    inspectorToggle.addEventListener("click", () => {
+      const isClosed = inspector.classList.toggle("ct-inspector--closed");
+      inspector.classList.toggle("ct-inspector--open", !isClosed);
+      shell.classList.toggle("ct-shell--inspector-closed", isClosed);
+      inspectorToggle.setAttribute("aria-expanded", String(!isClosed));
+      inspectorToggle.innerHTML = `<span aria-hidden="true">${isClosed ? "‹" : "›"}</span>`;
+    });
+  }
+}
+
+renderShell();
+
+// =========================
 // Authentication / UI state
 // =========================
 const STORAGE_TOKEN_KEY = "jwtToken";
@@ -91,18 +376,12 @@ const navImagineButton = document.getElementById("navImagine");
 const navCreateButton = document.getElementById("navCreate");
 const navPublishButton = document.getElementById("navPublish");
 const navSystemButton = document.getElementById("navSystem");
+const inspectorActionButton = document.getElementById("ct-inspector-action");
 const VERIFY_NAV_HINT = "Verify your email to access this area.";
 const viewSections = Array.from(document.querySelectorAll(".view"));
-const mainContentEl = document.querySelector(".main-content");
+const mainContentEl = document.getElementById("ct-main");
 const initialActiveView =
   (mainContentEl && mainContentEl.dataset.activeView) || "dashboard-view";
-const VIEW_PATHS = {
-  "dashboard-view": "/dashboard",
-  "imagine-view": "/imagine",
-  "create-view": "/create",
-  "publish-view": "/publish",
-  "system-view": "/system",
-};
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -1488,6 +1767,12 @@ navButtons.forEach(btn => {
     }
   });
 });
+
+if (inspectorActionButton) {
+  inspectorActionButton.addEventListener("click", () => {
+    changeView("create-view", { path: VIEW_PATHS["create-view"] });
+  });
+}
 
 window.addEventListener("popstate", event => {
   const state = event.state || {};
