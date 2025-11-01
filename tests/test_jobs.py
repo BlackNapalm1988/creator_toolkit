@@ -52,7 +52,9 @@ def test_job_handle_package_failure_records_error(monkeypatch):
 
     monkeypatch.setattr(job_handlers, "probe_audio_duration", lambda path: -1)
 
-    job_handlers.job_handle_package(job_id, {"loop_video_path": "loop.mp4", "audio_path": "audio.mp3"})
+    job_handlers.job_handle_package(
+        job_id, {"loop_video_path": "loop.mp4", "audio_path": "audio.mp3"}
+    )
 
     job = jobs_module.get_job(job_id)
     assert job is not None
@@ -67,7 +69,9 @@ def test_package_job_produces_unique_out_paths(monkeypatch):
 
     produced = []
 
-    def fake_build(loop_clip_path, music_audio_path, out_path, target_ms, voiceover_audio_path):
+    def fake_build(
+        loop_clip_path, music_audio_path, out_path, target_ms, voiceover_audio_path
+    ):
         produced.append(out_path)
         out_path_obj = Path(out_path)
         out_path_obj.parent.mkdir(parents=True, exist_ok=True)

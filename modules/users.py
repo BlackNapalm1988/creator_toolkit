@@ -63,7 +63,9 @@ def init_db() -> None:
         )
 
 
-def _ensure_columns(conn: sqlite3.Connection, table: str, columns: Iterable[Tuple[str, str]]) -> None:
+def _ensure_columns(
+    conn: sqlite3.Connection, table: str, columns: Iterable[Tuple[str, str]]
+) -> None:
     """Backfill optional columns that may be missing in older databases."""
 
     existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}

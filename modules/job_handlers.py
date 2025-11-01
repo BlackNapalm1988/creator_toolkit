@@ -34,7 +34,9 @@ def _resolve_output_path(raw_path: str | None) -> Path:
         if not candidate.is_absolute():
             candidate = project_path(*candidate.parts)
     else:
-        candidate = project_path("static", "uploads", _timestamped_filename("master", ".mp4"))
+        candidate = project_path(
+            "static", "uploads", _timestamped_filename("master", ".mp4")
+        )
     candidate.parent.mkdir(parents=True, exist_ok=True)
     return candidate
 
@@ -111,7 +113,10 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
             size = 1
         pseudo_random = int(hashlib.sha256(video_path.encode()).hexdigest(), 16) % 1000
         return round(
-            min(0.99, 0.65 + (size % 100000) / 100000 * 0.3 + (pseudo_random / 1000) * 0.05),
+            min(
+                0.99,
+                0.65 + (size % 100000) / 100000 * 0.3 + (pseudo_random / 1000) * 0.05,
+            ),
             3,
         )
 

@@ -3,9 +3,11 @@ import os
 import subprocess
 import tempfile
 
+
 def _run(cmd: list[str]) -> dict:
     p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     return {"code": p.returncode, "out": p.stdout}
+
 
 def probe_audio_duration(audio_path: str) -> int:
     """
@@ -13,9 +15,12 @@ def probe_audio_duration(audio_path: str) -> int:
     """
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
         audio_path,
     ]
     p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -24,9 +29,10 @@ def probe_audio_duration(audio_path: str) -> int:
     try:
         sec = float(p.stdout.strip())
         ms = int(sec * 1000)
-    except:
+    except Exception:
         ms = -1
     return ms
+
 
 def _concat_video_loop(loop_clip_path: str, target_ms: int, workdir: str) -> str:
     """
@@ -54,10 +60,14 @@ def _concat_video_loop(loop_clip_path: str, target_ms: int, workdir: str) -> str
     cmd = [
         "ffmpeg",
         "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", concat_list_path,
-        "-c", "copy",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        concat_list_path,
+        "-c",
+        "copy",
         concat_out,
     ]
     res = _run(cmd)
@@ -65,6 +75,7 @@ def _concat_video_loop(loop_clip_path: str, target_ms: int, workdir: str) -> str
         raise RuntimeError(f"concat failed: {res['out']}")
 
     return concat_out
+
 
 def _strip_video_audio(in_video: str, workdir: str) -> str:
     """
@@ -74,8 +85,10 @@ def _strip_video_audio(in_video: str, workdir: str) -> str:
     cmd = [
         "ffmpeg",
         "-y",
-        "-i", in_video,
-        "-c", "copy",
+        "-i",
+        in_video,
+        "-c",
+        "copy",
         "-an",
         silent_out,
     ]
@@ -84,9 +97,10 @@ def _strip_video_audio(in_video: str, workdir: str) -> str:
         raise RuntimeError(f"strip audio failed: {res['out']}")
     return silent_out
 
-def _mix_audio_tracks(music_audio_path: str,
-                      voiceover_audio_path: str | None,
-                      workdir: str) -> str:
+
+def _mix_audio_tracks(
+    music_audio_path: str, voiceover_audio_path: str | None, workdir: str
+) -> str:
     """
     If voiceover_audio_path is None -> just transcode music to wav (normalized)
     Else -> blend music under VO.
@@ -98,9 +112,12 @@ def _mix_audio_tracks(music_audio_path: str,
         cmd = [
             "ffmpeg",
             "-y",
-            "-i", music_audio_path,
-            "-ac", "2",
-            "-ar", "44100",
+            "-i",
+            music_audio_path,
+            "-ac",
+            "2",
+            "-ar",
+            "44100",
             mixed_out,
         ]
         res = _run(cmd)
@@ -113,13 +130,18 @@ def _mix_audio_tracks(music_audio_path: str,
     cmd = [
         "ffmpeg",
         "-y",
-        "-i", music_audio_path,
-        "-i", voiceover_audio_path,
+        "-i",
+        music_audio_path,
+        "-i",
+        voiceover_audio_path,
         "-filter_complex",
         "[0:a]volume=0.6[a0];[a0][1:a]amix=inputs=2:duration=longest:dropout_transition=0[aout]",
-        "-map", "[aout]",
-        "-ac", "2",
-        "-ar", "44100",
+        "-map",
+        "[aout]",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
         mixed_out,
     ]
     res = _run(cmd)
@@ -129,6 +151,7 @@ def _mix_audio_tracks(music_audio_path: str,
     print("[packager] music+vo mix ok:", res["out"])
     return mixed_out
 
+
 def _mux_video_audio(silent_video_path: str, final_audio_path: str, out_path: str):
     """
     Combine silent video + final audio into out_path mp4 (H.264+AAC).
@@ -136,18 +159,26 @@ def _mux_video_audio(silent_video_path: str, final_audio_path: str, out_path: st
     cmd = [
         "ffmpeg",
         "-y",
-        "-i", silent_video_path,
-        "-i", final_audio_path,
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-c:v", "copy",         # don't re-encode video, just copy from concat
-        "-c:a", "aac",
-        "-b:a", "192k",
+        "-i",
+        silent_video_path,
+        "-i",
+        final_audio_path,
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "copy",  # don't re-encode video, just copy from concat
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
         out_path,
     ]
     res = _run(cmd)
     if res["code"] != 0:
         raise RuntimeError(f"mux failed: {res['out']}")
+
 
 def build_master_from_loop(
     loop_clip_path: str,
