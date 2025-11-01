@@ -10,10 +10,10 @@ import secrets
 import smtplib
 import tempfile
 import uuid
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
-from collections.abc import Sequence
 from typing import Annotated, Dict, List, Optional
 from urllib.parse import urlencode
 
@@ -21,16 +21,16 @@ from urllib.parse import urlencode
 import requests
 from dotenv import load_dotenv
 from fastapi import (
-    FastAPI,
     APIRouter,
-    UploadFile,
+    Body,
+    Depends,
+    FastAPI,
     File,
     Form,
-    Body,
+    HTTPException,
     Request,
     Response,
-    HTTPException,
-    Depends,
+    UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -40,64 +40,67 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-# ---- local modules ----
-from modules.jobs import (
-    init_jobs_db,
-    enqueue,
-    get_job,
-    list_jobs,
-    list_active_jobs,
-    QueueWorker,
-)
-from modules.job_handlers import job_handle_package, job_handle_qa_batch
-from modules.packager import build_master_from_loop, probe_audio_duration
-from modules.chat import (
-    init_chat_db,
-    create_thread,
-    get_thread,
-    list_threads,
-    add_message,
-    get_messages,
-)
-from modules.storage import (
-    list_projects,
-    get_project,
-    upsert_project,
-    delete_project,
-    list_presets,
-    upsert_preset,
-    delete_preset,
-    project_path,
-)
-from modules.users import (
-    init_db,
-    create_user,
-    get_user_by_email,
-    get_user_by_id,
-    update_user_profile,
-    update_password_hash,
-    upsert_user_key,
-    list_user_keys,
-    delete_user_key,
-    set_verification_code,
-    mark_email_verified,
-    set_must_change_password,
-    count_users,
-    update_role,
-)
 from modules.auth import (
+    create_access_token,
+    decode_access_token,
+    decrypt_value,
+    encrypt_value,
     hash_password,
     verify_password,
-    encrypt_value,
-    decrypt_value,
-    decode_access_token,
-    create_access_token,
+)
+from modules.auth import (
     require_role as base_require_role,
 )
+from modules.chat import (
+    add_message,
+    create_thread,
+    get_messages,
+    get_thread,
+    init_chat_db,
+    list_threads,
+)
+from modules.job_handlers import job_handle_package, job_handle_qa_batch
+
+# ---- local modules ----
+from modules.jobs import (
+    QueueWorker,
+    enqueue,
+    get_job,
+    init_jobs_db,
+    list_active_jobs,
+    list_jobs,
+)
+from modules.packager import build_master_from_loop, probe_audio_duration
+from modules.storage import (
+    delete_preset,
+    delete_project,
+    get_project,
+    list_presets,
+    list_projects,
+    project_path,
+    upsert_preset,
+    upsert_project,
+)
 from modules.system import (
-    resolve_smtp_settings,
     get_public_smtp_settings,
+    resolve_smtp_settings,
     update_smtp_settings,
+)
+from modules.users import (
+    count_users,
+    create_user,
+    delete_user_key,
+    get_user_by_email,
+    get_user_by_id,
+    init_db,
+    list_user_keys,
+    mark_email_verified,
+    set_must_change_password,
+    set_verification_code,
+    update_password_hash,
+    update_role,
+    update_user_profile,
+    upsert_user_key,
 )
 
 # ---- environment setup ----
