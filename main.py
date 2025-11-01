@@ -38,7 +38,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from modules.auth import (
     create_access_token,
@@ -2000,12 +2000,12 @@ class YouTubeUploadRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    video_path: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = ""
-    tags: Optional[List[str]] = None
-    privacy_status: Optional[str] = "unlisted"
-    publish_at: Optional[str] = None
+    video_path: Optional[str] = Field(None, examples=["my/cool/video_path.mp4"])
+    title: Optional[str] = Field(None, examples=["My Super Cool Video!"])
+    description: Optional[str] = Field("", examples=["Created with Creator Toolkit"])
+    tags: Optional[List[str]] = Field(None, examples=["#Cool, #Videos, #Only"])
+    privacy_status: Optional[str] = Field("unlisted", examples=["Public, Unlisted, Private"])
+    publish_at: Optional[str] = Field(None, examples=["01/21/2025"])
 
 
 def _resolve_video_file(video_path_raw: str) -> Path:
