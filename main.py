@@ -1969,6 +1969,7 @@ def youtube_channels_me(
 
     return r.json()
 
+
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
     user=Depends(require_role(["admin", "owner"], require_verified=True)),
