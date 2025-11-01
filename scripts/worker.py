@@ -1,5 +1,5 @@
-from modules.jobs import QueueWorker, init_jobs_db
 from modules.job_handlers import job_handle_package, job_handle_qa_batch
+from modules.jobs import QueueWorker, init_jobs_db
 
 if __name__ == "__main__":
     init_jobs_db()

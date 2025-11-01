@@ -166,6 +166,11 @@ Always run the tests (and include new ones) when changing endpoints, job handler
 4. **Generate assets** — trigger `/imagine/send`, `/elevenlabs/voices`, `/elevenlabs/generate`, and packaging jobs to produce media.
 5. **Publish** — use `/youtube/upload` (and related helpers) to push finalized videos to your channel.
 
+### YouTube Publishing
+
+- `POST /youtube/upload` — Accepts `application/json` with fields like `video_path`, `title`, `description`, optional `tags` (array of strings), `privacy_status`, and `publish_at`. The backend reads the file directly from disk, so the `video_path` should point to a rendered video accessible to the server.
+- `POST /youtube/upload-form` — Alternative multipart/form-data endpoint kept for manual testing in tools like Swagger or Postman.
+
 ## Project Layout
 
 ```
