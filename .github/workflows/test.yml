@@ -33,7 +33,7 @@ jobs:
       - name: Verify Agents file integrity
         run: |
           python - <<'PY'
-          with open("Agents.md", encoding="utf-8") as f:
+          with open("/docs/agents/AGENTS.md", encoding="utf-8") as f:
               text = f.read()
           for key in ["API Server (FastAPI App)",
                       "Worker Agent (Background Worker)",
