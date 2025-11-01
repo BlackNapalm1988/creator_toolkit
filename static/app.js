@@ -96,8 +96,15 @@ const INSPECTOR_CARDS = [
 ];
 
 function renderShell() {
+  console.log("[ui-shell] renderShell invoked");
+
   const root = document.getElementById("app");
-  if (!root) return;
+  if (!root) {
+    console.warn("[ui-shell] #app root not found; aborting shell mount");
+    return;
+  }
+
+  console.log("[ui-shell] root found");
 
   const legacyContent = document.getElementById("legacyContent");
   const activeView = root.dataset.activeView || "dashboard-view";
@@ -118,6 +125,8 @@ function renderShell() {
   root.innerHTML = "";
   root.appendChild(shell);
 
+  console.log("[ui-shell] shell container injected");
+
   renderSidebar(activeView);
   renderMainWorkspace(legacyContent, activeView);
   renderInspector();
@@ -126,7 +135,12 @@ function renderShell() {
 
 function renderSidebar(activeView) {
   const sidebar = document.getElementById("ct-sidebar");
-  if (!sidebar) return;
+  if (!sidebar) {
+    console.warn("[ui-shell] sidebar mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering sidebar");
 
   const inner = document.createElement("div");
   inner.className = "ct-sidebar__inner";
@@ -192,11 +206,18 @@ function renderSidebar(activeView) {
 
     navEl.appendChild(sectionEl);
   });
+
+  console.log("[ui-shell] sidebar rendered");
 }
 
 function renderMainWorkspace(legacyContent, activeView) {
   const main = document.getElementById("ct-main");
-  if (!main) return;
+  if (!main) {
+    console.warn("[ui-shell] main workspace mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering main workspace");
 
   if (legacyContent) {
     legacyContent.classList.remove("legacy-content");
@@ -212,11 +233,17 @@ function renderMainWorkspace(legacyContent, activeView) {
 
   // Future steps (Library, Storyboard, Video Editor) will mount new views inside this workspace.
   main.dataset.activeView = activeView;
+  console.log("[ui-shell] main workspace rendered");
 }
 
 function renderInspector() {
   const inspector = document.getElementById("ct-inspector");
-  if (!inspector) return;
+  if (!inspector) {
+    console.warn("[ui-shell] inspector mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering inspector");
 
   const inner = inspector.querySelector(".ct-inspector__inner");
   if (!inner) return;
@@ -250,13 +277,18 @@ function renderInspector() {
     cardEl.appendChild(description);
     body.appendChild(cardEl);
   });
+
+  console.log("[ui-shell] inspector rendered");
 }
 
 function bindShellControls() {
   const shell = document.getElementById("ct-shell");
   const sidebar = document.getElementById("ct-sidebar");
   const inspector = document.getElementById("ct-inspector");
-  if (!shell || !sidebar || !inspector) return;
+  if (!shell || !sidebar || !inspector) {
+    console.warn("[ui-shell] shell controls missing required elements");
+    return;
+  }
 
   const sidebarToggle = document.getElementById("ct-sidebar-toggle");
   if (sidebarToggle) {
@@ -279,9 +311,20 @@ function bindShellControls() {
       inspectorToggle.innerHTML = `<span aria-hidden="true">${isClosed ? "‹" : "›"}</span>`;
     });
   }
+
+  console.log("[ui-shell] shell controls bound");
 }
 
-renderShell();
+function initializeShell() {
+  console.log("[ui-shell] initializing shell");
+  renderShell();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeShell);
+} else {
+  initializeShell();
+}
 
 // =========================
 // Authentication / UI state
@@ -687,6 +730,8 @@ function renderDashboardData(payload) {
       });
     }
   }
+
+  console.log("[ui-shell] shell controls bound");
 }
 
 async function loadDashboardData(force = false, options = {}) {
