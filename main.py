@@ -1969,196 +1969,134 @@ def youtube_channels_me(
 
     return r.json()
 
-
-class YouTubeUploadRequest(BaseModel):
-    video_path: str
-    title: str
-    description: Optional[str] = ""
-    tags: Optional[List[str]] = []
-    privacy_status: Optional[str] = "unlisted"
-    publish_at: Optional[str] = None
-
-
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
-    req: YouTubeUploadRequest,
     user=Depends(require_role(["admin", "owner"], require_verified=True)),
+    video_file: UploadFile = File(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    tags: str = Form(""),
+    privacy_status: str = Form("unlisted"),
+    publish_at: str = Form(""),
 ):
-    """Publishes a local file to YouTube using metadata from the frontend JSON."""
-    if not req.video_path or not req.title:
-        raise HTTPException(status_code=400, detail="video_path and title are required")
+    """
+    Upload a video file to the authorized user's YouTube channel.
+    Returns the videoId on success.
+    """
 
+    # 1. Get user's refresh token and mint an access token
     refresh_token = _get_youtube_refresh(user["id"])
     access_token = _youtube_get_access_token(refresh_token)
 
-    file_path = Path(req.video_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    # 2. Read the file bytes (UploadFile is SpooledTemporaryFile, we just read it)
+    try:
+        video_bytes = video_file.file.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Could not read uploaded file: {e}"
+        )
 
-    response = youtube_upload_video(
-        # access_token=access_token,
-        file_path=file_path,
-        title=req.title,
-        description=req.description or "",
-        tags=req.tags or [],
-        privacy_status=req.privacy_status or "unlisted",
-        publish_at=req.publish_at,
+    if not video_bytes:
+        raise HTTPException(status_code=400, detail="Empty video file")
+
+    # 3. Build metadata YouTube expects
+    # snippet: title, description, tags
+    # status: privacyStatus
+    snippet = {
+        "title": title,
+        "description": description,
+    }
+    parsed_tags = _parse_tags(tags)
+    if parsed_tags:
+        snippet["tags"] = parsed_tags
+
+    desired_visibility = (privacy_status or "unlisted").strip().lower()
+    allowed_visibilities = {"public", "unlisted", "private"}
+    if desired_visibility not in allowed_visibilities:
+        raise HTTPException(
+            status_code=400,
+            detail=f"privacy_status must be one of {', '.join(sorted(allowed_visibilities))}",
+        )
+
+    scheduled_iso = _normalize_publish_at(publish_at)
+    if scheduled_iso and desired_visibility != "public":
+        raise HTTPException(
+            status_code=400,
+            detail="Scheduled publish is only supported when visibility is set to 'public'.",
+        )
+
+    status_obj = {
+        "privacyStatus": desired_visibility if not scheduled_iso else "private"
+    }
+    if scheduled_iso:
+        status_obj["publishAt"] = scheduled_iso
+
+    metadata_obj = {"snippet": snippet, "status": status_obj}
+
+    metadata_json = json.dumps(metadata_obj)
+
+    # 4. Build multipart/related body manually
+    # We create a random boundary and send 2 parts:
+    #   - metadata (application/json; charset=UTF-8)
+    #   - media (video/*)
+    boundary = "==============CREATOR_TOOLKIT_" + uuid.uuid4().hex
+
+    # NOTE: We must use CRLF (\r\n) between MIME segments exactly how YouTube expects.
+    # We'll assemble bytes manually.
+    part1_headers = (
+        f"--{boundary}\r\n"
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+        f"{metadata_json}\r\n"
     )
 
-    return response
+    part2_headers = (
+        f"--{boundary}\r\n"
+        f"Content-Type: {video_file.content_type or 'video/mp4'}\r\n\r\n"
+    )
 
+    closing = f"\r\n--{boundary}--\r\n"
 
-# {
-#   "detail": [
-#     {
-#       "type": "missing",
-#       "loc": [
-#         "body",
-#         "video_file"
-#       ],
-#       "msg": "Field required",
-#       "input": null
-#     },
-#     {
-#       "type": "missing",
-#       "loc": [
-#         "body",
-#         "title"
-#       ],
-#       "msg": "Field required",
-#       "input": null
-#     }
-#   ]
-# }
+    body_bytes = (
+        part1_headers.encode("utf-8")
+        + part2_headers.encode("utf-8")
+        + video_bytes
+        + closing.encode("utf-8")
+    )
 
-# @app.post("/youtube/upload", tags=["YouTube"])
-# def youtube_upload_video(
-#     user=Depends(require_role(["admin", "owner"], require_verified=True)),
-#     video_file: UploadFile = File(...),
-#     title: str = Form(...),
-#     description: str = Form(""),
-#     tags: str = Form(""),
-#     privacy_status: str = Form("unlisted"),
-#     publish_at: str = Form(""),
-# ):
-#     """
-#     Upload a video file to the authorized user's YouTube channel.
-#     Returns the videoId on success.
-#     """
+    # 5. Send request to YouTube Data API v3 videos.insert
+    # We'll request the snippet+status parts so we can set title, desc, privacy.
+    upload_url = (
+        "https://www.googleapis.com/upload/youtube/v3/videos" "?part=snippet,status"
+    )
 
-#     # 1. Get user's refresh token and mint an access token
-#     refresh_token = _get_youtube_refresh(user["id"])
-#     access_token = _youtube_get_access_token(refresh_token)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": f"multipart/related; boundary={boundary}",
+    }
 
-#     # 2. Read the file bytes (UploadFile is SpooledTemporaryFile, we just read it)
-#     try:
-#         video_bytes = video_file.file.read()
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=400, detail=f"Could not read uploaded file: {e}"
-#         )
+    r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
 
-#     if not video_bytes:
-#         raise HTTPException(status_code=400, detail="Empty video file")
+    # 6. Handle response
+    if r.status_code >= 400:
+        # YouTube gives useful JSON error details.
+        raise HTTPException(status_code=r.status_code, detail=r.text)
 
-#     # 3. Build metadata YouTube expects
-#     # snippet: title, description, tags
-#     # status: privacyStatus
-#     snippet = {
-#         "title": title,
-#         "description": description,
-#     }
-#     parsed_tags = _parse_tags(tags)
-#     if parsed_tags:
-#         snippet["tags"] = parsed_tags
+    try:
+        yt_resp = r.json()
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Upload succeeded but could not parse JSON"
+        )
 
-#     desired_visibility = (privacy_status or "unlisted").strip().lower()
-#     allowed_visibilities = {"public", "unlisted", "private"}
-#     if desired_visibility not in allowed_visibilities:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=f"privacy_status must be one of {', '.join(sorted(allowed_visibilities))}",
-#         )
-
-#     scheduled_iso = _normalize_publish_at(publish_at)
-#     if scheduled_iso and desired_visibility != "public":
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Scheduled publish is only supported when visibility is set to 'public'.",
-#         )
-
-#     status_obj = {
-#         "privacyStatus": desired_visibility if not scheduled_iso else "private"
-#     }
-#     if scheduled_iso:
-#         status_obj["publishAt"] = scheduled_iso
-
-#     metadata_obj = {"snippet": snippet, "status": status_obj}
-
-#     metadata_json = json.dumps(metadata_obj)
-
-#     # 4. Build multipart/related body manually
-#     # We create a random boundary and send 2 parts:
-#     #   - metadata (application/json; charset=UTF-8)
-#     #   - media (video/*)
-#     boundary = "==============CREATOR_TOOLKIT_" + uuid.uuid4().hex
-
-#     # NOTE: We must use CRLF (\r\n) between MIME segments exactly how YouTube expects.
-#     # We'll assemble bytes manually.
-#     part1_headers = (
-#         f"--{boundary}\r\n"
-#         "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-#         f"{metadata_json}\r\n"
-#     )
-
-#     part2_headers = (
-#         f"--{boundary}\r\n"
-#         f"Content-Type: {video_file.content_type or 'video/mp4'}\r\n\r\n"
-#     )
-
-#     closing = f"\r\n--{boundary}--\r\n"
-
-#     body_bytes = (
-#         part1_headers.encode("utf-8")
-#         + part2_headers.encode("utf-8")
-#         + video_bytes
-#         + closing.encode("utf-8")
-#     )
-
-#     # 5. Send request to YouTube Data API v3 videos.insert
-#     # We'll request the snippet+status parts so we can set title, desc, privacy.
-#     upload_url = (
-#         "https://www.googleapis.com/upload/youtube/v3/videos" "?part=snippet,status"
-#     )
-
-#     headers = {
-#         "Authorization": f"Bearer {access_token}",
-#         "Content-Type": f"multipart/related; boundary={boundary}",
-#     }
-
-#     r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
-
-#     # 6. Handle response
-#     if r.status_code >= 400:
-#         # YouTube gives useful JSON error details.
-#         raise HTTPException(status_code=r.status_code, detail=r.text)
-
-#     try:
-#         yt_resp = r.json()
-#     except Exception:
-#         raise HTTPException(
-#             status_code=500, detail="Upload succeeded but could not parse JSON"
-#         )
-
-#     # YouTube responds with an object containing 'id' which is the new videoId.
-#     video_id = yt_resp.get("id")
-#     return {
-#         "ok": True,
-#         "video_id": video_id,
-#         "requested_visibility": desired_visibility,
-#         "scheduled_publish_at": scheduled_iso,
-#         "youtube_response": yt_resp,
-#     }
+    # YouTube responds with an object containing 'id' which is the new videoId.
+    video_id = yt_resp.get("id")
+    return {
+        "ok": True,
+        "video_id": video_id,
+        "requested_visibility": desired_visibility,
+        "scheduled_publish_at": scheduled_iso,
+        "youtube_response": yt_resp,
+    }
 
 
 # ----------------------------
