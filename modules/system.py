@@ -8,7 +8,9 @@ from typing import Any, Dict
 
 from modules import auth as auth_module
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "system_config.json")
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "data", "system_config.json"
+)
 os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
 
 
@@ -31,7 +33,9 @@ def _env_smtp_settings() -> Dict[str, Any]:
     return {
         "host": os.getenv("SMTP_HOST") or "",
         "port": int(os.getenv("SMTP_PORT") or 0),
-        "use_tls": (os.getenv("SMTP_USE_TLS", "1").strip().lower() in {"1", "true", "yes"}),
+        "use_tls": (
+            os.getenv("SMTP_USE_TLS", "1").strip().lower() in {"1", "true", "yes"}
+        ),
         "username": os.getenv("SMTP_USER") or "",
         "password": os.getenv("SMTP_PASSWORD") or "",
         "from_address": os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_USER") or "",
@@ -92,7 +96,9 @@ def get_public_smtp_settings() -> Dict[str, Any]:
 
     effective = resolve_smtp_settings()
     stored = load_smtp_config()
-    password_set = bool(effective.get("password")) or bool(stored.get("password_cipher") or stored.get("password_plain"))
+    password_set = bool(effective.get("password")) or bool(
+        stored.get("password_cipher") or stored.get("password_plain")
+    )
     masked_password = "********" if password_set else ""
     return {
         "host": effective.get("host", ""),

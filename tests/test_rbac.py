@@ -51,7 +51,9 @@ def test_test_users_bootstrapped():
         assert user["role"] == role
         assert user["is_verified"] is True
         assert user["must_change_password"] is False
-        assert auth_module.verify_password(main.TEST_USER_PASSWORD, user["password_hash"])
+        assert auth_module.verify_password(
+            main.TEST_USER_PASSWORD, user["password_hash"]
+        )
 
 
 def test_admin_only_smtp_endpoints(client):
@@ -95,7 +97,9 @@ def test_publish_permissions_enforced(client, role, expected_status):
 def test_editor_can_enqueue_qa_batch(client):
     editor = _create_user("editor@example.com", role="editor")
     payload = {"paths": ["a.mp4"], "palette": [], "thresholds": {"loop": 0.9}}
-    response = client.post("/qa/batch_async", json=payload, headers=_auth_headers(editor))
+    response = client.post(
+        "/qa/batch_async", json=payload, headers=_auth_headers(editor)
+    )
     assert response.status_code == 200
     body = response.json()
     assert "job_id" in body
@@ -117,7 +121,9 @@ def test_password_rotation_cleared_after_update(client):
         password="old-password",
     )
     payload = {"current_password": "old-password", "new_password": "new-password"}
-    response = client.post("/profile/password", json=payload, headers=_auth_headers(user))
+    response = client.post(
+        "/profile/password", json=payload, headers=_auth_headers(user)
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["user"]["must_change_password"] is False

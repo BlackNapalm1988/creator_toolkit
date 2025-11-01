@@ -1,3 +1,4 @@
+# ---- standard library ----
 import csv
 import datetime
 import hashlib
@@ -8,17 +9,15 @@ import os
 import secrets
 import smtplib
 import uuid
+from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Dict, List, Optional
-
-from dotenv import load_dotenv
+from typing import Annotated, Dict, List, Optional
 from urllib.parse import urlencode
 
+# ---- third-party ----
 import requests
-
-load_dotenv()
-
+from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
     APIRouter,
@@ -31,16 +30,15 @@ from fastapi import (
     HTTPException,
     Depends,
 )
-
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
-# --- modules ---
+# ---- local modules ----
 from modules.jobs import (
     init_jobs_db,
     enqueue,
@@ -51,7 +49,6 @@ from modules.jobs import (
 )
 from modules.job_handlers import job_handle_package, job_handle_qa_batch
 from modules.packager import build_master_from_loop, probe_audio_duration
-
 from modules.chat import (
     init_chat_db,
     create_thread,
@@ -60,7 +57,6 @@ from modules.chat import (
     add_message,
     get_messages,
 )
-
 from modules.storage import (
     list_projects,
     get_project,
@@ -71,7 +67,6 @@ from modules.storage import (
     delete_preset,
     project_path,
 )
-
 from modules.users import (
     init_db,
     create_user,
@@ -88,7 +83,6 @@ from modules.users import (
     count_users,
     update_role,
 )
-
 from modules.auth import (
     hash_password,
     verify_password,
@@ -98,13 +92,14 @@ from modules.auth import (
     create_access_token,
     require_role as base_require_role,
 )
-
 from modules.system import (
     resolve_smtp_settings,
     get_public_smtp_settings,
     update_smtp_settings,
 )
 
+# ---- environment setup ----
+load_dotenv()
 
 # --- logging / critical config ---
 logging.basicConfig(level=logging.INFO)
@@ -152,7 +147,9 @@ def _generate_verification_code() -> str:
     return f"{secrets.randbelow(900000) + 100000}"
 
 
-def _send_verification_email(recipient: str, code: str, full_name: str | None = None) -> bool:
+def _send_verification_email(
+    recipient: str, code: str, full_name: str | None = None
+) -> bool:
     """Send a verification code email using the configured SMTP settings."""
 
     smtp_settings = resolve_smtp_settings()
@@ -168,7 +165,9 @@ def _send_verification_email(recipient: str, code: str, full_name: str | None = 
         return False
 
     if not smtp_host or not smtp_from:
-        logger.warning("SMTP not configured; verification code for %s is %s", recipient, code)
+        logger.warning(
+            "SMTP not configured; verification code for %s is %s", recipient, code
+        )
         return False
 
     msg = EmailMessage()
@@ -191,7 +190,9 @@ def _send_verification_email(recipient: str, code: str, full_name: str | None = 
                 try:
                     smtp.starttls()
                 except smtplib.SMTPException:
-                    logger.debug("SMTP server did not accept STARTTLS; continuing without TLS")
+                    logger.debug(
+                        "SMTP server did not accept STARTTLS; continuing without TLS"
+                    )
             if smtp_user and smtp_password:
                 smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)
@@ -292,7 +293,7 @@ def current_user(request: Request, credentials=Depends(auth_scheme)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     if token.startswith("Bearer "):
-        token = token[len("Bearer "):]
+        token = token[len("Bearer ") :]
 
     payload = decode_access_token(token)
     if not payload:
@@ -369,11 +370,67 @@ ALLOWED_OPENAI_MODELS = [
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
+
+def _queue_worker_disabled() -> bool:
+    return os.getenv("DISABLE_QUEUE_WORKER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _start_queue_worker(app: FastAPI) -> None:
+    if getattr(app.state, "worker", None):
+        return
+
+    if _queue_worker_disabled():
+        logger.info("Queue worker disabled via DISABLE_QUEUE_WORKER flag")
+        app.state.worker = None
+        return
+
+    logger.info("Starting background queue worker")
+    worker = QueueWorker(
+        handlers={
+            "package": job_handle_package,
+            "qa_batch": job_handle_qa_batch,
+        },
+        poll_interval=0.5,
+    )
+    worker.start()
+    app.state.worker = worker
+
+    if JWT_SECRET == "dev_secret_change_me":
+        logger.error(
+            "JWT_SECRET is using the insecure default. Update your environment configuration."
+        )
+
+
+def _stop_queue_worker(app: FastAPI) -> None:
+    worker = getattr(app.state, "worker", None)
+    if worker:
+        worker.stop()
+        worker.join(timeout=2)
+        app.state.worker = None
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    """Manage startup and shutdown tasks for the FastAPI application."""
+
+    _start_queue_worker(app)
+
+    try:
+        yield
+    finally:
+        _stop_queue_worker(app)
+
+
 app = FastAPI(
     title="Creator Toolkit",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=app_lifespan,
 )
 app.state.worker = None
 
@@ -381,6 +438,18 @@ admin_router = APIRouter(prefix="/admin/system", tags=["Admin"])
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+async def start_queue_worker() -> None:
+    """Compatibility coroutine retained for tests to start the worker manually."""
+
+    _start_queue_worker(app)
+
+
+async def stop_queue_worker() -> None:
+    """Compatibility coroutine retained for tests to stop the worker manually."""
+
+    _stop_queue_worker(app)
 
 
 @app.get("/openapi.json", include_in_schema=False)
@@ -394,26 +463,31 @@ def custom_openapi(user=Depends(dev_user)):
 def custom_docs(user=Depends(dev_user)):
     """Serve Swagger UI for developers while keeping it hidden from public."""
 
-    return get_swagger_ui_html(openapi_url="/openapi.json", title="Creator Toolkit API Docs")
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json", title="Creator Toolkit API Docs"
+    )
 
 
 # init databases we'll need
-init_db()         # users / profile
+init_db()  # users / profile
 bootstrap_default_admin()
-init_jobs_db()    # job queue
-init_chat_db()    # imagine chat history
+init_jobs_db()  # job queue
+init_chat_db()  # imagine chat history
 
 # ----------------------------
 # IMAGINE (ChatGPT-style chat)
 # ----------------------------
 
+
 class ImagineThreadCreateReq(BaseModel):
     model: str | None = None
     title: str | None = None
 
+
 class ImagineSendReq(BaseModel):
     thread_id: str
     message: str
+
 
 class VideoGenReq(BaseModel):
     prompt: str
@@ -422,14 +496,17 @@ class VideoGenReq(BaseModel):
     aspect_ratio: str | None = None
     loop_hint: bool = True
 
+
 class VideoStatusReq(BaseModel):
     job_id: str
+
 
 class MusicGenReq(BaseModel):
     prompt: str = "lofi hip hop beat, warm, cozy, no vocals, vinyl crackle"
     duration_seconds: int = 180  # try ~3 min
     mood: str | None = "chill"
     genre: str | None = "lofi"
+
 
 class MusicStatusReq(BaseModel):
     job_id: str
@@ -460,6 +537,7 @@ def _get_eleven_key_for_user(user_id: int) -> str:
         )
     return decrypt_value(cipher)
 
+
 # def _get_eleven_key_for_user(user_id: int) -> str:
 #     row = list_user_keys(user_id, "elevenlabs")  # <- assumes you store provider="elevenlabs"
 #     if not row:
@@ -474,6 +552,7 @@ YOUTUBE_SCOPES = (
     "https://www.googleapis.com/auth/youtube.readonly "
     "https://www.googleapis.com/auth/youtube.upload"
 )
+
 
 def _get_youtube_refresh(user_id: int) -> str:
     """Load the encrypted YouTube refresh token for a user."""
@@ -512,7 +591,9 @@ def _youtube_get_access_token(refresh_token: str) -> str:
     js = r.json()
     at = js.get("access_token")
     if not at:
-        raise HTTPException(status_code=500, detail="No access_token in refresh response")
+        raise HTTPException(
+            status_code=500, detail="No access_token in refresh response"
+        )
     return at
 
 
@@ -525,7 +606,9 @@ def _normalize_publish_at(publish_at_raw: Optional[str]) -> Optional[str]:
     if not value:
         return None
 
-    normalized = value.replace(" ", "T", 1) if " " in value and "T" not in value else value
+    normalized = (
+        value.replace(" ", "T", 1) if " " in value and "T" not in value else value
+    )
     if normalized.endswith("Z"):
         normalized = normalized[:-1] + "+00:00"
 
@@ -593,16 +676,11 @@ def _youtube_upload_from_disk(
         )
 
     status_privacy = desired_visibility
-    status_obj = {
-        "privacyStatus": status_privacy if not scheduled_iso else "private"
-    }
+    status_obj = {"privacyStatus": status_privacy if not scheduled_iso else "private"}
     if scheduled_iso:
         status_obj["publishAt"] = scheduled_iso
 
-    metadata_obj = {
-        "snippet": snippet,
-        "status": status_obj
-    }
+    metadata_obj = {"snippet": snippet, "status": status_obj}
 
     metadata_json = json.dumps(metadata_obj)
     boundary = "==============CREATOR_TOOLKIT_" + uuid.uuid4().hex
@@ -613,21 +691,20 @@ def _youtube_upload_from_disk(
         f"{metadata_json}\r\n"
     )
 
-    part2_headers = (
-        f"--{boundary}\r\n"
-        "Content-Type: video/mp4\r\n\r\n"
-    )
+    part2_headers = f"--{boundary}\r\n" "Content-Type: video/mp4\r\n\r\n"
 
     closing = f"\r\n--{boundary}--\r\n"
 
     body_bytes = (
-        part1_headers.encode("utf-8") +
-        part2_headers.encode("utf-8") +
-        video_bytes +
-        closing.encode("utf-8")
+        part1_headers.encode("utf-8")
+        + part2_headers.encode("utf-8")
+        + video_bytes
+        + closing.encode("utf-8")
     )
 
-    upload_url = "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status"
+    upload_url = (
+        "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status"
+    )
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -637,12 +714,16 @@ def _youtube_upload_from_disk(
     r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
 
     if r.status_code >= 400:
-        raise HTTPException(status_code=r.status_code, detail=f"YouTube upload error: {r.text}")
+        raise HTTPException(
+            status_code=r.status_code, detail=f"YouTube upload error: {r.text}"
+        )
 
     try:
         yt_resp = r.json()
     except Exception:
-        raise HTTPException(status_code=500, detail="YouTube upload succeeded but JSON parse failed")
+        raise HTTPException(
+            status_code=500, detail="YouTube upload succeeded but JSON parse failed"
+        )
 
     return {
         "video_id": yt_resp.get("id"),
@@ -662,10 +743,13 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [t.strip() for t in tags_raw.split(",") if t.strip()]
 
 
-def _dashboard_shell(request: Request, *, active_view: str = "dashboard-view") -> HTMLResponse:
+def _dashboard_shell(
+    request: Request, *, active_view: str = "dashboard-view"
+) -> HTMLResponse:
     """Render the dashboard shell with the requested active view highlighted."""
 
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {"request": request, "active_view": active_view},
     )
@@ -710,7 +794,9 @@ def _to_iso(ts: int | None) -> str | None:
     if not ts:
         return None
     try:
-        return datetime.datetime.fromtimestamp(int(ts), tz=datetime.timezone.utc).isoformat()
+        return datetime.datetime.fromtimestamp(
+            int(ts), tz=datetime.timezone.utc
+        ).isoformat()
     except Exception:
         return None
 
@@ -815,11 +901,13 @@ def dashboard_data(user=Depends(current_user)):
         "recent_assets": recent_assets,
     }
 
+
 @app.get("/imagine/models")
 def imagine_models(user=Depends(require_role(CREATOR_ROLES, require_verified=True))):
     """Return the list of allowed OpenAI chat models."""
 
     return {"models": ALLOWED_OPENAI_MODELS, "default": OPENAI_MODEL}
+
 
 @app.post("/imagine/thread")
 def imagine_thread_create(
@@ -828,7 +916,7 @@ def imagine_thread_create(
 ):
     """Create a new chat thread for brainstorming prompts."""
 
-    model = (req.model or OPENAI_MODEL)
+    model = req.model or OPENAI_MODEL
     if model not in ALLOWED_OPENAI_MODELS:
         raise HTTPException(status_code=400, detail="Model not allowed")
 
@@ -839,10 +927,11 @@ def imagine_thread_create(
     add_message(
         tid,
         "system",
-        "You are a helpful creative copilot for short-form image/video workflows."
+        "You are a helpful creative copilot for short-form image/video workflows.",
     )
 
     return {"thread_id": tid}
+
 
 @app.get("/imagine/threads")
 def imagine_threads_list(
@@ -851,6 +940,7 @@ def imagine_threads_list(
     """Return recent imagine threads for the signed-in user."""
 
     return {"threads": list_threads(user["id"])}
+
 
 @app.get("/imagine/history/{thread_id}")
 def imagine_history(
@@ -865,10 +955,8 @@ def imagine_history(
     if th["user_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="forbidden")
 
-    return {
-        "thread": th,
-        "messages": get_messages(thread_id, limit=60)
-    }
+    return {"thread": th, "messages": get_messages(thread_id, limit=60)}
+
 
 @app.post("/imagine/send")
 def imagine_send(
@@ -894,6 +982,7 @@ def imagine_send(
 
     try:
         from openai import OpenAI
+
         client = OpenAI(api_key=key)
 
         history = get_messages(req.thread_id, limit=40)
@@ -914,9 +1003,11 @@ def imagine_send(
     add_message(req.thread_id, "assistant", reply)
     return {"reply": reply}
 
+
 # ----------------------------
 # ELEVENLABS ENDPOINTS
 # ----------------------------
+
 
 @app.get("/elevenlabs/voices", tags=["ElevenLabs"])
 def eleven_list_voices(
@@ -944,7 +1035,9 @@ def eleven_list_voices(
     try:
         r = requests.get(url, headers=headers, timeout=30)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Network error contacting ElevenLabs: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Network error contacting ElevenLabs: {e}"
+        )
 
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=r.text)
@@ -960,10 +1053,12 @@ def eleven_list_voices(
         vid = v.get("voice_id")
         nm = v.get("name")
         if vid and nm:
-            simplified.append({
-                "voice_id": vid,
-                "name": nm,
-            })
+            simplified.append(
+                {
+                    "voice_id": vid,
+                    "name": nm,
+                }
+            )
 
     # If simplified is empty, then you're probably on a tier where voices list isn't exposed
     # and they only return model info. We fall back to returning the raw response so you can inspect it.
@@ -982,12 +1077,32 @@ def eleven_list_voices(
     }
 
 
+class ElevenGenerateForm(BaseModel):
+    text: str
+    voice_id: Optional[str] = None
+    model_id: Optional[str] = None
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+def parse_eleven_generate_form(
+    text: Annotated[str, Form(...)],
+    voice_id: Annotated[Optional[str], Form()] = None,
+    model_identifier: Annotated[Optional[str], Form(alias="model_id")] = None,
+) -> ElevenGenerateForm:
+    """Return a validated payload for ElevenLabs TTS generation form data."""
+
+    return ElevenGenerateForm(
+        text=text,
+        voice_id=voice_id,
+        model_id=model_identifier,
+    )
+
+
 @app.post("/elevenlabs/generate", tags=["ElevenLabs"])
 def eleven_generate_tts(
     user=Depends(require_role(CREATOR_ROLES, require_verified=True)),
-    text: str = Form(...),
-    voice_id: Optional[str] = Form(None),
-    model_id: Optional[str] = Form(None),
+    form_data: ElevenGenerateForm = Depends(parse_eleven_generate_form),
 ):
     """
     Generate speech audio from ElevenLabs for the given text.
@@ -995,6 +1110,10 @@ def eleven_generate_tts(
     """
 
     api_key = _get_eleven_key_for_user(user["id"])
+
+    text = form_data.text
+    voice_id = form_data.voice_id
+    model_id = form_data.model_id
 
     # If no voice_id was provided, try to pick a default by querying /voices
     if not voice_id:
@@ -1017,7 +1136,7 @@ def eleven_generate_tts(
     if not voice_id:
         raise HTTPException(
             status_code=400,
-            detail="No voice_id provided and no default voice could be determined. Call /elevenlabs/voices to inspect."
+            detail="No voice_id provided and no default voice could be determined. Call /elevenlabs/voices to inspect.",
         )
 
     # ensure output dir exists
@@ -1049,7 +1168,9 @@ def eleven_generate_tts(
             timeout=60,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Network error contacting ElevenLabs: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Network error contacting ElevenLabs: {e}"
+        )
 
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -1075,6 +1196,7 @@ def eleven_generate_tts(
         "model_id_used": model_id,
         "text_preview": text[:120],
     }
+
 
 def _generate_voiceover_mp3_for_user(
     user_id: int,
@@ -1114,7 +1236,9 @@ def _generate_voiceover_mp3_for_user(
     )
 
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}")
+        raise HTTPException(
+            status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}"
+        )
 
     audio_bytes = resp.content
     if not audio_bytes or len(audio_bytes) < 10:
@@ -1125,11 +1249,14 @@ def _generate_voiceover_mp3_for_user(
 
     return out_path  # disk path
 
+
 class ImagineChatReq(BaseModel):
     message: str
 
+
 class ImagineChatResp(BaseModel):
     reply: str
+
 
 @app.post("/imagine/chat", response_model=ImagineChatResp, tags=["Imagine"])
 def imagine_chat(
@@ -1196,6 +1323,7 @@ def imagine_chat(
         reply_text = "(no reply from model)"
 
     return {"reply": reply_text}
+
 
 @app.post("/generate/music", tags=["Generate"])
 def generate_music(
@@ -1293,6 +1421,7 @@ def generate_music(
 
         if audio_b64:
             import base64
+
             audio_bytes = base64.b64decode(audio_b64)
             if len(audio_bytes) < 20000:  # ~20KB sanity check
                 raise HTTPException(
@@ -1364,6 +1493,7 @@ def generate_music(
         "note": "Generated via ElevenLabs (direct binary path)",
     }
 
+
 @app.get("/generate/music/status", tags=["Generate"])
 def get_music_status(
     job_id: str,
@@ -1403,7 +1533,9 @@ def get_music_status(
     try:
         payload = last_resp.json()
     except Exception:
-        raise HTTPException(status_code=500, detail="Music status response was not JSON")
+        raise HTTPException(
+            status_code=500, detail="Music status response was not JSON"
+        )
 
     status = payload.get("status", "unknown")
 
@@ -1443,6 +1575,7 @@ def get_music_status(
 
         if audio_b64:
             import base64
+
             audio_bytes = base64.b64decode(audio_b64)
             if len(audio_bytes) < 20000:
                 raise HTTPException(
@@ -1493,7 +1626,6 @@ def get_music_status(
         "status": status,
         "raw": payload,
     }
-
 
 
 @app.post("/generate/video", tags=["Generate"])
@@ -1637,19 +1769,18 @@ def generate_video(
 
         # maybe it inlined the video as base64 or gave us a direct URL
         video_url = (
-            payload.get("video_url")
-            or payload.get("url")
-            or payload.get("result_url")
+            payload.get("video_url") or payload.get("url") or payload.get("result_url")
         )
         video_b64 = payload.get("video_b64")
 
         if video_b64:
             import base64
+
             video_bytes = base64.b64decode(video_b64)
             if len(video_bytes) < 50000:
                 raise HTTPException(
                     status_code=500,
-                    detail="Sora returned suspiciously tiny base64 video"
+                    detail="Sora returned suspiciously tiny base64 video",
                 )
             with open(out_disk_path, "wb") as f:
                 f.write(video_bytes)
@@ -1692,7 +1823,7 @@ def generate_video(
     if len(video_bytes) < 50000:
         raise HTTPException(
             status_code=500,
-            detail="Sora returned tiny binary; not treating as valid video."
+            detail="Sora returned tiny binary; not treating as valid video.",
         )
 
     with open(out_disk_path, "wb") as f:
@@ -1707,13 +1838,15 @@ def generate_video(
     }
 
 
-
 # ----------------------------
 # YOUTUBE ENDPOINTS
 # ----------------------------
 
+
 @app.get("/youtube/auth/url", tags=["YouTube"])
-def youtube_auth_url(user=Depends(require_role(PUBLISHER_ROLES, require_verified=True))):
+def youtube_auth_url(
+    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
@@ -1724,13 +1857,14 @@ def youtube_auth_url(user=Depends(require_role(PUBLISHER_ROLES, require_verified
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "access_type": "offline",    # we want a refresh_token
-        "prompt": "consent",         # force Google to re-show consent and resend refresh_token
+        "access_type": "offline",  # we want a refresh_token
+        "prompt": "consent",  # force Google to re-show consent and resend refresh_token
         "scope": YOUTUBE_SCOPES,
     }
 
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return {"auth_url": url}
+
 
 @app.get("/youtube/oauth2/callback", tags=["YouTube"])
 def youtube_oauth2_callback(code: str, request: Request):
@@ -1744,11 +1878,13 @@ def youtube_oauth2_callback(code: str, request: Request):
 
     # 2. decode token just like current_user does
     if token.startswith("Bearer "):
-        token = token[len("Bearer "):]
+        token = token[len("Bearer ") :]
 
     payload = decode_access_token(token)
     if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token during callback")
+        raise HTTPException(
+            status_code=401, detail="Invalid or expired token during callback"
+        )
 
     uid_raw = payload.get("sub") or payload.get("id")
     if uid_raw is None:
@@ -1833,6 +1969,7 @@ def youtube_channels_me(
 
     return r.json()
 
+
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
     user=Depends(require_role(["admin", "owner"], require_verified=True)),
@@ -1856,7 +1993,9 @@ def youtube_upload_video(
     try:
         video_bytes = video_file.file.read()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Could not read uploaded file: {e}"
+        )
 
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Empty video file")
@@ -1893,10 +2032,7 @@ def youtube_upload_video(
     if scheduled_iso:
         status_obj["publishAt"] = scheduled_iso
 
-    metadata_obj = {
-        "snippet": snippet,
-        "status": status_obj
-    }
+    metadata_obj = {"snippet": snippet, "status": status_obj}
 
     metadata_json = json.dumps(metadata_obj)
 
@@ -1922,17 +2058,16 @@ def youtube_upload_video(
     closing = f"\r\n--{boundary}--\r\n"
 
     body_bytes = (
-        part1_headers.encode("utf-8") +
-        part2_headers.encode("utf-8") +
-        video_bytes +
-        closing.encode("utf-8")
+        part1_headers.encode("utf-8")
+        + part2_headers.encode("utf-8")
+        + video_bytes
+        + closing.encode("utf-8")
     )
 
     # 5. Send request to YouTube Data API v3 videos.insert
     # We'll request the snippet+status parts so we can set title, desc, privacy.
     upload_url = (
-        "https://www.googleapis.com/upload/youtube/v3/videos"
-        "?part=snippet,status"
+        "https://www.googleapis.com/upload/youtube/v3/videos" "?part=snippet,status"
     )
 
     headers = {
@@ -1950,7 +2085,9 @@ def youtube_upload_video(
     try:
         yt_resp = r.json()
     except Exception:
-        raise HTTPException(status_code=500, detail="Upload succeeded but could not parse JSON")
+        raise HTTPException(
+            status_code=500, detail="Upload succeeded but could not parse JSON"
+        )
 
     # YouTube responds with an object containing 'id' which is the new videoId.
     video_id = yt_resp.get("id")
@@ -1968,52 +2105,13 @@ def youtube_upload_video(
 # ----------------------------
 
 
-@app.on_event("startup")
-async def start_queue_worker() -> None:
-    """Start the background queue worker once the FastAPI app boots."""
-
-    if getattr(app.state, "worker", None):
-        return
-
-    if os.getenv("DISABLE_QUEUE_WORKER", "").strip().lower() in {"1", "true", "yes"}:
-        logger.info("Queue worker disabled via DISABLE_QUEUE_WORKER flag")
-        app.state.worker = None
-        return
-
-    logger.info("Starting background queue worker")
-    worker = QueueWorker(
-        handlers={
-            "package": job_handle_package,
-            "qa_batch": job_handle_qa_batch,
-        },
-        poll_interval=0.5,
-    )
-    worker.start()
-    app.state.worker = worker
-
-    if JWT_SECRET == "dev_secret_change_me":
-        logger.error(
-            "JWT_SECRET is using the insecure default. Update your environment configuration."
-        )
-
-
-@app.on_event("shutdown")
-async def stop_queue_worker() -> None:
-    """Stop the background queue worker when the app shuts down."""
-
-    worker = getattr(app.state, "worker", None)
-    if worker:
-        worker.stop()
-        worker.join(timeout=2)
-        app.state.worker = None
-
-
 class EnqueuePackageReq(BaseModel):
     loop_video_path: str
     audio_path: str
     fade_in_ms: int = 500
     fade_out_ms: int = 800
     out_path: str | None = None
+
 
 @app.post("/package_async")
 def package_async(
@@ -2023,13 +2121,15 @@ def package_async(
     """Enqueue a video packaging job for background processing."""
 
     # associate job with user in the future; for now just enqueue
-    jid = enqueue("package", req.dict())
+    jid = enqueue("package", req.model_dump())
     return {"job_id": jid}
+
 
 class EnqueueQABatchReq(BaseModel):
     paths: list
     palette: list = []
     thresholds: dict = {"loop": 0.92, "style": 75}
+
 
 class PublishPipelineReq(BaseModel):
     # creative / branding
@@ -2038,9 +2138,9 @@ class PublishPipelineReq(BaseModel):
     tags: Optional[str] = ""  # comma-separated list
 
     # source assets
-    loop_path: str            # e.g. "static/uploads/my_loop.mp4"
-    song_path: str            # e.g. "static/uploads/my_song.mp3"
-    duration_ms: int          # e.g. 180000 for ~3 mins
+    loop_path: str  # e.g. "static/uploads/my_loop.mp4"
+    song_path: str  # e.g. "static/uploads/my_song.mp3"
+    duration_ms: int  # e.g. 180000 for ~3 mins
 
     # narration
     narration_text: Optional[str] = None
@@ -2056,8 +2156,9 @@ def qa_batch_async(
     req: EnqueueQABatchReq,
     user=Depends(require_role(["admin", "owner", "editor"], require_verified=True)),
 ):
-    jid = enqueue("qa_batch", req.dict())
+    jid = enqueue("qa_batch", req.model_dump())
     return {"job_id": jid}
+
 
 @app.get("/jobs/{jid}")
 def jobs_get(
@@ -2091,19 +2192,19 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.post("/upload")
 def upload(file: UploadFile = File(...)):
     out_path = os.path.join("static", "uploads", file.filename)
     with open(out_path, "wb") as f:
         f.write(file.file.read())
-    return {
-        "path": out_path.replace("\\", "/"),
-        "size": os.path.getsize(out_path)
-    }
+    return {"path": out_path.replace("\\", "/"), "size": os.path.getsize(out_path)}
+
 
 @app.get("/download")
 def download(path: str):
@@ -2115,6 +2216,7 @@ def download(path: str):
 
 class CompileReq(BaseModel):
     scene_yaml_path: str
+
 
 @app.post("/compile")
 def compile_scene(req: CompileReq):
@@ -2141,19 +2243,20 @@ def compute_loop_score(video_path: str) -> float:
     return round(
         min(
             0.99,
-            0.65
-            + (size % 100000) / 100000 * 0.3
-            + (h / 1000) * 0.05,
+            0.65 + (size % 100000) / 100000 * 0.3 + (h / 1000) * 0.05,
         ),
         3,
     )
+
 
 def compute_style_score(video_path: str, palette: list) -> int:
     base = (len(palette) * 13 + len(os.path.basename(video_path)) * 3) % 40 + 60
     return int(base)
 
+
 def detect_watermark(video_path: str) -> bool:
     return "wm" in os.path.basename(video_path).lower()
+
 
 @app.post("/qa")
 def qa(loop_video_path: str = Form(...), palette: str = Form("[]")):
@@ -2166,6 +2269,7 @@ def qa(loop_video_path: str = Form(...), palette: str = Form("[]")):
         "style_score": compute_style_score(loop_video_path, pal),
         "watermark_flag": detect_watermark(loop_video_path),
     }
+
 
 @app.post("/qa/batch")
 def api_qa_batch(
@@ -2200,6 +2304,7 @@ def api_qa_batch(
             }
         )
     return {"results": rows}
+
 
 @app.post("/qa/batch_csv")
 def api_qa_batch_csv(
@@ -2239,12 +2344,14 @@ def api_qa_batch_csv(
             )
     return {"csv_path": csv_path, "count": len(rows)}
 
+
 class PackageReq(BaseModel):
     loop_video_path: str
     audio_path: str
     fade_in_ms: int = 500
     fade_out_ms: int = 800
     out_path: str | None = None
+
 
 class PackageReqV2(BaseModel):
     loop_path: str
@@ -2253,12 +2360,15 @@ class PackageReqV2(BaseModel):
     duration_ms: int
     voiceover_path: Optional[str] = None
 
+
 @app.post("/package")
 def package(req: PackageReq):
     out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
     audio_ms = probe_audio_duration(req.audio_path)
     if audio_ms <= 0:
-        raise HTTPException(status_code=400, detail="Invalid audio file (duration <= 0)")
+        raise HTTPException(
+            status_code=400, detail="Invalid audio file (duration <= 0)"
+        )
 
     try:
         res = build_master_from_loop(
@@ -2277,6 +2387,7 @@ def package(req: PackageReq):
         "detail": res,
     }
 
+
 @app.post("/package/master", tags=["Packager"])
 def package_master(
     req: PackageReqV2,
@@ -2294,7 +2405,9 @@ def package_master(
     masters_dir = os.path.join("static", "masters")
     os.makedirs(masters_dir, exist_ok=True)
 
-    out_file = req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
+    out_file = (
+        req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
+    )
     out_path = os.path.join(masters_dir, out_file)
 
     try:
@@ -2318,9 +2431,11 @@ def package_master(
         "voiceover_used": result.get("voiceover_used"),
     }
 
+
 @app.get("/projects")
 def api_list_projects():
     return {"projects": list_projects()}
+
 
 @app.post("/projects")
 def api_create_or_update_project(payload: dict = Body(...)):
@@ -2344,6 +2459,7 @@ def api_create_or_update_project(payload: dict = Body(...)):
         )
     return upsert_project(proj)
 
+
 @app.get("/projects/{pid}")
 def api_get_project(pid: str):
     p = get_project(pid)
@@ -2351,13 +2467,16 @@ def api_get_project(pid: str):
         return JSONResponse(status_code=404, content={"error": "not found"})
     return p
 
+
 @app.delete("/projects/{pid}")
 def api_delete_project(pid: str):
     return {"deleted": delete_project(pid)}
 
+
 @app.get("/presets")
 def api_list_presets():
     return {"presets": list_presets()}
+
 
 @app.post("/presets")
 def api_upsert_preset(payload: dict = Body(...)):
@@ -2373,6 +2492,7 @@ def api_upsert_preset(payload: dict = Body(...)):
         )
     return upsert_preset(pr)
 
+
 @app.delete("/presets/{pid}")
 def api_delete_preset(pid: str):
     return {"deleted": delete_preset(pid)}
@@ -2382,29 +2502,36 @@ def api_delete_preset(pid: str):
 # AUTH / PROFILE ROUTES
 # ----------------------------
 
+
 class RegisterReq(BaseModel):
     full_name: str
     email: EmailStr
     password: str
 
+
 class LoginReq(BaseModel):
     email: EmailStr
     password: str
+
 
 class ProfileUpdateReq(BaseModel):
     full_name: str
     email: EmailStr
 
+
 class PasswordChangeReq(BaseModel):
     current_password: str
     new_password: str
+
 
 class KeyUpsertReq(BaseModel):
     provider: str
     secret: str
 
+
 class VerifyEmailReq(BaseModel):
     code: str
+
 
 class RoleUpdateReq(BaseModel):
     role: str
@@ -2424,6 +2551,7 @@ class SMTPTestRequest(BaseModel):
     to: EmailStr
     subject: Optional[str] = "Creator Toolkit SMTP Test"
     body: Optional[str] = "This is a test email from Creator Toolkit."
+
 
 @app.post("/auth/register")
 def auth_register(req: RegisterReq):
@@ -2452,6 +2580,7 @@ def auth_register(req: RegisterReq):
         "email_sent": email_sent,
     }
 
+
 @app.post("/auth/login")
 def auth_login(req: LoginReq):
     u = get_user_by_email(req.email)
@@ -2477,8 +2606,8 @@ def auth_login(req: LoginReq):
         value=token,
         httponly=True,
         samesite="Lax",
-        secure=False,          # keep False for http://localhost
-        path="/",              # ensure all routes get it
+        secure=False,  # keep False for http://localhost
+        path="/",  # ensure all routes get it
     )
 
     logger.info("/auth/login issued token for user_id=%s", user_id)
@@ -2517,7 +2646,9 @@ def auth_resend_verification(user=Depends(current_user)):
     new_code = _generate_verification_code()
     set_verification_code(user["id"], new_code)
     refreshed = get_user_by_id(user["id"]) or user
-    email_sent = _send_verification_email(user.get("email"), new_code, refreshed.get("full_name"))
+    email_sent = _send_verification_email(
+        user.get("email"), new_code, refreshed.get("full_name")
+    )
     logger.info("Issued new verification code for user_id=%s", user["id"])
     message = "A new verification code has been emailed to you."
     if not email_sent:
@@ -2537,6 +2668,7 @@ def auth_logout(response: Response):
     response.delete_cookie("token")
     return response
 
+
 @app.get("/auth/whoami")
 def whoami(user=Depends(current_user)):
     info = _user_payload(user)
@@ -2544,12 +2676,14 @@ def whoami(user=Depends(current_user)):
     info["verified_at"] = user.get("verified_at")
     return info
 
+
 @app.get("/me")
 def me(user=Depends(current_user)):
     info = _user_payload(user)
     info["created_at"] = user.get("created_at")
     info["verified_at"] = user.get("verified_at")
     return info
+
 
 @app.post("/profile")
 def profile_update(req: ProfileUpdateReq, user=Depends(current_user)):
@@ -2567,15 +2701,22 @@ def profile_update(req: ProfileUpdateReq, user=Depends(current_user)):
     if email_changed:
         verification_code = _generate_verification_code()
         set_verification_code(user["id"], verification_code)
-        email_sent = _send_verification_email(normalized_email, verification_code, req.full_name)
+        email_sent = _send_verification_email(
+            normalized_email, verification_code, req.full_name
+        )
         logger.info("User %s updated email; verification reset", user["id"])
     refreshed = get_user_by_id(user["id"]) or user
     response = {"ok": True, "user": _user_payload(refreshed)}
     if verification_code:
         response["requires_verification"] = True
-        response["message"] = "Email updated. Check your inbox for a new verification code." if email_sent else "Email updated. Verification code regenerated but email delivery is not configured."
+        response["message"] = (
+            "Email updated. Check your inbox for a new verification code."
+            if email_sent
+            else "Email updated. Verification code regenerated but email delivery is not configured."
+        )
         response["email_sent"] = email_sent
     return response
+
 
 @app.post("/profile/password")
 def profile_password_change(req: PasswordChangeReq, user=Depends(current_user)):
@@ -2593,6 +2734,7 @@ def profile_password_change(req: PasswordChangeReq, user=Depends(current_user)):
     set_must_change_password(user["id"], False)
     refreshed = get_user_by_id(user["id"]) or user
     return {"ok": True, "user": _user_payload(refreshed)}
+
 
 @app.post("/profile/role")
 def profile_role_update(
@@ -2638,7 +2780,7 @@ def admin_update_smtp_settings(
     config: SMTPConfigUpdate,
     user=Depends(require_role(["admin"], require_verified=True)),
 ):
-    payload = config.dict(exclude_unset=True)
+    payload = config.model_dump(exclude_unset=True)
     payload = {k: v for k, v in payload.items() if v is not None}
     try:
         update_smtp_settings(payload)
@@ -2666,7 +2808,9 @@ def admin_test_smtp(
     msg.set_content(req.body or "This is a test email from Creator Toolkit.")
 
     try:
-        with smtplib.SMTP(host, int(settings.get("port") or 0), timeout=SMTP_TIMEOUT) as smtp:
+        with smtplib.SMTP(
+            host, int(settings.get("port") or 0), timeout=SMTP_TIMEOUT
+        ) as smtp:
             if bool(settings.get("use_tls", True)):
                 try:
                     smtp.starttls()
@@ -2682,11 +2826,15 @@ def admin_test_smtp(
 
     return {"ok": True}
 
+
 @app.get("/profile/keys")
-def profile_keys_list(user=Depends(require_role(["admin", "owner"], require_verified=True))):
+def profile_keys_list(
+    user=Depends(require_role(["admin", "owner"], require_verified=True))
+):
     raw = list_user_keys(user["id"])
     # we do NOT return the decrypted secrets, just providers
     return {"providers": list(raw.keys())}
+
 
 @app.post("/profile/keys")
 def profile_keys_upsert(
@@ -2697,6 +2845,7 @@ def profile_keys_upsert(
     upsert_user_key(user["id"], req.provider.lower(), cipher)
     return {"ok": True}
 
+
 @app.delete("/profile/keys/{provider}")
 def profile_keys_delete(
     provider: str,
@@ -2704,6 +2853,7 @@ def profile_keys_delete(
 ):
     delete_user_key(user["id"], provider.lower())
     return {"ok": True, "deleted": provider.lower()}
+
 
 @app.post("/pipeline/publish_lofi", tags=["Pipeline"])
 def pipeline_publish_lofi(
@@ -2724,7 +2874,10 @@ def pipeline_publish_lofi(
     voiceover_path = None
     if req.narration_text and req.narration_text.strip():
         if not req.narration_voice_id:
-            raise HTTPException(status_code=400, detail="narration_voice_id is required if narration_text is provided")
+            raise HTTPException(
+                status_code=400,
+                detail="narration_voice_id is required if narration_text is provided",
+            )
         voiceover_path = _generate_voiceover_mp3_for_user(
             user_id=user_id,
             text=req.narration_text.strip(),
@@ -2780,6 +2933,7 @@ def pipeline_publish_lofi(
         "youtube_scheduled_publish_at": yt_info["scheduled_publish_at"],
     }
 
+
 @app.get("/generate/video/status", tags=["Generate"])
 def get_video_status(
     job_id: str,
@@ -2806,7 +2960,7 @@ def get_video_status(
     if meta_resp.status_code >= 400:
         raise HTTPException(
             status_code=meta_resp.status_code,
-            detail=f"Failed to get status: {meta_resp.text}"
+            detail=f"Failed to get status: {meta_resp.text}",
         )
 
     try:
@@ -2830,19 +2984,14 @@ def get_video_status(
     # Failed?
     if status == "failed":
         raise HTTPException(
-            status_code=500,
-            detail=meta.get("error", "Generation failed")
+            status_code=500, detail=meta.get("error", "Generation failed")
         )
 
     # Completed. Now we actually need the bytes.
     if status == "completed":
         # Two possible patterns:
         # Pattern A: there's a direct video_url/asset in meta (check first)
-        video_url = (
-            meta.get("video_url")
-            or meta.get("result_url")
-            or meta.get("url")
-        )
+        video_url = meta.get("video_url") or meta.get("result_url") or meta.get("url")
 
         uploads_dir = os.path.join("static", "uploads")
         os.makedirs(uploads_dir, exist_ok=True)
@@ -2855,8 +3004,7 @@ def get_video_status(
             dl = requests.get(video_url, headers=headers, timeout=120)
             if dl.status_code >= 400:
                 raise HTTPException(
-                    status_code=500,
-                    detail=f"Download via video_url failed: {dl.text}"
+                    status_code=500, detail=f"Download via video_url failed: {dl.text}"
                 )
             with open(out_disk_path, "wb") as f:
                 f.write(dl.content)
@@ -2872,7 +3020,7 @@ def get_video_status(
             if bin_resp.status_code >= 400:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Download via /content failed: {bin_resp.text}"
+                    detail=f"Download via /content failed: {bin_resp.text}",
                 )
 
             # sanity check: verify it's not JSON (aka still not an error)

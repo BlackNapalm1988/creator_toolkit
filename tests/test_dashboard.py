@@ -62,11 +62,19 @@ def test_dashboard_data_authenticated_success(client):
     jobs_module.update_job_status(job_id, stage="qa", status="running", progress=65)
 
     token = _issue_token(user_info["id"], user_info["email"])
-    response = client.get("/dashboard/data", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/dashboard/data", headers={"Authorization": f"Bearer {token}"}
+    )
     assert response.status_code == 200
 
     payload = response.json()
-    assert set(payload.keys()) == {"user", "providers", "recent_jobs", "recent_assets", "active_jobs"}
+    assert set(payload.keys()) == {
+        "user",
+        "providers",
+        "recent_jobs",
+        "recent_assets",
+        "active_jobs",
+    }
 
     assert payload["user"]["id"] == user_info["id"]
     assert payload["user"]["display_name"] == "Test User"

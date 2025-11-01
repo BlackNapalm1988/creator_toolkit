@@ -53,9 +53,7 @@ def init_jobs_db() -> None:
 
         if not existing_table:
             conn.execute(CREATE_TABLE_SQL)
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
             )
@@ -82,9 +80,7 @@ def init_jobs_db() -> None:
         if needs_migration:
             conn.execute("ALTER TABLE jobs RENAME TO jobs_legacy")
             conn.execute(CREATE_TABLE_SQL)
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
             )
@@ -118,9 +114,7 @@ def init_jobs_db() -> None:
             conn.execute("DROP TABLE jobs_legacy")
         else:
             # ensure indexes exist for existing installs
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)"
             )
@@ -138,7 +132,9 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
 
-def enqueue(job_type: str, payload: Dict[str, Any], *, project_id: str | None = None) -> str:
+def enqueue(
+    job_type: str, payload: Dict[str, Any], *, project_id: str | None = None
+) -> str:
     """Persist a job in ``queued`` state and return the job ID."""
 
     job_id = new_id(job_type)
@@ -214,7 +210,9 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def list_jobs(limit: int = 50, statuses: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+def list_jobs(
+    limit: int = 50, statuses: Optional[Iterable[str]] = None
+) -> List[Dict[str, Any]]:
     """Return recent jobs optionally filtered by ``statuses``."""
 
     query = (
@@ -322,10 +320,14 @@ def append_log(job_id: str, line: str) -> None:
         row = conn.execute("SELECT logs FROM jobs WHERE id=?", (job_id,)).fetchone()
         previous = row[0] or ""
         new_logs = (previous + ("\n" if previous else "") + line)[:20000]
-        conn.execute("UPDATE jobs SET logs=?, updated_at=? WHERE id=?", (new_logs, now(), job_id))
+        conn.execute(
+            "UPDATE jobs SET logs=?, updated_at=? WHERE id=?", (new_logs, now(), job_id)
+        )
 
 
-def set_result(job_id: str, result: Dict[str, Any], *, duration_ms: Optional[int] = None) -> None:
+def set_result(
+    job_id: str, result: Dict[str, Any], *, duration_ms: Optional[int] = None
+) -> None:
     """Persist a successful result payload."""
 
     update_kwargs: Dict[str, Any] = {

@@ -23,7 +23,9 @@ JWT_EXPIRE_MIN = int(os.getenv("JWT_EXPIRE_MIN", "43200"))
 
 FERNET_SECRET = os.getenv("FERNET_SECRET")
 if FERNET_SECRET:
-    secret_bytes = FERNET_SECRET.encode() if isinstance(FERNET_SECRET, str) else FERNET_SECRET
+    secret_bytes = (
+        FERNET_SECRET.encode() if isinstance(FERNET_SECRET, str) else FERNET_SECRET
+    )
     FERNET = Fernet(secret_bytes)
 else:
     FERNET = None
