@@ -8,10 +8,12 @@ import math
 import os
 import secrets
 import smtplib
+import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Annotated, Dict, List, Optional
 from urllib.parse import urlencode
 
@@ -637,7 +639,7 @@ def _youtube_upload_from_disk(
     file_path: str,
     title: str,
     description: str,
-    tags: str,
+    tags: str | Sequence[str],
     privacy_status: str,
     publish_at: Optional[str] = None,
 ) -> dict:
@@ -650,8 +652,17 @@ def _youtube_upload_from_disk(
     with open(file_path, "rb") as f:
         video_bytes = f.read()
 
-    # parse tags
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    # parse tags from either a comma-delimited string or an iterable of strings
+    tag_list: List[str] = []
+    if isinstance(tags, str):
+        tag_list = _parse_tags(tags)
+    elif tags:
+        for tag in tags:
+            if tag is None:
+                continue
+            text = str(tag).strip()
+            if text:
+                tag_list.append(text)
 
     snippet = {
         "title": title,
@@ -1970,9 +1981,64 @@ def youtube_channels_me(
     return r.json()
 
 
+class YouTubeUploadRequest(BaseModel):
+    """Request payload for JSON-based YouTube uploads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    video_path: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = ""
+    tags: Optional[List[str]] = None
+    privacy_status: Optional[str] = "unlisted"
+    publish_at: Optional[str] = None
+
+
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
-    user=Depends(require_role(["admin", "owner"], require_verified=True)),
+    req: YouTubeUploadRequest,
+    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
+):
+    """Upload a rendered video residing on disk using a JSON request payload."""
+
+    video_path_raw = (req.video_path or "").strip()
+    title_raw = (req.title or "").strip()
+
+    if not video_path_raw or not title_raw:
+        raise HTTPException(status_code=400, detail="video_path and title are required")
+
+    file_path = Path(video_path_raw).expanduser()
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+
+    description = (req.description or "").strip()
+    tags = req.tags or []
+    privacy_status_raw = (req.privacy_status or "unlisted").strip()
+    privacy_status = privacy_status_raw or "unlisted"
+    publish_at = (req.publish_at or "").strip() or None
+
+    yt_info = _youtube_upload_from_disk(
+        user_id=user["id"],
+        file_path=str(file_path),
+        title=title_raw,
+        description=description,
+        tags=tags,
+        privacy_status=privacy_status,
+        publish_at=publish_at,
+    )
+
+    return {
+        "ok": True,
+        "video_id": yt_info.get("video_id"),
+        "requested_visibility": yt_info.get("requested_visibility"),
+        "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
+        "youtube_response": yt_info.get("youtube_response"),
+    }
+
+
+@app.post("/youtube/upload-form", tags=["YouTube"])
+def youtube_upload_video_form(
+    user=Depends(require_role(PUBLISHER_ROLES, require_verified=True)),
     video_file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(""),
@@ -1980,123 +2046,52 @@ def youtube_upload_video(
     privacy_status: str = Form("unlisted"),
     publish_at: str = Form(""),
 ):
-    """
-    Upload a video file to the authorized user's YouTube channel.
-    Returns the videoId on success.
-    """
+    """Upload a video provided via multipart/form-data for manual testing tools."""
 
-    # 1. Get user's refresh token and mint an access token
-    refresh_token = _get_youtube_refresh(user["id"])
-    access_token = _youtube_get_access_token(refresh_token)
-
-    # 2. Read the file bytes (UploadFile is SpooledTemporaryFile, we just read it)
     try:
         video_bytes = video_file.file.read()
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
-            status_code=400, detail=f"Could not read uploaded file: {e}"
-        )
+            status_code=400, detail=f"Could not read uploaded file: {exc}"
+        ) from exc
 
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Empty video file")
 
-    # 3. Build metadata YouTube expects
-    # snippet: title, description, tags
-    # status: privacyStatus
-    snippet = {
-        "title": title,
-        "description": description,
-    }
-    parsed_tags = _parse_tags(tags)
-    if parsed_tags:
-        snippet["tags"] = parsed_tags
-
-    desired_visibility = (privacy_status or "unlisted").strip().lower()
-    allowed_visibilities = {"public", "unlisted", "private"}
-    if desired_visibility not in allowed_visibilities:
+    suffix = Path(video_file.filename or "upload.mp4").suffix or ".mp4"
+    temp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(video_bytes)
+            temp_path = Path(tmp.name)
+    except Exception as exc:
         raise HTTPException(
-            status_code=400,
-            detail=f"privacy_status must be one of {', '.join(sorted(allowed_visibilities))}",
-        )
-
-    scheduled_iso = _normalize_publish_at(publish_at)
-    if scheduled_iso and desired_visibility != "public":
-        raise HTTPException(
-            status_code=400,
-            detail="Scheduled publish is only supported when visibility is set to 'public'.",
-        )
-
-    status_obj = {
-        "privacyStatus": desired_visibility if not scheduled_iso else "private"
-    }
-    if scheduled_iso:
-        status_obj["publishAt"] = scheduled_iso
-
-    metadata_obj = {"snippet": snippet, "status": status_obj}
-
-    metadata_json = json.dumps(metadata_obj)
-
-    # 4. Build multipart/related body manually
-    # We create a random boundary and send 2 parts:
-    #   - metadata (application/json; charset=UTF-8)
-    #   - media (video/*)
-    boundary = "==============CREATOR_TOOLKIT_" + uuid.uuid4().hex
-
-    # NOTE: We must use CRLF (\r\n) between MIME segments exactly how YouTube expects.
-    # We'll assemble bytes manually.
-    part1_headers = (
-        f"--{boundary}\r\n"
-        "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-        f"{metadata_json}\r\n"
-    )
-
-    part2_headers = (
-        f"--{boundary}\r\n"
-        f"Content-Type: {video_file.content_type or 'video/mp4'}\r\n\r\n"
-    )
-
-    closing = f"\r\n--{boundary}--\r\n"
-
-    body_bytes = (
-        part1_headers.encode("utf-8")
-        + part2_headers.encode("utf-8")
-        + video_bytes
-        + closing.encode("utf-8")
-    )
-
-    # 5. Send request to YouTube Data API v3 videos.insert
-    # We'll request the snippet+status parts so we can set title, desc, privacy.
-    upload_url = (
-        "https://www.googleapis.com/upload/youtube/v3/videos" "?part=snippet,status"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": f"multipart/related; boundary={boundary}",
-    }
-
-    r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
-
-    # 6. Handle response
-    if r.status_code >= 400:
-        # YouTube gives useful JSON error details.
-        raise HTTPException(status_code=r.status_code, detail=r.text)
+            status_code=500, detail=f"Failed to persist uploaded file: {exc}"
+        ) from exc
 
     try:
-        yt_resp = r.json()
-    except Exception:
-        raise HTTPException(
-            status_code=500, detail="Upload succeeded but could not parse JSON"
+        yt_info = _youtube_upload_from_disk(
+            user_id=user["id"],
+            file_path=str(temp_path),
+            title=title.strip(),
+            description=(description or "").strip(),
+            tags=tags,
+            privacy_status=(privacy_status or "").strip() or "unlisted",
+            publish_at=(publish_at or "").strip() or None,
         )
+    finally:
+        if temp_path:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
-    # YouTube responds with an object containing 'id' which is the new videoId.
-    video_id = yt_resp.get("id")
     return {
         "ok": True,
-        "video_id": video_id,
-        "requested_visibility": desired_visibility,
-        "scheduled_publish_at": scheduled_iso,
-        "youtube_response": yt_resp,
+        "video_id": yt_info.get("video_id"),
+        "requested_visibility": yt_info.get("requested_visibility"),
+        "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
+        "youtube_response": yt_info.get("youtube_response"),
     }
 
 

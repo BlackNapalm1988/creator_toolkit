@@ -75,21 +75,24 @@ def test_admin_only_smtp_endpoints(client):
         ("viewer", 403),
     ],
 )
-def test_publish_permissions_enforced(client, role, expected_status):
+def test_publish_permissions_enforced(client, tmp_path, role, expected_status):
     user = _create_user(f"{role}@example.com", role=role)
-    files = {"video_file": ("demo.mp4", b"fake", "video/mp4")}
-    data = {
+    video_path = tmp_path / "demo.mp4"
+    video_path.write_bytes(b"fake video bytes")
+
+    payload = {
+        "video_path": str(video_path),
         "title": "Example",
         "description": "",
-        "tags": "",
+        "tags": [],
         "privacy_status": "unlisted",
-        "publish_at": "",
+        "publish_at": None,
     }
+
     response = client.post(
         "/youtube/upload",
         headers=_auth_headers(user),
-        files=files,
-        data=data,
+        json=payload,
     )
     assert response.status_code == expected_status
 
