@@ -8,6 +8,14 @@ const VIEW_PATHS = {
   "create-view": "/create",
   "publish-view": "/publish",
   "system-view": "/system",
+  library: "#library",
+  "library-scenes": "#library/scenes",
+  "library-video": "#library/video",
+  "library-audio": "#library/audio",
+  "library-other": "#library/other",
+  jobs: "#jobs",
+  "jobs-active": "#jobs/active",
+  "jobs-history": "#jobs/history",
 };
 
 const NAV_SECTIONS = [
@@ -41,6 +49,7 @@ const NAV_SECTIONS = [
   {
     label: "Library",
     id: "library",
+    view: "library",
     children: [
       { label: "Scenes", id: "library-scenes" },
       { label: "Video", id: "library-video" },
@@ -64,6 +73,7 @@ const NAV_SECTIONS = [
   {
     label: "Jobs",
     id: "jobs",
+    view: "jobs",
     children: [
       { label: "Active Jobs", id: "jobs-active" },
       { label: "History", id: "jobs-history" },
@@ -95,10 +105,20 @@ const INSPECTOR_CARDS = [
   },
 ];
 
+const LEGACY_VIEWS = new Set([
+  "dashboard-view",
+  "imagine-view",
+  "create-view",
+  "publish-view",
+  "system-view",
+]);
+
 let shellRoot = null;
 let mainContentEl = null;
 let navButtons = [];
 let inspectorActionButton = null;
+let legacyWorkspace = null;
+let dynamicWorkspace = null;
 let initialActiveView = "dashboard-view";
 const SHELL_MAX_BOOTSTRAP_ATTEMPTS = 10;
 let shellBootstrapAttempts = 0;
@@ -146,6 +166,84 @@ function renderShell(activeViewOverride) {
   return true;
 }
 
+function renderSidebarSection(section, activeView) {
+  const sectionEl = document.createElement("section");
+  sectionEl.className = "ct-nav-section";
+
+  const sectionView = section.view || section.id;
+  const hasChildren = Array.isArray(section.children) && section.children.length > 0;
+  const childActive = hasChildren
+    ? section.children.some(child => (child.view || child.id) === activeView)
+    : false;
+
+  if (sectionView) {
+    const link = document.createElement("a");
+    link.className = "ct-nav-link ct-nav-item nav-item";
+    link.href = VIEW_PATHS[sectionView] || "#";
+    link.dataset.view = sectionView;
+    if (section.roles) {
+      link.dataset.roles = section.roles;
+    }
+    if (section.navId) {
+      link.id = section.navId;
+    }
+
+    if (sectionView === activeView || childActive) {
+      link.classList.add("active");
+    }
+
+    const iconText = section.label.charAt(0).toUpperCase();
+    link.innerHTML = `
+      <span class="ct-nav-link__icon" aria-hidden="true">${iconText}</span>
+      <span class="ct-nav-link__label">${section.label}</span>
+    `;
+    sectionEl.appendChild(link);
+  } else {
+    const heading = document.createElement("h3");
+    heading.className = "ct-nav-heading";
+    heading.textContent = section.label;
+    sectionEl.appendChild(heading);
+  }
+
+  if (hasChildren) {
+    const list = document.createElement("ul");
+    list.className = "ct-nav-children";
+
+    section.children.forEach(child => {
+      const childView = child.view || child.id;
+      if (!childView) {
+        return;
+      }
+
+      const item = document.createElement("li");
+      item.className = "ct-nav-child";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ct-nav-item ct-nav-child__button";
+      button.dataset.view = childView;
+      if (sectionView) {
+        button.dataset.parent = sectionView;
+      }
+      if (child.roles) {
+        button.dataset.roles = child.roles;
+      } else if (section.roles) {
+        button.dataset.roles = section.roles;
+      }
+      if (childView === activeView) {
+        button.classList.add("active");
+      }
+      button.textContent = child.label;
+      item.appendChild(button);
+      list.appendChild(item);
+    });
+
+    sectionEl.appendChild(list);
+  }
+
+  return sectionEl;
+}
+
 function renderSidebar(activeView) {
   const sidebar = document.getElementById("ct-sidebar");
   if (!sidebar) {
@@ -174,50 +272,10 @@ function renderSidebar(activeView) {
   if (!navEl) return;
 
   NAV_SECTIONS.forEach(section => {
-    const sectionEl = document.createElement("section");
-    sectionEl.className = "ct-nav-section";
-
-    if (section.view) {
-      const link = document.createElement("a");
-      link.className = "ct-nav-link nav-item";
-      link.href = VIEW_PATHS[section.view] || "#";
-      link.dataset.view = section.view;
-      if (section.roles) {
-        link.dataset.roles = section.roles;
-      }
-      if (section.navId) {
-        link.id = section.navId;
-      }
-      if (section.view === activeView) {
-        link.classList.add("active");
-      }
-      const iconText = section.label.charAt(0).toUpperCase();
-      link.innerHTML = `
-        <span class="ct-nav-link__icon" aria-hidden="true">${iconText}</span>
-        <span class="ct-nav-link__label">${section.label}</span>
-      `;
-      sectionEl.appendChild(link);
-    } else {
-      const heading = document.createElement("h3");
-      heading.className = "ct-nav-heading";
-      heading.textContent = section.label;
-      sectionEl.appendChild(heading);
+    const sectionEl = renderSidebarSection(section, activeView);
+    if (sectionEl) {
+      navEl.appendChild(sectionEl);
     }
-
-    if (Array.isArray(section.children) && section.children.length) {
-      const list = document.createElement("ul");
-      list.className = "ct-nav-children";
-      section.children.forEach(child => {
-        const item = document.createElement("li");
-        item.className = "ct-nav-child";
-        item.dataset.childId = child.id;
-        item.textContent = child.label;
-        list.appendChild(item);
-      });
-      sectionEl.appendChild(list);
-    }
-
-    navEl.appendChild(sectionEl);
   });
 
   console.log("[ui-shell] sidebar rendered");
@@ -232,21 +290,187 @@ function renderMainWorkspace(legacyContent, activeView) {
 
   console.log("[ui-shell] rendering main workspace");
 
-  if (legacyContent) {
-    legacyContent.classList.remove("legacy-content");
-    legacyContent.id = "ct-main-workspace";
-    legacyContent.classList.add("ct-main-workspace");
-    main.appendChild(legacyContent);
-  } else if (!main.querySelector(".ct-main-workspace")) {
-    const workspace = document.createElement("div");
+  let workspace = document.getElementById("ct-main-workspace");
+  if (!workspace) {
+    workspace = document.createElement("div");
     workspace.id = "ct-main-workspace";
     workspace.className = "ct-main-workspace";
     main.appendChild(workspace);
   }
 
+  if (legacyContent) {
+    legacyContent.classList.remove("legacy-content");
+    legacyContent.id = "ct-legacy-content";
+    legacyContent.classList.add("ct-legacy-content");
+    if (!workspace.contains(legacyContent)) {
+      workspace.appendChild(legacyContent);
+    }
+  }
+
+  let dynamic = document.getElementById("ct-main-dynamic");
+  if (!dynamic) {
+    dynamic = document.createElement("div");
+    dynamic.id = "ct-main-dynamic";
+    dynamic.className = "ct-main-dynamic hidden";
+    workspace.appendChild(dynamic);
+  }
+
+  legacyWorkspace = document.getElementById("ct-legacy-content");
+  dynamicWorkspace = dynamic;
+
   // Future steps (Library, Storyboard, Video Editor) will mount new views inside this workspace.
   main.dataset.activeView = activeView;
   console.log("[ui-shell] main workspace rendered");
+}
+
+function shouldUseLegacyWorkspace(viewId) {
+  return LEGACY_VIEWS.has(viewId);
+}
+
+function renderWorkspace(viewId) {
+  if (!mainContentEl) return;
+
+  const workspace = document.getElementById("ct-main-workspace");
+  if (!workspace) return;
+
+  const normalized = (viewId || "").toLowerCase();
+  const useLegacy = shouldUseLegacyWorkspace(normalized);
+
+  const dynamic = dynamicWorkspace || document.getElementById("ct-main-dynamic");
+  const legacy = legacyWorkspace || document.getElementById("ct-legacy-content");
+
+  if (legacy) {
+    legacy.classList.toggle("hidden", !useLegacy);
+  }
+
+  if (!dynamic) {
+    return;
+  }
+
+  dynamic.innerHTML = "";
+  dynamic.classList.toggle("hidden", useLegacy);
+
+  if (useLegacy) {
+    console.log(`[ui-shell] workspace using legacy content for ${normalized || "default"}`);
+    return;
+  }
+
+  console.log(`[ui-shell] rendering workspace for ${normalized}`);
+
+  switch (normalized) {
+    case "library":
+    case "library-scenes":
+    case "library-video":
+    case "library-audio":
+    case "library-other":
+      renderLibraryWorkspace(dynamic, normalized);
+      break;
+    case "jobs":
+    case "jobs-active":
+    case "jobs-history":
+      renderJobsWorkspace(dynamic, normalized);
+      break;
+    default:
+      renderPlaceholderWorkspace(dynamic, normalized);
+      break;
+  }
+}
+
+function renderLibraryWorkspace(root, viewId) {
+  if (!root) return;
+
+  const copy = {
+    library: {
+      title: "Library",
+      body: "Coming soon — manage your generated assets from a single dashboard.",
+      empty: "No assets yet — generate content in Imagine to populate your Library.",
+    },
+    "library-scenes": {
+      title: "Library · Scenes",
+      body: "Review and organize storyboard scenes created across your projects.",
+      empty: "No scenes yet — generate new scenes to see them here.",
+    },
+    "library-video": {
+      title: "Library · Video",
+      body: "Final and in-progress video renders will appear in this list.",
+      empty: "No videos yet — export from Imagine or upload your own assets.",
+    },
+    "library-audio": {
+      title: "Library · Audio",
+      body: "Voiceover, music, and SFX assets will live here for quick reuse.",
+      empty: "No audio yet — generate music or import stems to build your collection.",
+    },
+    "library-other": {
+      title: "Library · Other",
+      body: "Additional creative assets (images, docs) will surface here soon.",
+      empty: "No miscellaneous assets yet — drop uploads here to keep them handy.",
+    },
+  };
+
+  const { title, body, empty } = copy[viewId] || copy.library;
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${title}</h2>
+        <p>${body}</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">${empty}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderJobsWorkspace(root, viewId) {
+  if (!root) return;
+
+  const copy = {
+    jobs: {
+      title: "Jobs",
+      body: "Monitor active generation and packaging work in one place.",
+      empty: "No jobs to show — kick off an Imagine request to populate this feed.",
+    },
+    "jobs-active": {
+      title: "Jobs · Active",
+      body: "Track progress for in-flight Imagine, QA, and packaging jobs.",
+      empty: "No active jobs — start a new generation to see it here.",
+    },
+    "jobs-history": {
+      title: "Jobs · History",
+      body: "Review recently completed jobs and revisit their outputs.",
+      empty: "No job history yet — completed work will be listed here.",
+    },
+  };
+
+  const { title, body, empty } = copy[viewId] || copy.jobs;
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${title}</h2>
+        <p>${body}</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">${empty}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderPlaceholderWorkspace(root, viewId) {
+  if (!root) return;
+
+  const label = viewId.replace(/-/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${label}</h2>
+        <p>Placeholder view — content coming soon.</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">Nothing to show yet.</p>
+      </div>
+    </section>
+  `;
 }
 
 function renderInspector() {
@@ -331,19 +555,22 @@ function bindShellControls() {
 function refreshShellRefs() {
   shellRoot = document.getElementById("ct-shell");
   mainContentEl = document.getElementById("ct-main");
-  navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
+  legacyWorkspace = document.getElementById("ct-legacy-content");
+  dynamicWorkspace = document.getElementById("ct-main-dynamic");
+  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
   inspectorActionButton = document.getElementById("ct-inspector-action");
 }
 
-function handleNavClick(event) {
-  const btn = event.currentTarget;
+function handleNavSelection(btn, event) {
   if (!btn || btn.classList.contains("hidden")) return;
 
   const target = btn.dataset.view;
   if (!target) return;
 
   if (btn.dataset.locked === "verify") {
-    event.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
     showVerificationOverlay();
     if (verificationBanner) {
       verificationBanner.classList.remove("hidden");
@@ -351,9 +578,11 @@ function handleNavClick(event) {
     return;
   }
 
-  event.preventDefault();
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
 
-  const href = btn.getAttribute("href") || VIEW_PATHS[target];
+  const href = btn.tagName === "A" ? btn.getAttribute("href") : btn.dataset.path || VIEW_PATHS[target];
   changeView(target, { path: href });
   if (target === "dashboard-view") {
     loadDashboardData(true, { silent: true });
@@ -361,10 +590,19 @@ function handleNavClick(event) {
 }
 
 function bindNavigationHandlers() {
-  navButtons.forEach(btn => {
-    if (!btn || btn.dataset.shellBound === "1") return;
-    btn.dataset.shellBound = "1";
-    btn.addEventListener("click", handleNavClick);
+  const navEl = document.getElementById("ct-sidebar-nav");
+  if (!navEl || navEl.dataset.shellBound === "1") {
+    return;
+  }
+
+  navEl.dataset.shellBound = "1";
+  navEl.addEventListener("click", event => {
+    const btn = event.target.closest(".ct-nav-item[data-view]");
+    if (!btn || !navEl.contains(btn)) {
+      return;
+    }
+
+    handleNavSelection(btn, event);
   });
 }
 
@@ -891,13 +1129,27 @@ function setActiveView(viewId) {
   viewSections.forEach(section => {
     section.classList.toggle("active", section.id === viewId);
   });
+  let parentToActivate = null;
   navButtons.forEach(btn => {
     const target = btn.dataset.view;
-    btn.classList.toggle("active", target === viewId);
+    const isActive = target === viewId;
+    btn.classList.toggle("active", isActive);
+    if (isActive && btn.dataset.parent) {
+      parentToActivate = btn.dataset.parent;
+    }
   });
+  if (parentToActivate) {
+    navButtons.forEach(btn => {
+      if (btn.dataset.view === parentToActivate) {
+        btn.classList.add("active");
+      }
+    });
+  }
   if (mainContentEl) {
     mainContentEl.dataset.activeView = viewId;
   }
+
+  renderWorkspace(viewId);
 }
 
 function changeView(viewId, options = {}) {
