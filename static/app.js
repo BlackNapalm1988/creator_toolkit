@@ -1,4 +1,774 @@
 // =========================
+// Application Shell Layout
+// =========================
+
+const VIEW_PATHS = {
+  "dashboard-view": "/dashboard",
+  "imagine-view": "/imagine",
+  "create-view": "/create",
+  "publish-view": "/publish",
+  "system-view": "/system",
+  library: "#library",
+  "library-scenes": "#library/scenes",
+  "library-video": "#library/video",
+  "library-audio": "#library/audio",
+  "library-other": "#library/other",
+  jobs: "#jobs",
+  "jobs-active": "#jobs/active",
+  "jobs-history": "#jobs/history",
+};
+
+const NAV_SECTIONS = [
+  {
+    label: "Dashboard",
+    id: "dashboard",
+    navId: "navDashboard",
+    view: "dashboard-view",
+    roles: "admin owner editor viewer",
+    icon: "🏠",
+  },
+  {
+    label: "Imagine",
+    id: "imagine",
+    navId: "navImagine",
+    view: "imagine-view",
+    roles: "admin owner editor",
+    icon: "🎨",
+  },
+  {
+    label: "Create",
+    id: "create",
+    navId: "navCreate",
+    view: "create-view",
+    roles: "admin owner editor",
+    icon: "✨",
+    children: [
+      { label: "New Project", id: "create-new" },
+      { label: "Image from Text", id: "create-image-text" },
+      { label: "Scene from Text", id: "create-scene-text" },
+      { label: "Video from Text", id: "create-video-text" },
+    ],
+  },
+  {
+    label: "Library",
+    id: "library",
+    view: "library",
+    icon: "📚",
+    children: [
+      { label: "Scenes", id: "library-scenes" },
+      { label: "Video", id: "library-video" },
+      { label: "Audio", id: "library-audio" },
+      { label: "Other", id: "library-other" },
+    ],
+  },
+  {
+    label: "Publish",
+    id: "publish",
+    navId: "navPublish",
+    view: "publish-view",
+    roles: "admin owner",
+    icon: "🚀",
+    children: [
+      { label: "YouTube", id: "publish-youtube" },
+      { label: "Facebook", id: "publish-facebook" },
+      { label: "Instagram", id: "publish-instagram" },
+      { label: "TikTok", id: "publish-tiktok" },
+    ],
+  },
+  {
+    label: "Jobs",
+    id: "jobs",
+    view: "jobs",
+    icon: "📋",
+    children: [
+      { label: "Active Jobs", id: "jobs-active" },
+      { label: "History", id: "jobs-history" },
+    ],
+  },
+  {
+    label: "System",
+    id: "system",
+    navId: "navSystem",
+    view: "system-view",
+    roles: "admin",
+    icon: "⚙️",
+  },
+];
+
+const INSPECTOR_CARDS = [
+  {
+    title: "Music created and added to assets",
+    description:
+      "Latest audio generations appear in your Library. Drag them into new edits or share with collaborators.",
+  },
+  {
+    title: "Scene created and added to assets",
+    description:
+      "Keep iterating on your scenes. Refresh prompts, remix scripts, and stage shots before packaging.",
+  },
+  {
+    title: "What would you like to do?",
+    description: "Prompt Imagine with goals or paste scripts to generate beat boards, voiceover, and music cues.",
+  },
+];
+
+const LEGACY_VIEWS = new Set([
+  "dashboard-view",
+  "imagine-view",
+  "create-view",
+  "publish-view",
+  "system-view",
+]);
+
+let emojiSupportChecked = false;
+
+function supportsEmojiRendering() {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    if (!canvas.getContext) {
+      return false;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context || typeof context.fillText !== "function") {
+      return false;
+    }
+
+    const emoji = "😀";
+    const fallback = "■";
+    canvas.width = canvas.height = 18;
+    context.textBaseline = "top";
+    context.font = "16px sans-serif";
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillText(emoji, 0, 0);
+    const emojiData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    for (let i = 0; i < emojiData.length; i += 4) {
+      const alpha = emojiData[i + 3];
+      if (!alpha) {
+        continue;
+      }
+
+      const r = emojiData[i];
+      const g = emojiData[i + 1];
+      const b = emojiData[i + 2];
+      if (r !== g || g !== b) {
+        return true;
+      }
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillText(fallback, 0, 0);
+    const fallbackData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    for (let i = 0; i < emojiData.length; i += 4) {
+      if (
+        emojiData[i] !== fallbackData[i] ||
+        emojiData[i + 1] !== fallbackData[i + 1] ||
+        emojiData[i + 2] !== fallbackData[i + 2] ||
+        emojiData[i + 3] !== fallbackData[i + 3]
+      ) {
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn("[ui-shell] emoji detection failed", err);
+  }
+
+  return false;
+}
+
+function ensureEmojiSupportClass() {
+  if (emojiSupportChecked || typeof document === "undefined") {
+    return;
+  }
+
+  emojiSupportChecked = true;
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+
+  const hasEmoji = supportsEmojiRendering();
+  root.classList.add(hasEmoji ? "ct-has-emoji" : "ct-no-emoji");
+  if (!hasEmoji) {
+    console.warn("[ui-shell] emoji rendering unavailable; using letter fallback icons");
+  }
+}
+
+let shellRoot = null;
+let mainContentEl = null;
+let navButtons = [];
+let inspectorActionButton = null;
+let legacyWorkspace = null;
+let dynamicWorkspace = null;
+let initialActiveView = "dashboard-view";
+const SHELL_MAX_BOOTSTRAP_ATTEMPTS = 10;
+let shellBootstrapAttempts = 0;
+
+function renderShell(activeViewOverride) {
+  console.log("[ui-shell] renderShell invoked");
+
+  const root = document.getElementById("app");
+  if (!root) {
+    console.warn("[ui-shell] #app root not found; aborting shell mount");
+    return false;
+  }
+
+  console.log("[ui-shell] root found");
+
+  const legacyContent = document.getElementById("legacyContent");
+  const activeView = activeViewOverride || root.dataset.activeView || "dashboard-view";
+
+  const shell = document.createElement("div");
+  shell.id = "ct-shell";
+  shell.className = "ct-shell ct-shell--sidebar-open ct-shell--inspector-open";
+  shell.innerHTML = `
+    <aside id="ct-sidebar" class="ct-sidebar ct-sidebar--open">
+      <div class="ct-sidebar__inner"></div>
+    </aside>
+    <main id="ct-main" class="ct-main" data-active-view="${activeView}"></main>
+    <aside id="ct-inspector" class="ct-inspector ct-inspector--open">
+      <div class="ct-inspector__inner"></div>
+    </aside>
+  `;
+
+  root.innerHTML = "";
+  root.appendChild(shell);
+
+  console.log("[ui-shell] shell container injected");
+
+  renderSidebar(activeView);
+  renderMainWorkspace(legacyContent, activeView);
+  renderInspector();
+  bindShellControls();
+  refreshShellRefs();
+  bindNavigationHandlers();
+  bindInspectorActions();
+
+  return true;
+}
+
+function renderSidebarSection(section, activeView) {
+  const sectionEl = document.createElement("section");
+  sectionEl.className = "ct-nav-section";
+
+  const sectionView = section.view || section.id;
+  const hasChildren = Array.isArray(section.children) && section.children.length > 0;
+  const childActive = hasChildren
+    ? section.children.some(child => (child.view || child.id) === activeView)
+    : false;
+
+  if (sectionView) {
+    const link = document.createElement("a");
+    link.className = "ct-nav-link ct-nav-item nav-item";
+    link.href = VIEW_PATHS[sectionView] || "#";
+    link.dataset.view = sectionView;
+    if (section.roles) {
+      link.dataset.roles = section.roles;
+    }
+    if (section.navId) {
+      link.id = section.navId;
+    }
+
+    if (sectionView === activeView || childActive) {
+      link.classList.add("active");
+    }
+
+    const iconText = section.label.charAt(0).toUpperCase();
+    const iconEmoji = section.icon || null;
+    const iconClasses = ["ct-nav-link__icon"];
+    if (!iconEmoji) {
+      iconClasses.push("ct-nav-link__icon--fallback");
+    }
+
+    link.innerHTML = `
+      <span class="${iconClasses.join(" ")}" aria-hidden="true">
+        ${iconEmoji ? `<span class="ct-nav-link__icon-emoji" role="presentation">${iconEmoji}</span>` : ""}
+        <span class="ct-nav-link__icon-letter" role="presentation">${iconText}</span>
+      </span>
+      <span class="ct-nav-link__label">${section.label}</span>
+    `;
+    sectionEl.appendChild(link);
+  } else {
+    const heading = document.createElement("h3");
+    heading.className = "ct-nav-heading";
+    heading.textContent = section.label;
+    sectionEl.appendChild(heading);
+  }
+
+  if (hasChildren) {
+    const list = document.createElement("ul");
+    list.className = "ct-nav-children";
+
+    section.children.forEach(child => {
+      const childView = child.view || child.id;
+      if (!childView) {
+        return;
+      }
+
+      const item = document.createElement("li");
+      item.className = "ct-nav-child";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ct-nav-item ct-nav-child__button";
+      button.dataset.view = childView;
+      if (sectionView) {
+        button.dataset.parent = sectionView;
+      }
+      if (child.roles) {
+        button.dataset.roles = child.roles;
+      } else if (section.roles) {
+        button.dataset.roles = section.roles;
+      }
+      if (childView === activeView) {
+        button.classList.add("active");
+      }
+      button.textContent = child.label;
+      item.appendChild(button);
+      list.appendChild(item);
+    });
+
+    sectionEl.appendChild(list);
+  }
+
+  return sectionEl;
+}
+
+function renderSidebar(activeView) {
+  const sidebar = document.getElementById("ct-sidebar");
+  if (!sidebar) {
+    console.warn("[ui-shell] sidebar mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering sidebar");
+
+  const inner = document.createElement("div");
+  inner.className = "ct-sidebar__inner";
+  inner.innerHTML = `
+    <div class="ct-sidebar__header">
+      <span class="ct-sidebar__title">Workspace</span>
+      <button id="ct-sidebar-toggle" class="ct-sidebar__toggle" aria-label="Collapse navigation" aria-expanded="true">
+        <span aria-hidden="true">‹</span>
+      </button>
+    </div>
+    <nav id="ct-sidebar-nav" class="ct-sidebar__nav"></nav>
+  `;
+
+  sidebar.innerHTML = "";
+  sidebar.appendChild(inner);
+  sidebar.setAttribute("data-expanded", "true");
+
+  const navEl = inner.querySelector("#ct-sidebar-nav");
+  if (!navEl) return;
+
+  NAV_SECTIONS.forEach(section => {
+    const sectionEl = renderSidebarSection(section, activeView);
+    if (sectionEl) {
+      navEl.appendChild(sectionEl);
+    }
+  });
+
+  console.log("[ui-shell] sidebar rendered");
+}
+
+function renderMainWorkspace(legacyContent, activeView) {
+  const main = document.getElementById("ct-main");
+  if (!main) {
+    console.warn("[ui-shell] main workspace mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering main workspace");
+
+  let workspace = document.getElementById("ct-main-workspace");
+  if (!workspace) {
+    workspace = document.createElement("div");
+    workspace.id = "ct-main-workspace";
+    workspace.className = "ct-main-workspace";
+    main.appendChild(workspace);
+  }
+
+  if (legacyContent) {
+    legacyContent.classList.remove("legacy-content");
+    legacyContent.id = "ct-legacy-content";
+    legacyContent.classList.add("ct-legacy-content");
+    if (!workspace.contains(legacyContent)) {
+      workspace.appendChild(legacyContent);
+    }
+  }
+
+  let dynamic = document.getElementById("ct-main-dynamic");
+  if (!dynamic) {
+    dynamic = document.createElement("div");
+    dynamic.id = "ct-main-dynamic";
+    dynamic.className = "ct-main-dynamic hidden";
+    workspace.appendChild(dynamic);
+  }
+
+  legacyWorkspace = document.getElementById("ct-legacy-content");
+  dynamicWorkspace = dynamic;
+
+  // Future steps (Library, Storyboard, Video Editor) will mount new views inside this workspace.
+  main.dataset.activeView = activeView;
+  console.log("[ui-shell] main workspace rendered");
+}
+
+function shouldUseLegacyWorkspace(viewId) {
+  return LEGACY_VIEWS.has(viewId);
+}
+
+function renderWorkspace(viewId) {
+  if (!mainContentEl) return;
+
+  const workspace = document.getElementById("ct-main-workspace");
+  if (!workspace) return;
+
+  const normalized = (viewId || "").toLowerCase();
+  const useLegacy = shouldUseLegacyWorkspace(normalized);
+
+  const dynamic = dynamicWorkspace || document.getElementById("ct-main-dynamic");
+  const legacy = legacyWorkspace || document.getElementById("ct-legacy-content");
+
+  if (legacy) {
+    legacy.classList.toggle("hidden", !useLegacy);
+  }
+
+  if (!dynamic) {
+    return;
+  }
+
+  dynamic.innerHTML = "";
+  dynamic.classList.toggle("hidden", useLegacy);
+
+  if (useLegacy) {
+    console.log(`[ui-shell] workspace using legacy content for ${normalized || "default"}`);
+    return;
+  }
+
+  console.log(`[ui-shell] rendering workspace for ${normalized}`);
+
+  switch (normalized) {
+    case "library":
+    case "library-scenes":
+    case "library-video":
+    case "library-audio":
+    case "library-other":
+      renderLibraryWorkspace(dynamic, normalized);
+      break;
+    case "jobs":
+    case "jobs-active":
+    case "jobs-history":
+      renderJobsWorkspace(dynamic, normalized);
+      break;
+    default:
+      renderPlaceholderWorkspace(dynamic, normalized);
+      break;
+  }
+}
+
+function renderLibraryWorkspace(root, viewId) {
+  if (!root) return;
+
+  const copy = {
+    library: {
+      title: "Library",
+      body: "Coming soon — manage your generated assets from a single dashboard.",
+      empty: "No assets yet — generate content in Imagine to populate your Library.",
+    },
+    "library-scenes": {
+      title: "Library · Scenes",
+      body: "Review and organize storyboard scenes created across your projects.",
+      empty: "No scenes yet — generate new scenes to see them here.",
+    },
+    "library-video": {
+      title: "Library · Video",
+      body: "Final and in-progress video renders will appear in this list.",
+      empty: "No videos yet — export from Imagine or upload your own assets.",
+    },
+    "library-audio": {
+      title: "Library · Audio",
+      body: "Voiceover, music, and SFX assets will live here for quick reuse.",
+      empty: "No audio yet — generate music or import stems to build your collection.",
+    },
+    "library-other": {
+      title: "Library · Other",
+      body: "Additional creative assets (images, docs) will surface here soon.",
+      empty: "No miscellaneous assets yet — drop uploads here to keep them handy.",
+    },
+  };
+
+  const { title, body, empty } = copy[viewId] || copy.library;
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${title}</h2>
+        <p>${body}</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">${empty}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderJobsWorkspace(root, viewId) {
+  if (!root) return;
+
+  const copy = {
+    jobs: {
+      title: "Jobs",
+      body: "Monitor active generation and packaging work in one place.",
+      empty: "No jobs to show — kick off an Imagine request to populate this feed.",
+    },
+    "jobs-active": {
+      title: "Jobs · Active",
+      body: "Track progress for in-flight Imagine, QA, and packaging jobs.",
+      empty: "No active jobs — start a new generation to see it here.",
+    },
+    "jobs-history": {
+      title: "Jobs · History",
+      body: "Review recently completed jobs and revisit their outputs.",
+      empty: "No job history yet — completed work will be listed here.",
+    },
+  };
+
+  const { title, body, empty } = copy[viewId] || copy.jobs;
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${title}</h2>
+        <p>${body}</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">${empty}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderPlaceholderWorkspace(root, viewId) {
+  if (!root) return;
+
+  const label = viewId.replace(/-/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+  root.innerHTML = `
+    <section class="ct-workspace-section">
+      <header class="ct-workspace-header">
+        <h2>${label}</h2>
+        <p>Placeholder view — content coming soon.</p>
+      </header>
+      <div class="ct-workspace-body">
+        <p class="ct-empty">Nothing to show yet.</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderInspector() {
+  const inspector = document.getElementById("ct-inspector");
+  if (!inspector) {
+    console.warn("[ui-shell] inspector mount point missing");
+    return;
+  }
+
+  console.log("[ui-shell] rendering inspector");
+
+  const inner = inspector.querySelector(".ct-inspector__inner");
+  if (!inner) return;
+
+  inner.innerHTML = `
+    <button id="ct-inspector-toggle" class="ct-inspector__toggle" aria-label="Collapse Imagine panel" aria-expanded="true">
+      <span aria-hidden="true">›</span>
+    </button>
+    <header class="ct-inspector__header">
+      <h2>IMAGINE</h2>
+      <p class="ct-inspector__subtitle">Prompt tools & creative memory</p>
+    </header>
+    <div id="ct-inspector-body" class="ct-inspector__body"></div>
+    <div class="ct-inspector__footer">
+      <button id="ct-inspector-action" class="ghost-btn full">Create a new video</button>
+    </div>
+  `;
+
+  const body = inner.querySelector("#ct-inspector-body");
+  if (!body) return;
+
+  // Placeholder Imagine activity cards; Step 2+ will replace these with live data.
+  INSPECTOR_CARDS.forEach(card => {
+    const cardEl = document.createElement("article");
+    cardEl.className = "ct-inspector__card";
+    const title = document.createElement("h3");
+    title.textContent = card.title;
+    const description = document.createElement("p");
+    description.textContent = card.description;
+    cardEl.appendChild(title);
+    cardEl.appendChild(description);
+    body.appendChild(cardEl);
+  });
+
+  console.log("[ui-shell] inspector rendered");
+}
+
+function bindShellControls() {
+  const shell = document.getElementById("ct-shell");
+  const sidebar = document.getElementById("ct-sidebar");
+  const inspector = document.getElementById("ct-inspector");
+  if (!shell || !sidebar || !inspector) {
+    console.warn("[ui-shell] shell controls missing required elements");
+    return;
+  }
+
+  const sidebarToggle = document.getElementById("ct-sidebar-toggle");
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener("click", () => {
+      const isCollapsed = sidebar.classList.toggle("ct-sidebar--collapsed");
+      sidebar.classList.toggle("ct-sidebar--open", !isCollapsed);
+      shell.classList.toggle("ct-shell--sidebar-collapsed", isCollapsed);
+      sidebarToggle.setAttribute("aria-expanded", String(!isCollapsed));
+      sidebarToggle.innerHTML = `<span aria-hidden="true">${isCollapsed ? "›" : "‹"}</span>`;
+      sidebar.setAttribute("data-expanded", String(!isCollapsed));
+    });
+  }
+
+  const inspectorToggle = document.getElementById("ct-inspector-toggle");
+  if (inspectorToggle) {
+    inspectorToggle.addEventListener("click", () => {
+      const isClosed = inspector.classList.toggle("ct-inspector--closed");
+      inspector.classList.toggle("ct-inspector--open", !isClosed);
+      shell.classList.toggle("ct-shell--inspector-closed", isClosed);
+      inspectorToggle.setAttribute("aria-expanded", String(!isClosed));
+      inspectorToggle.innerHTML = `<span aria-hidden="true">${isClosed ? "‹" : "›"}</span>`;
+    });
+  }
+
+  console.log("[ui-shell] shell controls bound");
+}
+
+function refreshShellRefs() {
+  shellRoot = document.getElementById("ct-shell");
+  mainContentEl = document.getElementById("ct-main");
+  legacyWorkspace = document.getElementById("ct-legacy-content");
+  dynamicWorkspace = document.getElementById("ct-main-dynamic");
+  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
+  inspectorActionButton = document.getElementById("ct-inspector-action");
+}
+
+function handleNavSelection(btn, event) {
+  if (!btn || btn.classList.contains("hidden")) return;
+
+  const target = btn.dataset.view;
+  if (!target) return;
+
+  if (btn.dataset.locked === "verify") {
+    if (event) {
+      event.preventDefault();
+    }
+    showVerificationOverlay();
+    if (verificationBanner) {
+      verificationBanner.classList.remove("hidden");
+    }
+    return;
+  }
+
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+
+  const href = btn.tagName === "A" ? btn.getAttribute("href") : btn.dataset.path || VIEW_PATHS[target];
+  changeView(target, { path: href });
+  if (target === "dashboard-view") {
+    loadDashboardData(true, { silent: true });
+  }
+}
+
+function bindNavigationHandlers() {
+  const navEl = document.getElementById("ct-sidebar-nav");
+  if (!navEl || navEl.dataset.shellBound === "1") {
+    return;
+  }
+
+  navEl.dataset.shellBound = "1";
+  navEl.addEventListener("click", event => {
+    const btn = event.target.closest(".ct-nav-item[data-view]");
+    if (!btn || !navEl.contains(btn)) {
+      return;
+    }
+
+    handleNavSelection(btn, event);
+  });
+}
+
+function bindInspectorActions() {
+  if (!inspectorActionButton || inspectorActionButton.dataset.shellBound === "1") {
+    return;
+  }
+
+  inspectorActionButton.dataset.shellBound = "1";
+  inspectorActionButton.addEventListener("click", () => {
+    changeView("create-view", { path: VIEW_PATHS["create-view"] });
+  });
+}
+
+function initializeShell() {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeShell, { once: true });
+    return;
+  }
+
+  console.log("[ui-shell] initializing shell");
+
+  ensureEmojiSupportClass();
+
+  const root = document.getElementById("app");
+  initialActiveView = (root && root.dataset.active_view) || (root && root.dataset.activeView) || initialActiveView;
+
+  const mounted = renderShell(initialActiveView);
+  if (!mounted) {
+    shellBootstrapAttempts += 1;
+    if (shellBootstrapAttempts >= SHELL_MAX_BOOTSTRAP_ATTEMPTS) {
+      console.error(
+        `[ui-shell] shell mount failed after ${shellBootstrapAttempts} attempts; giving up`
+      );
+      return;
+    }
+
+    console.warn(
+      `[ui-shell] renderShell failed (attempt ${shellBootstrapAttempts}); retrying on next frame`
+    );
+    requestAnimationFrame(initializeShell);
+    return;
+  }
+
+  shellBootstrapAttempts = 0;
+
+  const mountedView = (mainContentEl && mainContentEl.dataset.activeView) || initialActiveView;
+  initialActiveView = mountedView;
+  changeView(mountedView, {
+    path: window.location.pathname,
+    replace: true,
+  });
+
+  if (typeof applyUserState === "function") {
+    try {
+      applyUserState();
+    } catch (err) {
+      console.warn("[ui-shell] applyUserState failed during shell init", err);
+    }
+  }
+
+  console.log("[ui-shell] shell initialized");
+}
+
+initializeShell();
+
+// =========================
 // Authentication / UI state
 // =========================
 const STORAGE_TOKEN_KEY = "jwtToken";
@@ -85,24 +855,8 @@ const activeJobsList = document.getElementById("activeJobsList");
 const refreshJobsButton = document.getElementById("refreshJobsButton");
 const dashboardRoleBadge = document.getElementById("dashboardRoleBadge");
 
-const navButtons = Array.from(document.querySelectorAll(".nav-item[data-view]"));
-const navDashboardButton = document.getElementById("navDashboard");
-const navImagineButton = document.getElementById("navImagine");
-const navCreateButton = document.getElementById("navCreate");
-const navPublishButton = document.getElementById("navPublish");
-const navSystemButton = document.getElementById("navSystem");
 const VERIFY_NAV_HINT = "Verify your email to access this area.";
 const viewSections = Array.from(document.querySelectorAll(".view"));
-const mainContentEl = document.querySelector(".main-content");
-const initialActiveView =
-  (mainContentEl && mainContentEl.dataset.activeView) || "dashboard-view";
-const VIEW_PATHS = {
-  "dashboard-view": "/dashboard",
-  "imagine-view": "/imagine",
-  "create-view": "/create",
-  "publish-view": "/publish",
-  "system-view": "/system",
-};
 
 const generateControls = [
   document.getElementById("imagineSendBtn"),
@@ -408,6 +1162,8 @@ function renderDashboardData(payload) {
       });
     }
   }
+
+  console.log("[ui-shell] shell controls bound");
 }
 
 async function loadDashboardData(force = false, options = {}) {
@@ -474,13 +1230,27 @@ function setActiveView(viewId) {
   viewSections.forEach(section => {
     section.classList.toggle("active", section.id === viewId);
   });
+  let parentToActivate = null;
   navButtons.forEach(btn => {
     const target = btn.dataset.view;
-    btn.classList.toggle("active", target === viewId);
+    const isActive = target === viewId;
+    btn.classList.toggle("active", isActive);
+    if (isActive && btn.dataset.parent) {
+      parentToActivate = btn.dataset.parent;
+    }
   });
+  if (parentToActivate) {
+    navButtons.forEach(btn => {
+      if (btn.dataset.view === parentToActivate) {
+        btn.classList.add("active");
+      }
+    });
+  }
   if (mainContentEl) {
     mainContentEl.dataset.activeView = viewId;
   }
+
+  renderWorkspace(viewId);
 }
 
 function changeView(viewId, options = {}) {
@@ -1462,33 +2232,6 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-navButtons.forEach(btn => {
-  btn.addEventListener("click", event => {
-    if (btn.classList.contains("hidden")) return;
-    const target = btn.dataset.view;
-    if (!target) return;
-
-    if (btn.dataset.locked === "verify") {
-      if (event) event.preventDefault();
-      showVerificationOverlay();
-      if (verificationBanner) {
-        verificationBanner.classList.remove("hidden");
-      }
-      return;
-    }
-
-    if (event) {
-      event.preventDefault();
-    }
-
-    const href = btn.getAttribute("href") || VIEW_PATHS[target];
-    changeView(target, { path: href });
-    if (target === "dashboard-view") {
-      loadDashboardData(true, { silent: true });
-    }
-  });
-});
-
 window.addEventListener("popstate", event => {
   const state = event.state || {};
   const targetView = state.viewId || initialActiveView;
@@ -1503,11 +2246,6 @@ if (refreshJobsButton) {
     loadDashboardData(true);
   });
 }
-
-changeView(initialActiveView, {
-  path: window.location.pathname,
-  replace: true,
-});
 
 // =========================
 // IMAGINE TAB
