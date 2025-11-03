@@ -121,6 +121,10 @@ const LEGACY_VIEWS = new Set([
 ]);
 
 let inspectorChatHistory = [];
+let chatMessageCounter = 0;
+
+const CHAT_VISIBLE_BATCH = 10;
+const CHAT_LATEST_THRESHOLD = 8;
 
 let emojiSupportChecked = false;
 
@@ -256,6 +260,91 @@ function saveInspectorChatHistory(history) {
   }
 }
 
+function generateChatMessageId() {
+  chatMessageCounter += 1;
+  return `chatmsg_${Date.now()}_${chatMessageCounter}`;
+}
+
+function normalizeChatHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history.map(message => {
+    const normalized = { ...message };
+    normalized.role = normalized.role === "user" ? "user" : "assistant";
+    if (typeof normalized.content !== "string") {
+      normalized.content = normalized.content == null ? "" : String(normalized.content);
+    }
+    if (!normalized.id) {
+      normalized.id = generateChatMessageId();
+    }
+    return normalized;
+  });
+}
+
+function createChatMessage(role, content, extra = {}) {
+  return {
+    id: generateChatMessageId(),
+    role: role === "user" ? "user" : "assistant",
+    content: typeof content === "string" ? content : String(content || ""),
+    ...extra,
+  };
+}
+
+function isInspectorChatAtLatest(chatEl) {
+  if (!chatEl) {
+    return true;
+  }
+
+  const remaining = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+  return remaining <= CHAT_LATEST_THRESHOLD;
+}
+
+function buildChatMessageElement(message) {
+  const role = message.role === "user" ? "user" : "assistant";
+  const item = document.createElement("div");
+  item.className = `ct-chat-msg ${role === "user" ? "is-user" : "is-assistant"}`;
+  item.dataset.msgId = message.id || "";
+
+  const meta = document.createElement("div");
+  meta.className = "ct-chat-meta";
+  meta.textContent = role === "user" ? "You" : "Assistant";
+  item.appendChild(meta);
+
+  const body = document.createElement("div");
+  body.className = "ct-chat-body";
+  body.textContent = message.content || "";
+  item.appendChild(body);
+
+  if (message.asset) {
+    const assetRow = document.createElement("div");
+    assetRow.className = "ct-chat-asset";
+    const parts = [];
+    if (message.asset.project_id) {
+      parts.push(`Project ${message.asset.project_id}`);
+    }
+    if (message.asset.asset_type) {
+      parts.push(String(message.asset.asset_type).toUpperCase());
+    }
+    if (message.asset.file_path) {
+      parts.push(message.asset.file_path);
+    }
+    assetRow.textContent = parts.length ? parts.join(" • ") : "Asset saved";
+    item.appendChild(assetRow);
+  }
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "ct-chat-save";
+  saveBtn.title = "Save to Library";
+  saveBtn.setAttribute("aria-label", "Save to Library");
+  saveBtn.textContent = "💾";
+  item.appendChild(saveBtn);
+
+  return item;
+}
+
 function focusImagineInput() {
   const input = document.getElementById("ct-inspector-input");
   if (input) {
@@ -284,6 +373,9 @@ function toggleImagineInspector(open = null) {
 
   if (shouldOpen) {
     focusImagineInput();
+    if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
+      window.updateLatestUI();
+    }
   }
 }
 
@@ -647,44 +739,214 @@ function renderPlaceholderWorkspace(root, viewId) {
   `;
 }
 
-function renderInspectorChat(container, history) {
+function renderInspectorChat(container, history, options = {}) {
   if (!container) {
     return;
   }
 
+  const { scrollToLatest = true } = options;
+  const total = history.length;
+  const start = Math.max(0, total - CHAT_VISIBLE_BATCH);
+  const previousHeight = container.scrollHeight;
+  const previousTop = container.scrollTop;
+
+  container.dataset.offset = String(start);
   container.innerHTML = "";
 
-  history.forEach(message => {
-    const item = document.createElement("div");
-    const role = message.role === "assistant" ? "assistant" : "user";
-    item.className = `ct-inspector-chat__message ct-inspector-chat__message--${role}`;
+  const fragment = document.createDocumentFragment();
+  for (let i = start; i < total; i += 1) {
+    fragment.appendChild(buildChatMessageElement(history[i]));
+  }
 
-    const text = document.createElement("p");
-    text.className = "ct-inspector-chat__text";
-    text.textContent = message.content || "";
-    item.appendChild(text);
+  container.appendChild(fragment);
 
-    if (message.asset) {
-      const asset = document.createElement("div");
-      asset.className = "ct-inspector-chat__asset";
-      const parts = [];
-      if (message.asset.project_id) {
-        parts.push(`Project ${message.asset.project_id}`);
-      }
-      if (message.asset.asset_type) {
-        parts.push((message.asset.asset_type || "").toString().toUpperCase());
-      }
-      if (message.asset.file_path) {
-        parts.push(message.asset.file_path);
-      }
-      asset.textContent = parts.length ? parts.join(" • ") : "Asset saved";
-      item.appendChild(asset);
-    }
+  if (scrollToLatest) {
+    container.scrollTop = container.scrollHeight;
+  } else {
+    const distanceFromBottom = previousHeight - previousTop;
+    container.scrollTop = Math.max(0, container.scrollHeight - distanceFromBottom);
+  }
 
-    container.appendChild(item);
+  if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
+    window.updateLatestUI();
+  }
+}
+
+function attachInspectorChatScroll(container) {
+  if (!container || container.dataset.scrollVirtualized === "1") {
+    return;
+  }
+
+  container.dataset.scrollVirtualized = "1";
+
+  container.addEventListener(
+    "scroll",
+    () => {
+      if (container.scrollTop <= 2) {
+        const messages = inspectorChatHistory;
+        const currentOffset = parseInt(container.dataset.offset || "0", 10);
+        if (currentOffset > 0) {
+          const nextOffset = Math.max(0, currentOffset - CHAT_VISIBLE_BATCH);
+          const fragment = document.createDocumentFragment();
+          for (let i = nextOffset; i < currentOffset; i += 1) {
+            fragment.appendChild(buildChatMessageElement(messages[i]));
+          }
+
+          const previousHeight = container.scrollHeight;
+          const previousTop = container.scrollTop;
+          container.prepend(fragment);
+          container.dataset.offset = String(nextOffset);
+          const newHeight = container.scrollHeight;
+          container.scrollTop = previousTop + (newHeight - previousHeight);
+        }
+      }
+
+      if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
+        window.updateLatestUI();
+      }
+    },
+    { passive: true }
+  );
+}
+
+function initInspectorScrollAwareness() {
+  const chat = document.getElementById("ct-inspector-chat");
+  if (!chat || chat.dataset.scrollAware === "1") {
+    return;
+  }
+
+  chat.dataset.scrollAware = "1";
+
+  let chatHover = false;
+
+  chat.addEventListener("mouseenter", () => {
+    chatHover = true;
   });
 
-  container.scrollTop = container.scrollHeight;
+  chat.addEventListener("mouseleave", () => {
+    chatHover = false;
+  });
+
+  chat.addEventListener("focusin", () => {
+    chatHover = true;
+  });
+
+  chat.addEventListener("focusout", () => {
+    chatHover = false;
+  });
+
+  chat.addEventListener(
+    "wheel",
+    event => {
+      if (!chatHover) {
+        return;
+      }
+
+      const atTop = chat.scrollTop <= 0 && event.deltaY < 0;
+      const atBottom = Math.ceil(chat.scrollTop + chat.clientHeight) >= chat.scrollHeight && event.deltaY > 0;
+      if (!(atTop || atBottom)) {
+        event.stopPropagation();
+      }
+    },
+    { passive: true }
+  );
+}
+
+function initChatLatestControls() {
+  const chat = document.getElementById("ct-inspector-chat");
+  const jump = document.getElementById("ct-chat-jump-latest");
+  const overlay = document.getElementById("ct-chat-history-overlay");
+
+  if (!chat || !jump || !overlay) {
+    return;
+  }
+
+  if (chat.dataset.latestBound === "1") {
+    if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
+      window.updateLatestUI();
+    }
+    return;
+  }
+
+  chat.dataset.latestBound = "1";
+
+  const computeAtLatest = () => isInspectorChatAtLatest(chat);
+
+  window.updateLatestUI = function updateLatestUI() {
+    const atLatest = computeAtLatest();
+    jump.hidden = atLatest;
+    overlay.hidden = atLatest;
+  };
+
+  chat.addEventListener(
+    "scroll",
+    () => {
+      window.updateLatestUI();
+    },
+    { passive: true }
+  );
+
+  jump.addEventListener("click", () => {
+    chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+  });
+
+  window.updateLatestUI();
+}
+
+function wireMessageActions(container) {
+  if (!container || container.dataset.actionsBound === "1") {
+    return;
+  }
+
+  container.dataset.actionsBound = "1";
+
+  container.addEventListener("click", async event => {
+    const btn = event.target.closest(".ct-chat-save");
+    if (!btn) {
+      return;
+    }
+
+    const messageEl = btn.closest(".ct-chat-msg");
+    if (!messageEl) {
+      return;
+    }
+
+    const messageId = messageEl.dataset.msgId;
+    const message = inspectorChatHistory.find(entry => String(entry.id) === String(messageId));
+    const content = message?.content || "";
+
+    const asset = {
+      filename: `chatmsg_${Date.now()}.txt`,
+      content,
+      type: "text",
+      project_id: getActiveProjectId() || null,
+    };
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+
+    try {
+      const res = await fetch("/api/assets/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(asset),
+      });
+
+      if (!res.ok) {
+        throw new Error(`save failed with status ${res.status}`);
+      }
+
+      btn.textContent = "✓ Saved";
+    } catch (err) {
+      console.warn("[ui-shell] failed to save chat message", err);
+      btn.textContent = "✕";
+    } finally {
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }, 1200);
+    }
+  });
 }
 
 async function handleInspectorChatSubmit(text, history, container) {
@@ -693,8 +955,10 @@ async function handleInspectorChatSubmit(text, history, container) {
     return history;
   }
 
-  const newHistory = [...history, { role: "user", content: trimmed }];
-  renderInspectorChat(container, newHistory);
+  const shouldStickToLatest = isInspectorChatAtLatest(container);
+  const userMessage = createChatMessage("user", trimmed);
+  const newHistory = [...history, userMessage];
+  renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
   saveInspectorChatHistory(newHistory);
 
   try {
@@ -712,13 +976,14 @@ async function handleInspectorChatSubmit(text, history, container) {
     }
 
     const data = await res.json();
-    const assistantMsg = {
-      role: "assistant",
-      content: data.reply || "(no response)",
-    };
+    const assistantExtras = {};
+    if (data.asset) {
+      assistantExtras.asset = data.asset;
+    }
+
+    const assistantMsg = createChatMessage("assistant", data.reply || "(no response)", assistantExtras);
 
     if (data.asset) {
-      assistantMsg.asset = data.asset;
       if (typeof saveImagineAsset === "function") {
         saveImagineAsset({
           ...data.asset,
@@ -728,13 +993,13 @@ async function handleInspectorChatSubmit(text, history, container) {
     }
 
     newHistory.push(assistantMsg);
-    renderInspectorChat(container, newHistory);
+    renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
     saveInspectorChatHistory(newHistory);
     return newHistory;
   } catch (err) {
     console.warn("[ui-shell] imagine chat failed", err);
-    newHistory.push({ role: "assistant", content: "Error contacting imagine service." });
-    renderInspectorChat(container, newHistory);
+    newHistory.push(createChatMessage("assistant", "Error contacting imagine service."));
+    renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
     saveInspectorChatHistory(newHistory);
     return newHistory;
   }
@@ -755,8 +1020,15 @@ function initInspectorChat() {
   }
 
   chatContainer.dataset.chatBound = "1";
-  inspectorChatHistory = loadInspectorChatHistory();
+  inspectorChatHistory = normalizeChatHistory(loadInspectorChatHistory());
+  if (inspectorChatHistory.length) {
+    saveInspectorChatHistory(inspectorChatHistory);
+  }
   renderInspectorChat(chatContainer, inspectorChatHistory);
+  attachInspectorChatScroll(chatContainer);
+  initInspectorScrollAwareness();
+  wireMessageActions(chatContainer);
+  initChatLatestControls();
 
   const submit = async () => {
     const value = input.value;
@@ -811,12 +1083,16 @@ function renderInspector() {
       <h2>IMAGINE</h2>
       <button id="ct-inspector-close" class="ct-inspector-close" aria-label="Close imagine chat">×</button>
     </div>
-    <div id="ct-inspector-chat" class="ct-inspector-chat"></div>
-    <div class="ct-inspector-input">
-      <textarea id="ct-inspector-input" placeholder="Describe the vibe..."></textarea>
-      <button id="ct-inspector-send" class="ct-inspector-send">Send</button>
-    </div>
+    <div id="ct-inspector-chat" class="ct-inspector-chat" data-offset="0"></div>
     <div class="ct-inspector-cards"></div>
+    <div class="ct-inspector-input-wrap">
+      <button id="ct-chat-jump-latest" class="ct-chat-jump-latest" hidden>Jump to latest ↓</button>
+      <div class="ct-inspector-input">
+        <textarea id="ct-inspector-input" placeholder="Describe the vibe..."></textarea>
+        <button id="ct-inspector-send" class="ct-inspector-send">Send</button>
+      </div>
+      <div id="ct-chat-history-overlay" class="ct-chat-history-overlay" hidden></div>
+    </div>
   `;
 
   const cardsContainer = inner.querySelector(".ct-inspector-cards");

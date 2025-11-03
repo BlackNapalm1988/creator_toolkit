@@ -459,6 +459,9 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
   overflow: hidden;
   transition: transform 0.25s ease;
 }
@@ -474,6 +477,7 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   padding: 1.25rem 1.5rem 1.5rem;
   width: 100%;
   height: 100%;
+  min-height: 100%;
   box-sizing: border-box;
 }
 
@@ -511,57 +515,110 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
 }
 
 .ct-inspector-chat {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  max-height: calc(100vh - 230px);
 }
 
-.ct-inspector-chat__message {
-  background: rgba(255, 255, 255, 0.04);
+.ct-chat-msg {
+  position: relative;
+  border-radius: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.9rem;
-  padding: 0.75rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.65rem 0.85rem 0.85rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
-.ct-inspector-chat__message--user {
+.ct-chat-msg.is-user {
   align-self: flex-end;
-  background: rgba(107, 92, 255, 0.2);
-  border-color: rgba(107, 92, 255, 0.4);
+  background: rgba(107, 92, 255, 0.18);
+  border-color: rgba(107, 92, 255, 0.35);
 }
 
-.ct-inspector-chat__message--assistant {
+.ct-chat-msg.is-assistant {
   align-self: flex-start;
 }
 
-.ct-inspector-chat__text {
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.ct-inspector-chat__asset {
+.ct-chat-meta {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.55);
 }
 
+.ct-chat-body {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ct-chat-asset {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ct-chat-save {
+  position: absolute;
+  right: 0.45rem;
+  top: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  background: rgba(12, 14, 19, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.35rem;
+  color: #fff;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.ct-chat-msg:hover .ct-chat-save,
+.ct-chat-save:focus-visible {
+  opacity: 1;
+}
+
+.ct-chat-save:focus-visible {
+  outline: 2px solid rgba(107, 92, 255, 0.65);
+  outline-offset: 2px;
+}
+
+.ct-chat-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ct-inspector-input-wrap {
+  position: relative;
+  padding-top: 0.75rem;
+  margin-top: auto;
+}
+
 .ct-inspector-input {
+  position: relative;
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
   gap: 0.65rem;
+  z-index: 2;
 }
 
 .ct-inspector-input textarea {
+  flex: 1 1 auto;
   resize: vertical;
-  min-height: 80px;
+  min-height: 72px;
   max-height: 200px;
   padding: 0.75rem;
   border-radius: 0.75rem;
@@ -602,11 +659,45 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   box-shadow: none;
 }
 
+.ct-chat-jump-latest {
+  position: absolute;
+  right: 0;
+  top: -38px;
+  z-index: 4;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(12, 14, 19, 0.7);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ct-chat-jump-latest:hover {
+  background: rgba(107, 92, 255, 0.25);
+}
+
+.ct-chat-jump-latest:focus-visible {
+  outline: 2px solid rgba(107, 92, 255, 0.65);
+  outline-offset: 2px;
+}
+
+.ct-chat-history-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 64px;
+  border-radius: 0.75rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(17, 19, 24, 0) 0%, rgba(17, 19, 24, 0.75) 100%);
+  z-index: 3;
+}
+
 .ct-inspector-cards {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-top: auto;
 }
 
 .ct-inspector-card {
