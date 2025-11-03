@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import main
 from modules import jobs as jobs_module
+from modules import system as system_module
 from modules import users as users_module
 
 
@@ -61,6 +62,9 @@ def isolate_databases(clean_runtime_dirs, tmp_path, monkeypatch):
 
     monkeypatch.setattr(users_module, "DB_PATH", str(auth_db))
     monkeypatch.setattr(jobs_module, "DB_PATH", str(jobs_db))
+    system_config = tmp_path / "system_config.json"
+    monkeypatch.setattr(system_module, "CONFIG_PATH", str(system_config))
+    system_config.parent.mkdir(parents=True, exist_ok=True)
 
     users_module.init_db()
     jobs_module.init_jobs_db()

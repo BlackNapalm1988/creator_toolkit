@@ -74,6 +74,7 @@ def test_dashboard_data_authenticated_success(client):
         "recent_jobs",
         "recent_assets",
         "active_jobs",
+        "branding",
     }
 
     assert payload["user"]["id"] == user_info["id"]
@@ -108,6 +109,7 @@ def test_dashboard_data_authenticated_success(client):
     assert active_entry["stage"] in {"qa", "running"}
     assert active_entry["error_message"] is None
     assert "out_path" in active_entry
+    assert payload["branding"]["badge_text"] == "CT"
 
 
 def test_dashboard_data_rejects_unauthenticated(client):

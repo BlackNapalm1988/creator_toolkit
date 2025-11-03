@@ -82,8 +82,10 @@ from modules.storage import (
     upsert_project,
 )
 from modules.system import (
+    get_public_branding_settings,
     get_public_smtp_settings,
     resolve_smtp_settings,
+    update_branding_settings,
     update_smtp_settings,
 )
 from modules.users import (
@@ -768,7 +770,11 @@ def _dashboard_shell(
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"request": request, "active_view": active_view},
+        {
+            "request": request,
+            "active_view": active_view,
+            "branding": get_public_branding_settings(),
+        },
     )
 
 
@@ -916,6 +922,7 @@ def dashboard_data(user: Annotated[dict, Depends(current_user)]):
         "recent_jobs": recent_jobs,
         "active_jobs": active_jobs,
         "recent_assets": recent_assets,
+        "branding": get_public_branding_settings(),
     }
 
 
@@ -2004,7 +2011,9 @@ class YouTubeUploadRequest(BaseModel):
     title: Optional[str] = Field(None, examples=["My Super Cool Video!"])
     description: Optional[str] = Field("", examples=["Created with Creator Toolkit"])
     tags: Optional[List[str]] = Field(None, examples=["#Cool, #Videos, #Only"])
-    privacy_status: Optional[str] = Field("unlisted", examples=["Public, Unlisted, Private"])
+    privacy_status: Optional[str] = Field(
+        "unlisted", examples=["Public, Unlisted, Private"]
+    )
     publish_at: Optional[str] = Field(None, examples=["2025-11-02T18:00:00Z"])
 
 
@@ -2609,6 +2618,10 @@ class RoleUpdateReq(BaseModel):
     user_id: Optional[int] = None
 
 
+class BrandingUpdate(BaseModel):
+    badge_text: Optional[str] = None
+
+
 class SMTPConfigUpdate(BaseModel):
     host: Optional[str] = None
     port: Optional[int] = None
@@ -2841,6 +2854,26 @@ def profile_role_update(
 @app.post("/profile/access-group")
 def profile_access_group_deprecated():
     raise HTTPException(status_code=410, detail="Deprecated: use /profile/role")
+
+
+@admin_router.get("/branding")
+def admin_get_branding_settings(
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
+):
+    return get_public_branding_settings()
+
+
+@admin_router.post("/branding")
+def admin_update_branding_settings(
+    config: BrandingUpdate,
+    user: Annotated[dict, Depends(require_role(["admin"], require_verified=True))],
+):
+    try:
+        update_branding_settings({"badge_text": config.badge_text})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    refreshed = get_public_branding_settings()
+    return {"ok": True, "branding": refreshed}
 
 
 @admin_router.get("/smtp")

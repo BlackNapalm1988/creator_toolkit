@@ -273,6 +273,28 @@
     <div class="row">
       <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>
     </div>
+    {% set preview_badge = branding.badge_text if branding and branding.badge_text else 'CT' %}
+    <section id="brandingConfigSection" class="system-branding hidden">
+      <h3>Topbar Branding</h3>
+      <p class="help-text">Customize the mini icon that appears beside the Creator Toolkit title.</p>
+      <div class="branding-preview">
+        <span id="brandingPreview" class="brand-mark">{{ preview_badge }}</span>
+        <span class="branding-preview__label">Preview</span>
+      </div>
+      <form id="brandingForm" class="modal-form inline active">
+        <label>Icon Text
+          <input
+            id="brandingBadge"
+            type="text"
+            maxlength="3"
+            value="{{ preview_badge }}"
+            autocomplete="off"
+          />
+        </label>
+        <button type="submit">Save Branding</button>
+      </form>
+      <div id="brandingFeedback" class="form-feedback"></div>
+    </section>
     <div id="verifyFeedback" class="form-feedback"></div>
   </div>
 </section>

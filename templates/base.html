@@ -8,8 +8,27 @@
   {% block head_extra %}{% endblock %}
 </head>
 <body>
+  {% set branding_badge = (branding.badge_text if branding and branding.badge_text else 'CT') %}
   <header class="topbar">
-    <div class="brand">Creator Toolkit</div>
+    <div class="topbar__brand">
+      <span
+        id="brandMark"
+        class="brand-mark"
+        data-default-icon="{{ branding_badge|e }}"
+      >{{ branding_badge|e }}</span>
+      <div class="brand">Creator Toolkit</div>
+      <button
+        id="dashboardTopbarButton"
+        class="ghost-btn icon-only ct-nav-item"
+        type="button"
+        data-view="dashboard-view"
+        aria-label="Dashboard"
+        title="Dashboard"
+      >
+        <span class="ct-nav-link__icon" aria-hidden="true">D</span>
+        <span class="sr-only">Dashboard</span>
+      </button>
+    </div>
     <div class="spacer"></div>
     <div class="auth-actions" id="authActions">
       <button id="openLoginButton" class="ghost-btn filled">Log In</button>
@@ -18,6 +37,18 @@
       <span id="userGreeting" class="user-greeting"></span>
       <a id="docsLink" class="ghost-btn hidden" href="/docs" target="_blank" rel="noopener">Docs</a>
       <button id="profileButton" class="ghost-btn">Profile</button>
+      <button
+        id="systemTopbarButton"
+        class="ghost-btn icon-only ct-nav-item"
+        type="button"
+        data-view="system-view"
+        data-roles="admin"
+        aria-label="System settings"
+        title="System settings"
+      >
+        <span class="ct-nav-link__icon" aria-hidden="true">S</span>
+        <span class="sr-only">System</span>
+      </button>
       <button id="logoutButton" class="ghost-btn">Log Out</button>
     </div>
   </header>
@@ -34,49 +65,10 @@
 
   {% set nav_active = active_view or 'dashboard-view' %}
 
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebarNav">
-      <nav class="sidebar-menu">
-        <a
-          class="sidebar-link nav-item {% if nav_active == 'dashboard-view' %}active{% endif %}"
-          id="navDashboard"
-          data-view="dashboard-view"
-          data-roles="admin owner editor viewer"
-          href="/dashboard"
-        >Dashboard</a>
-        <a
-          class="sidebar-link nav-item {% if nav_active == 'imagine-view' %}active{% endif %}"
-          id="navImagine"
-          data-view="imagine-view"
-          data-roles="admin owner editor"
-          href="/imagine"
-        >Imagine</a>
-        <a
-          class="sidebar-link nav-item {% if nav_active == 'create-view' %}active{% endif %}"
-          id="navCreate"
-          data-view="create-view"
-          data-roles="admin owner editor"
-          href="/create"
-        >Create</a>
-        <a
-          class="sidebar-link nav-item {% if nav_active == 'publish-view' %}active{% endif %}"
-          id="navPublish"
-          data-view="publish-view"
-          data-roles="admin owner"
-          href="/publish"
-        >Publish</a>
-        <a
-          class="sidebar-link nav-item {% if nav_active == 'system-view' %}active{% endif %}"
-          id="navSystem"
-          data-view="system-view"
-          data-roles="admin"
-          href="/system"
-        >System</a>
-      </nav>
-    </aside>
-    <main class="main-content" data-active-view="{{ nav_active }}">
+  <div id="app" class="app-root" data-active-view="{{ nav_active }}">
+    <div id="legacyContent" class="legacy-content">
       {% block content %}{% endblock %}
-    </main>
+    </div>
   </div>
 
   {% block modals %}{% endblock %}

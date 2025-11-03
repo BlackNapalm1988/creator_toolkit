@@ -8,6 +8,8 @@ from typing import Any, Dict
 
 from modules import auth as auth_module
 
+DEFAULT_BRANDING: Dict[str, str] = {"badge_text": "CT"}
+
 CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "system_config.json"
 )
@@ -27,6 +29,40 @@ def _read_config() -> Dict[str, Any]:
 def _write_config(data: Dict[str, Any]) -> None:
     with open(CONFIG_PATH, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
+
+
+def load_branding_config() -> Dict[str, Any]:
+    """Return the persisted branding configuration (with defaults applied)."""
+
+    data = _read_config()
+    raw = data.get("branding") or {}
+    badge = (raw.get("badge_text") or "").strip()
+    if not badge:
+        badge = DEFAULT_BRANDING["badge_text"]
+    return {"badge_text": badge}
+
+
+def update_branding_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and persist the branding configuration."""
+
+    badge = (payload.get("badge_text") or "").strip()
+    if not badge:
+        badge = DEFAULT_BRANDING["badge_text"]
+    if len(badge) > 3:
+        raise ValueError("badge_text must be at most 3 characters")
+
+    config = _read_config()
+    config["branding"] = {"badge_text": badge}
+    _write_config(config)
+    return config["branding"]
+
+
+def get_public_branding_settings() -> Dict[str, Any]:
+    """Expose branding settings safe for UI consumption."""
+
+    branding = load_branding_config()
+    badge = (branding.get("badge_text") or "").strip() or DEFAULT_BRANDING["badge_text"]
+    return {"badge_text": badge}
 
 
 def _env_smtp_settings() -> Dict[str, Any]:
