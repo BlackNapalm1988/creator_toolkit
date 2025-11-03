@@ -257,16 +257,17 @@ function renderSidebar(activeView) {
   inner.className = "ct-sidebar__inner";
   inner.innerHTML = `
     <div class="ct-sidebar__header">
+      <span class="ct-sidebar__title">Workspace</span>
       <button id="ct-sidebar-toggle" class="ct-sidebar__toggle" aria-label="Collapse navigation" aria-expanded="true">
         <span aria-hidden="true">‹</span>
       </button>
-      <span class="ct-sidebar__title">Workspace</span>
     </div>
     <nav id="ct-sidebar-nav" class="ct-sidebar__nav"></nav>
   `;
 
   sidebar.innerHTML = "";
   sidebar.appendChild(inner);
+  sidebar.setAttribute("data-expanded", "true");
 
   const navEl = inner.querySelector("#ct-sidebar-nav");
   if (!navEl) return;
@@ -535,6 +536,7 @@ function bindShellControls() {
       shell.classList.toggle("ct-shell--sidebar-collapsed", isCollapsed);
       sidebarToggle.setAttribute("aria-expanded", String(!isCollapsed));
       sidebarToggle.innerHTML = `<span aria-hidden="true">${isCollapsed ? "›" : "‹"}</span>`;
+      sidebar.setAttribute("data-expanded", String(!isCollapsed));
     });
   }
 
