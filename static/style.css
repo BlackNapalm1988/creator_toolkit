@@ -473,52 +473,143 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   gap: 1.25rem;
   padding: 1.25rem 1.5rem 1.5rem;
   width: 100%;
+  height: 100%;
   box-sizing: border-box;
 }
 
-.ct-inspector__toggle {
-  position: absolute;
-  left: -34px;
-  top: 1.25rem;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  display: inline-flex;
+.ct-inspector-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  gap: 0.5rem;
 }
 
-.ct-inspector__toggle:hover {
-  background: rgba(107, 92, 255, 0.4);
-  border-color: var(--accent);
-}
-
-.ct-inspector__header h2 {
+.ct-inspector-header h2 {
   margin: 0;
   font-size: 0.95rem;
-  letter-spacing: 0.08em;
-}
-
-.ct-inspector__subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
-.ct-inspector__body {
+.ct-inspector-close {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.35rem;
+  color: #fff;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.ct-inspector-close:hover {
+  background: rgba(107, 92, 255, 0.2);
+  border-color: rgba(107, 92, 255, 0.4);
+}
+
+.ct-inspector-chat {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
 }
 
-.ct-inspector__card {
+.ct-inspector-chat__message {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ct-inspector-chat__message--user {
+  align-self: flex-end;
+  background: rgba(107, 92, 255, 0.2);
+  border-color: rgba(107, 92, 255, 0.4);
+}
+
+.ct-inspector-chat__message--assistant {
+  align-self: flex-start;
+}
+
+.ct-inspector-chat__text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ct-inspector-chat__asset {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ct-inspector-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ct-inspector-input textarea {
+  resize: vertical;
+  min-height: 80px;
+  max-height: 200px;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 19, 0.85);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.ct-inspector-input textarea:focus {
+  outline: none;
+  border-color: rgba(107, 92, 255, 0.6);
+  box-shadow: 0 0 0 1px rgba(107, 92, 255, 0.35);
+}
+
+.ct-inspector-send {
+  align-self: flex-end;
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, rgba(107, 92, 255, 0.9), rgba(255, 119, 186, 0.9));
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.ct-inspector-send:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(107, 92, 255, 0.2);
+}
+
+.ct-inspector-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ct-inspector-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: auto;
+}
+
+.ct-inspector-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -528,25 +619,22 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   gap: 0.5rem;
 }
 
-.ct-inspector__card h3 {
+.ct-inspector-card h3 {
   margin: 0;
   font-size: 0.85rem;
   color: #fff;
 }
 
-.ct-inspector__card p {
+.ct-inspector-card p {
   margin: 0;
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
-.ct-inspector__footer {
-  margin-top: auto;
+.ct-shell--inspector-closed .ct-inspector-send {
+  pointer-events: none;
 }
 
-.ct-shell--inspector-closed .ct-inspector__toggle {
-  left: -30px;
-}
 
 /* App shell */
 .app-shell {

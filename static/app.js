@@ -120,6 +120,8 @@ const LEGACY_VIEWS = new Set([
   "system-view",
 ]);
 
+let inspectorChatHistory = [];
+
 let emojiSupportChecked = false;
 
 function supportsEmojiRendering() {
@@ -210,6 +212,80 @@ let dynamicWorkspace = null;
 let initialActiveView = "dashboard-view";
 const SHELL_MAX_BOOTSTRAP_ATTEMPTS = 10;
 let shellBootstrapAttempts = 0;
+
+function getActiveProjectId() {
+  // TODO: replace once project selection is implemented
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.currentProjectId || null;
+}
+
+function getImagineChatKey() {
+  const projectId = getActiveProjectId();
+  return projectId ? `ct_imagine_chat_${projectId}` : "ct_imagine_chat_global";
+}
+
+function loadInspectorChatHistory() {
+  if (typeof localStorage === "undefined") {
+    return [];
+  }
+
+  const key = getImagineChatKey();
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn("[ui-shell] failed to parse imagine chat history", err);
+    return [];
+  }
+}
+
+function saveInspectorChatHistory(history) {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+
+  const key = getImagineChatKey();
+  try {
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch (err) {
+    console.warn("[ui-shell] failed to persist imagine chat history", err);
+  }
+}
+
+function focusImagineInput() {
+  const input = document.getElementById("ct-inspector-input");
+  if (input) {
+    input.focus();
+  }
+}
+
+// TODO: add Ctrl+I to toggle imagine inspector once hotkey infrastructure exists
+function toggleImagineInspector(open = null) {
+  const inspector = document.getElementById("ct-inspector");
+  if (!inspector) {
+    return;
+  }
+
+  const shell = document.getElementById("ct-shell");
+  const isOpen = !inspector.classList.contains("ct-inspector--closed");
+  const shouldOpen = open === null ? !isOpen : open;
+
+  inspector.classList.toggle("ct-inspector--closed", !shouldOpen);
+  inspector.classList.toggle("ct-inspector--open", shouldOpen);
+
+  if (shell) {
+    shell.classList.toggle("ct-shell--inspector-closed", !shouldOpen);
+    shell.classList.toggle("ct-shell--inspector-open", shouldOpen);
+  }
+
+  if (shouldOpen) {
+    focusImagineInput();
+  }
+}
 
 function renderShell(activeViewOverride) {
   console.log("[ui-shell] renderShell invoked");
@@ -571,6 +647,153 @@ function renderPlaceholderWorkspace(root, viewId) {
   `;
 }
 
+function renderInspectorChat(container, history) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = "";
+
+  history.forEach(message => {
+    const item = document.createElement("div");
+    const role = message.role === "assistant" ? "assistant" : "user";
+    item.className = `ct-inspector-chat__message ct-inspector-chat__message--${role}`;
+
+    const text = document.createElement("p");
+    text.className = "ct-inspector-chat__text";
+    text.textContent = message.content || "";
+    item.appendChild(text);
+
+    if (message.asset) {
+      const asset = document.createElement("div");
+      asset.className = "ct-inspector-chat__asset";
+      const parts = [];
+      if (message.asset.project_id) {
+        parts.push(`Project ${message.asset.project_id}`);
+      }
+      if (message.asset.asset_type) {
+        parts.push((message.asset.asset_type || "").toString().toUpperCase());
+      }
+      if (message.asset.file_path) {
+        parts.push(message.asset.file_path);
+      }
+      asset.textContent = parts.length ? parts.join(" • ") : "Asset saved";
+      item.appendChild(asset);
+    }
+
+    container.appendChild(item);
+  });
+
+  container.scrollTop = container.scrollHeight;
+}
+
+async function handleInspectorChatSubmit(text, history, container) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) {
+    return history;
+  }
+
+  const newHistory = [...history, { role: "user", content: trimmed }];
+  renderInspectorChat(container, newHistory);
+  saveInspectorChatHistory(newHistory);
+
+  try {
+    const res = await fetch("/api/imagine/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: trimmed,
+        project_id: getActiveProjectId() || null,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`request failed with status ${res.status}`);
+    }
+
+    const data = await res.json();
+    const assistantMsg = {
+      role: "assistant",
+      content: data.reply || "(no response)",
+    };
+
+    if (data.asset) {
+      assistantMsg.asset = data.asset;
+      if (typeof saveImagineAsset === "function") {
+        saveImagineAsset({
+          ...data.asset,
+          project_id: getActiveProjectId() || null,
+        });
+      }
+    }
+
+    newHistory.push(assistantMsg);
+    renderInspectorChat(container, newHistory);
+    saveInspectorChatHistory(newHistory);
+    return newHistory;
+  } catch (err) {
+    console.warn("[ui-shell] imagine chat failed", err);
+    newHistory.push({ role: "assistant", content: "Error contacting imagine service." });
+    renderInspectorChat(container, newHistory);
+    saveInspectorChatHistory(newHistory);
+    return newHistory;
+  }
+}
+
+function initInspectorChat() {
+  const chatContainer = document.getElementById("ct-inspector-chat");
+  const input = document.getElementById("ct-inspector-input");
+  const sendButton = document.getElementById("ct-inspector-send");
+  const closeBtn = document.getElementById("ct-inspector-close");
+
+  if (!chatContainer || !input || !sendButton) {
+    return;
+  }
+
+  if (chatContainer.dataset.chatBound === "1") {
+    return;
+  }
+
+  chatContainer.dataset.chatBound = "1";
+  inspectorChatHistory = loadInspectorChatHistory();
+  renderInspectorChat(chatContainer, inspectorChatHistory);
+
+  const submit = async () => {
+    const value = input.value;
+    if (!value.trim()) {
+      return;
+    }
+
+    input.value = "";
+    sendButton.disabled = true;
+    input.disabled = true;
+
+    try {
+      inspectorChatHistory = await handleInspectorChatSubmit(value, inspectorChatHistory, chatContainer);
+    } finally {
+      sendButton.disabled = false;
+      input.disabled = false;
+      focusImagineInput();
+    }
+  };
+
+  sendButton.addEventListener("click", event => {
+    event.preventDefault();
+    submit();
+  });
+
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => toggleImagineInspector(false));
+  }
+}
+
 function renderInspector() {
   const inspector = document.getElementById("ct-inspector");
   if (!inspector) {
@@ -584,34 +807,34 @@ function renderInspector() {
   if (!inner) return;
 
   inner.innerHTML = `
-    <button id="ct-inspector-toggle" class="ct-inspector__toggle" aria-label="Collapse Imagine panel" aria-expanded="true">
-      <span aria-hidden="true">›</span>
-    </button>
-    <header class="ct-inspector__header">
+    <div class="ct-inspector-header">
       <h2>IMAGINE</h2>
-      <p class="ct-inspector__subtitle">Prompt tools & creative memory</p>
-    </header>
-    <div id="ct-inspector-body" class="ct-inspector__body"></div>
-    <div class="ct-inspector__footer">
-      <button id="ct-inspector-action" class="ghost-btn full">Create a new video</button>
+      <button id="ct-inspector-close" class="ct-inspector-close" aria-label="Close imagine chat">×</button>
     </div>
+    <div id="ct-inspector-chat" class="ct-inspector-chat"></div>
+    <div class="ct-inspector-input">
+      <textarea id="ct-inspector-input" placeholder="Describe the vibe..."></textarea>
+      <button id="ct-inspector-send" class="ct-inspector-send">Send</button>
+    </div>
+    <div class="ct-inspector-cards"></div>
   `;
 
-  const body = inner.querySelector("#ct-inspector-body");
-  if (!body) return;
+  const cardsContainer = inner.querySelector(".ct-inspector-cards");
+  if (cardsContainer) {
+    INSPECTOR_CARDS.forEach(card => {
+      const cardEl = document.createElement("article");
+      cardEl.className = "ct-inspector-card";
+      const title = document.createElement("h3");
+      title.textContent = card.title;
+      const description = document.createElement("p");
+      description.textContent = card.description;
+      cardEl.appendChild(title);
+      cardEl.appendChild(description);
+      cardsContainer.appendChild(cardEl);
+    });
+  }
 
-  // Placeholder Imagine activity cards; Step 2+ will replace these with live data.
-  INSPECTOR_CARDS.forEach(card => {
-    const cardEl = document.createElement("article");
-    cardEl.className = "ct-inspector__card";
-    const title = document.createElement("h3");
-    title.textContent = card.title;
-    const description = document.createElement("p");
-    description.textContent = card.description;
-    cardEl.appendChild(title);
-    cardEl.appendChild(description);
-    body.appendChild(cardEl);
-  });
+  initInspectorChat();
 
   console.log("[ui-shell] inspector rendered");
 }
@@ -619,8 +842,7 @@ function renderInspector() {
 function bindShellControls() {
   const shell = document.getElementById("ct-shell");
   const sidebar = document.getElementById("ct-sidebar");
-  const inspector = document.getElementById("ct-inspector");
-  if (!shell || !sidebar || !inspector) {
+  if (!shell || !sidebar) {
     console.warn("[ui-shell] shell controls missing required elements");
     return;
   }
@@ -634,17 +856,6 @@ function bindShellControls() {
       sidebarToggle.setAttribute("aria-expanded", String(!isCollapsed));
       sidebarToggle.innerHTML = `<span aria-hidden="true">${isCollapsed ? "›" : "‹"}</span>`;
       sidebar.setAttribute("data-expanded", String(!isCollapsed));
-    });
-  }
-
-  const inspectorToggle = document.getElementById("ct-inspector-toggle");
-  if (inspectorToggle) {
-    inspectorToggle.addEventListener("click", () => {
-      const isClosed = inspector.classList.toggle("ct-inspector--closed");
-      inspector.classList.toggle("ct-inspector--open", !isClosed);
-      shell.classList.toggle("ct-shell--inspector-closed", isClosed);
-      inspectorToggle.setAttribute("aria-expanded", String(!isClosed));
-      inspectorToggle.innerHTML = `<span aria-hidden="true">${isClosed ? "‹" : "›"}</span>`;
     });
   }
 
@@ -679,6 +890,11 @@ function handleNavSelection(btn, event) {
 
   if (event && typeof event.preventDefault === "function") {
     event.preventDefault();
+  }
+
+  if (target === "imagine-view") {
+    toggleImagineInspector(true);
+    return;
   }
 
   const href = btn.tagName === "A" ? btn.getAttribute("href") : btn.dataset.path || VIEW_PATHS[target];
