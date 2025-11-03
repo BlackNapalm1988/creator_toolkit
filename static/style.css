@@ -188,6 +188,7 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
 }
 
 .ct-sidebar__toggle:hover {
@@ -264,9 +265,35 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: #fff;
+}
+
+.ct-nav-link__icon-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.ct-nav-link__icon-letter {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #fff;
+  line-height: 1;
+  display: none;
+}
+
+.ct-nav-link__icon--fallback .ct-nav-link__icon-letter {
+  display: inline;
+}
+
+.ct-nav-link__icon--fallback .ct-nav-link__icon-emoji {
+  display: none;
+}
+
+html.ct-no-emoji .ct-nav-link__icon-letter {
+  display: inline;
+}
+
+html.ct-no-emoji .ct-nav-link__icon-emoji {
+  display: none;
 }
 
 .ct-nav-link__label {
@@ -314,8 +341,20 @@ body {
 }
 
 
-.ct-sidebar--collapsed .ct-sidebar__title,
-.ct-sidebar--collapsed .ct-nav-heading,
+.ct-sidebar--collapsed .ct-sidebar__header {
+  justify-content: center;
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
+}
+
+.ct-sidebar--collapsed .ct-sidebar__title {
+  display: none;
+}
+
+.ct-sidebar--collapsed .ct-nav-heading {
+  display: none;
+}
+
 .ct-sidebar--collapsed .ct-nav-children {
   opacity: 0;
   pointer-events: none;

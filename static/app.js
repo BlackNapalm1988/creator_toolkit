@@ -25,6 +25,7 @@ const NAV_SECTIONS = [
     navId: "navDashboard",
     view: "dashboard-view",
     roles: "admin owner editor viewer",
+    icon: "🏠",
   },
   {
     label: "Imagine",
@@ -32,6 +33,7 @@ const NAV_SECTIONS = [
     navId: "navImagine",
     view: "imagine-view",
     roles: "admin owner editor",
+    icon: "🎨",
   },
   {
     label: "Create",
@@ -39,6 +41,7 @@ const NAV_SECTIONS = [
     navId: "navCreate",
     view: "create-view",
     roles: "admin owner editor",
+    icon: "✨",
     children: [
       { label: "New Project", id: "create-new" },
       { label: "Image from Text", id: "create-image-text" },
@@ -50,6 +53,7 @@ const NAV_SECTIONS = [
     label: "Library",
     id: "library",
     view: "library",
+    icon: "📚",
     children: [
       { label: "Scenes", id: "library-scenes" },
       { label: "Video", id: "library-video" },
@@ -63,6 +67,7 @@ const NAV_SECTIONS = [
     navId: "navPublish",
     view: "publish-view",
     roles: "admin owner",
+    icon: "🚀",
     children: [
       { label: "YouTube", id: "publish-youtube" },
       { label: "Facebook", id: "publish-facebook" },
@@ -74,6 +79,7 @@ const NAV_SECTIONS = [
     label: "Jobs",
     id: "jobs",
     view: "jobs",
+    icon: "📋",
     children: [
       { label: "Active Jobs", id: "jobs-active" },
       { label: "History", id: "jobs-history" },
@@ -85,6 +91,7 @@ const NAV_SECTIONS = [
     navId: "navSystem",
     view: "system-view",
     roles: "admin",
+    icon: "⚙️",
   },
 ];
 
@@ -112,6 +119,87 @@ const LEGACY_VIEWS = new Set([
   "publish-view",
   "system-view",
 ]);
+
+let emojiSupportChecked = false;
+
+function supportsEmojiRendering() {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    if (!canvas.getContext) {
+      return false;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context || typeof context.fillText !== "function") {
+      return false;
+    }
+
+    const emoji = "😀";
+    const fallback = "■";
+    canvas.width = canvas.height = 18;
+    context.textBaseline = "top";
+    context.font = "16px sans-serif";
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillText(emoji, 0, 0);
+    const emojiData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    for (let i = 0; i < emojiData.length; i += 4) {
+      const alpha = emojiData[i + 3];
+      if (!alpha) {
+        continue;
+      }
+
+      const r = emojiData[i];
+      const g = emojiData[i + 1];
+      const b = emojiData[i + 2];
+      if (r !== g || g !== b) {
+        return true;
+      }
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillText(fallback, 0, 0);
+    const fallbackData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    for (let i = 0; i < emojiData.length; i += 4) {
+      if (
+        emojiData[i] !== fallbackData[i] ||
+        emojiData[i + 1] !== fallbackData[i + 1] ||
+        emojiData[i + 2] !== fallbackData[i + 2] ||
+        emojiData[i + 3] !== fallbackData[i + 3]
+      ) {
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn("[ui-shell] emoji detection failed", err);
+  }
+
+  return false;
+}
+
+function ensureEmojiSupportClass() {
+  if (emojiSupportChecked || typeof document === "undefined") {
+    return;
+  }
+
+  emojiSupportChecked = true;
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+
+  const hasEmoji = supportsEmojiRendering();
+  root.classList.add(hasEmoji ? "ct-has-emoji" : "ct-no-emoji");
+  if (!hasEmoji) {
+    console.warn("[ui-shell] emoji rendering unavailable; using letter fallback icons");
+  }
+}
 
 let shellRoot = null;
 let mainContentEl = null;
@@ -193,8 +281,17 @@ function renderSidebarSection(section, activeView) {
     }
 
     const iconText = section.label.charAt(0).toUpperCase();
+    const iconEmoji = section.icon || null;
+    const iconClasses = ["ct-nav-link__icon"];
+    if (!iconEmoji) {
+      iconClasses.push("ct-nav-link__icon--fallback");
+    }
+
     link.innerHTML = `
-      <span class="ct-nav-link__icon" aria-hidden="true">${iconText}</span>
+      <span class="${iconClasses.join(" ")}" aria-hidden="true">
+        ${iconEmoji ? `<span class="ct-nav-link__icon-emoji" role="presentation">${iconEmoji}</span>` : ""}
+        <span class="ct-nav-link__icon-letter" role="presentation">${iconText}</span>
+      </span>
       <span class="ct-nav-link__label">${section.label}</span>
     `;
     sectionEl.appendChild(link);
@@ -626,6 +723,8 @@ function initializeShell() {
   }
 
   console.log("[ui-shell] initializing shell");
+
+  ensureEmojiSupportClass();
 
   const root = document.getElementById("app");
   initialActiveView = (root && root.dataset.active_view) || (root && root.dataset.activeView) || initialActiveView;
