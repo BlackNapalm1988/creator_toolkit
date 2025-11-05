@@ -20,12 +20,14 @@ const VIEW_PATHS = {
 
 const NAV_SECTIONS = [
   {
-    label: "Dashboard",
-    id: "dashboard",
-    navId: "navDashboard",
-    view: "dashboard-view",
-    roles: "admin owner editor viewer",
-    icon: "🏠",
+    label: "Jobs",
+    id: "jobs",
+    navId: "navJobs",
+    view: "jobs",
+    children: [
+      { label: "Active Jobs", id: "jobs-active" },
+      { label: "History", id: "jobs-history" },
+    ],
   },
   {
     label: "Imagine",
@@ -33,7 +35,6 @@ const NAV_SECTIONS = [
     navId: "navImagine",
     view: "imagine-view",
     roles: "admin owner editor",
-    icon: "🎨",
   },
   {
     label: "Create",
@@ -41,7 +42,6 @@ const NAV_SECTIONS = [
     navId: "navCreate",
     view: "create-view",
     roles: "admin owner editor",
-    icon: "✨",
     children: [
       { label: "New Project", id: "create-new" },
       { label: "Image from Text", id: "create-image-text" },
@@ -50,24 +50,11 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: "Library",
-    id: "library",
-    view: "library",
-    icon: "📚",
-    children: [
-      { label: "Scenes", id: "library-scenes" },
-      { label: "Video", id: "library-video" },
-      { label: "Audio", id: "library-audio" },
-      { label: "Other", id: "library-other" },
-    ],
-  },
-  {
     label: "Publish",
     id: "publish",
     navId: "navPublish",
     view: "publish-view",
     roles: "admin owner",
-    icon: "🚀",
     children: [
       { label: "YouTube", id: "publish-youtube" },
       { label: "Facebook", id: "publish-facebook" },
@@ -76,41 +63,18 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: "Jobs",
-    id: "jobs",
-    view: "jobs",
-    icon: "📋",
+    label: "Library",
+    id: "library",
+    view: "library",
     children: [
-      { label: "Active Jobs", id: "jobs-active" },
-      { label: "History", id: "jobs-history" },
+      { label: "Scenes", id: "library-scenes" },
+      { label: "Video", id: "library-video" },
+      { label: "Audio", id: "library-audio" },
+      { label: "Other", id: "library-other" },
     ],
-  },
-  {
-    label: "System",
-    id: "system",
-    navId: "navSystem",
-    view: "system-view",
-    roles: "admin",
-    icon: "⚙️",
   },
 ];
 
-const INSPECTOR_CARDS = [
-  {
-    title: "Music created and added to assets",
-    description:
-      "Latest audio generations appear in your Library. Drag them into new edits or share with collaborators.",
-  },
-  {
-    title: "Scene created and added to assets",
-    description:
-      "Keep iterating on your scenes. Refresh prompts, remix scripts, and stage shots before packaging.",
-  },
-  {
-    title: "What would you like to do?",
-    description: "Prompt Imagine with goals or paste scripts to generate beat boards, voiceover, and music cues.",
-  },
-];
 
 const LEGACY_VIEWS = new Set([
   "dashboard-view",
@@ -120,11 +84,7 @@ const LEGACY_VIEWS = new Set([
   "system-view",
 ]);
 
-let inspectorChatHistory = [];
-let chatMessageCounter = 0;
-
-const CHAT_VISIBLE_BATCH = 10;
-const CHAT_LATEST_THRESHOLD = 8;
+const INSPECTOR_SCROLL_EPSILON = 8;
 
 let emojiSupportChecked = false;
 
@@ -211,173 +171,22 @@ let shellRoot = null;
 let mainContentEl = null;
 let navButtons = [];
 let inspectorActionButton = null;
+let inspectorEl = null;
+let inspectorToggleButton = null;
+let topbarDashboardButton = null;
+let inspectorChatEl = null;
+let inspectorMessagesEl = null;
+let inspectorInputEl = null;
+let inspectorSendButton = null;
+let inspectorChatOverlayEl = null;
+let inspectorThreadId = null;
+let inspectorThreadPromise = null;
+let inspectorSendInProgress = false;
 let legacyWorkspace = null;
 let dynamicWorkspace = null;
 let initialActiveView = "dashboard-view";
 const SHELL_MAX_BOOTSTRAP_ATTEMPTS = 10;
 let shellBootstrapAttempts = 0;
-
-function getActiveProjectId() {
-  // TODO: replace once project selection is implemented
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return window.currentProjectId || null;
-}
-
-function getImagineChatKey() {
-  const projectId = getActiveProjectId();
-  return projectId ? `ct_imagine_chat_${projectId}` : "ct_imagine_chat_global";
-}
-
-function loadInspectorChatHistory() {
-  if (typeof localStorage === "undefined") {
-    return [];
-  }
-
-  const key = getImagineChatKey();
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.warn("[ui-shell] failed to parse imagine chat history", err);
-    return [];
-  }
-}
-
-function saveInspectorChatHistory(history) {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
-
-  const key = getImagineChatKey();
-  try {
-    localStorage.setItem(key, JSON.stringify(history));
-  } catch (err) {
-    console.warn("[ui-shell] failed to persist imagine chat history", err);
-  }
-}
-
-function generateChatMessageId() {
-  chatMessageCounter += 1;
-  return `chatmsg_${Date.now()}_${chatMessageCounter}`;
-}
-
-function normalizeChatHistory(history) {
-  if (!Array.isArray(history)) {
-    return [];
-  }
-
-  return history.map(message => {
-    const normalized = { ...message };
-    normalized.role = normalized.role === "user" ? "user" : "assistant";
-    if (typeof normalized.content !== "string") {
-      normalized.content = normalized.content == null ? "" : String(normalized.content);
-    }
-    if (!normalized.id) {
-      normalized.id = generateChatMessageId();
-    }
-    return normalized;
-  });
-}
-
-function createChatMessage(role, content, extra = {}) {
-  return {
-    id: generateChatMessageId(),
-    role: role === "user" ? "user" : "assistant",
-    content: typeof content === "string" ? content : String(content || ""),
-    ...extra,
-  };
-}
-
-function isInspectorChatAtLatest(chatEl) {
-  if (!chatEl) {
-    return true;
-  }
-
-  const remaining = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
-  return remaining <= CHAT_LATEST_THRESHOLD;
-}
-
-function buildChatMessageElement(message) {
-  const role = message.role === "user" ? "user" : "assistant";
-  const item = document.createElement("div");
-  item.className = `ct-chat-msg ${role === "user" ? "is-user" : "is-assistant"}`;
-  item.dataset.msgId = message.id || "";
-
-  const meta = document.createElement("div");
-  meta.className = "ct-chat-meta";
-  meta.textContent = role === "user" ? "You" : "Assistant";
-  item.appendChild(meta);
-
-  const body = document.createElement("div");
-  body.className = "ct-chat-body";
-  body.textContent = message.content || "";
-  item.appendChild(body);
-
-  if (message.asset) {
-    const assetRow = document.createElement("div");
-    assetRow.className = "ct-chat-asset";
-    const parts = [];
-    if (message.asset.project_id) {
-      parts.push(`Project ${message.asset.project_id}`);
-    }
-    if (message.asset.asset_type) {
-      parts.push(String(message.asset.asset_type).toUpperCase());
-    }
-    if (message.asset.file_path) {
-      parts.push(message.asset.file_path);
-    }
-    assetRow.textContent = parts.length ? parts.join(" • ") : "Asset saved";
-    item.appendChild(assetRow);
-  }
-
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "button";
-  saveBtn.className = "ct-chat-save";
-  saveBtn.title = "Save to Library";
-  saveBtn.setAttribute("aria-label", "Save to Library");
-  saveBtn.textContent = "💾";
-  item.appendChild(saveBtn);
-
-  return item;
-}
-
-function focusImagineInput() {
-  const input = document.getElementById("ct-inspector-input");
-  if (input) {
-    input.focus();
-  }
-}
-
-// TODO: add Ctrl+I to toggle imagine inspector once hotkey infrastructure exists
-function toggleImagineInspector(open = null) {
-  const inspector = document.getElementById("ct-inspector");
-  if (!inspector) {
-    return;
-  }
-
-  const shell = document.getElementById("ct-shell");
-  const isOpen = !inspector.classList.contains("ct-inspector--closed");
-  const shouldOpen = open === null ? !isOpen : open;
-
-  inspector.classList.toggle("ct-inspector--closed", !shouldOpen);
-  inspector.classList.toggle("ct-inspector--open", shouldOpen);
-
-  if (shell) {
-    shell.classList.toggle("ct-shell--inspector-closed", !shouldOpen);
-    shell.classList.toggle("ct-shell--inspector-open", shouldOpen);
-  }
-
-  if (shouldOpen) {
-    focusImagineInput();
-    if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
-      window.updateLatestUI();
-    }
-  }
-}
 
 function renderShell(activeViewOverride) {
   console.log("[ui-shell] renderShell invoked");
@@ -417,6 +226,7 @@ function renderShell(activeViewOverride) {
   bindShellControls();
   refreshShellRefs();
   bindNavigationHandlers();
+  bindTopbarNavigation();
   bindInspectorActions();
 
   return true;
@@ -739,333 +549,6 @@ function renderPlaceholderWorkspace(root, viewId) {
   `;
 }
 
-function renderInspectorChat(container, history, options = {}) {
-  if (!container) {
-    return;
-  }
-
-  const { scrollToLatest = true } = options;
-  const total = history.length;
-  const start = Math.max(0, total - CHAT_VISIBLE_BATCH);
-  const previousHeight = container.scrollHeight;
-  const previousTop = container.scrollTop;
-
-  container.dataset.offset = String(start);
-  container.innerHTML = "";
-
-  const fragment = document.createDocumentFragment();
-  for (let i = start; i < total; i += 1) {
-    fragment.appendChild(buildChatMessageElement(history[i]));
-  }
-
-  container.appendChild(fragment);
-
-  if (scrollToLatest) {
-    container.scrollTop = container.scrollHeight;
-  } else {
-    const distanceFromBottom = previousHeight - previousTop;
-    container.scrollTop = Math.max(0, container.scrollHeight - distanceFromBottom);
-  }
-
-  if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
-    window.updateLatestUI();
-  }
-}
-
-function attachInspectorChatScroll(container) {
-  if (!container || container.dataset.scrollVirtualized === "1") {
-    return;
-  }
-
-  container.dataset.scrollVirtualized = "1";
-
-  container.addEventListener(
-    "scroll",
-    () => {
-      if (container.scrollTop <= 2) {
-        const messages = inspectorChatHistory;
-        const currentOffset = parseInt(container.dataset.offset || "0", 10);
-        if (currentOffset > 0) {
-          const nextOffset = Math.max(0, currentOffset - CHAT_VISIBLE_BATCH);
-          const fragment = document.createDocumentFragment();
-          for (let i = nextOffset; i < currentOffset; i += 1) {
-            fragment.appendChild(buildChatMessageElement(messages[i]));
-          }
-
-          const previousHeight = container.scrollHeight;
-          const previousTop = container.scrollTop;
-          container.prepend(fragment);
-          container.dataset.offset = String(nextOffset);
-          const newHeight = container.scrollHeight;
-          container.scrollTop = previousTop + (newHeight - previousHeight);
-        }
-      }
-
-      if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
-        window.updateLatestUI();
-      }
-    },
-    { passive: true }
-  );
-}
-
-function initInspectorScrollAwareness() {
-  const chat = document.getElementById("ct-inspector-chat");
-  if (!chat || chat.dataset.scrollAware === "1") {
-    return;
-  }
-
-  chat.dataset.scrollAware = "1";
-
-  let chatHover = false;
-
-  chat.addEventListener("mouseenter", () => {
-    chatHover = true;
-  });
-
-  chat.addEventListener("mouseleave", () => {
-    chatHover = false;
-  });
-
-  chat.addEventListener("focusin", () => {
-    chatHover = true;
-  });
-
-  chat.addEventListener("focusout", () => {
-    chatHover = false;
-  });
-
-  chat.addEventListener(
-    "wheel",
-    event => {
-      if (!chatHover) {
-        return;
-      }
-
-      const atTop = chat.scrollTop <= 0 && event.deltaY < 0;
-      const atBottom = Math.ceil(chat.scrollTop + chat.clientHeight) >= chat.scrollHeight && event.deltaY > 0;
-      if (!(atTop || atBottom)) {
-        event.stopPropagation();
-      }
-    },
-    { passive: true }
-  );
-}
-
-function initChatLatestControls() {
-  const chat = document.getElementById("ct-inspector-chat");
-  const jump = document.getElementById("ct-chat-jump-latest");
-  const overlay = document.getElementById("ct-chat-history-overlay");
-
-  if (!chat || !jump || !overlay) {
-    return;
-  }
-
-  if (chat.dataset.latestBound === "1") {
-    if (typeof window !== "undefined" && typeof window.updateLatestUI === "function") {
-      window.updateLatestUI();
-    }
-    return;
-  }
-
-  chat.dataset.latestBound = "1";
-
-  const computeAtLatest = () => isInspectorChatAtLatest(chat);
-
-  window.updateLatestUI = function updateLatestUI() {
-    const atLatest = computeAtLatest();
-    jump.hidden = atLatest;
-    overlay.hidden = atLatest;
-  };
-
-  chat.addEventListener(
-    "scroll",
-    () => {
-      window.updateLatestUI();
-    },
-    { passive: true }
-  );
-
-  jump.addEventListener("click", () => {
-    chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
-  });
-
-  window.updateLatestUI();
-}
-
-function wireMessageActions(container) {
-  if (!container || container.dataset.actionsBound === "1") {
-    return;
-  }
-
-  container.dataset.actionsBound = "1";
-
-  container.addEventListener("click", async event => {
-    const btn = event.target.closest(".ct-chat-save");
-    if (!btn) {
-      return;
-    }
-
-    const messageEl = btn.closest(".ct-chat-msg");
-    if (!messageEl) {
-      return;
-    }
-
-    const messageId = messageEl.dataset.msgId;
-    const message = inspectorChatHistory.find(entry => String(entry.id) === String(messageId));
-    const content = message?.content || "";
-
-    const asset = {
-      filename: `chatmsg_${Date.now()}.txt`,
-      content,
-      type: "text",
-      project_id: getActiveProjectId() || null,
-    };
-
-    const originalText = btn.textContent;
-    btn.disabled = true;
-
-    try {
-      const res = await fetch("/api/assets/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(asset),
-      });
-
-      if (!res.ok) {
-        throw new Error(`save failed with status ${res.status}`);
-      }
-
-      btn.textContent = "✓ Saved";
-    } catch (err) {
-      console.warn("[ui-shell] failed to save chat message", err);
-      btn.textContent = "✕";
-    } finally {
-      setTimeout(() => {
-        btn.textContent = originalText;
-        btn.disabled = false;
-      }, 1200);
-    }
-  });
-}
-
-async function handleInspectorChatSubmit(text, history, container) {
-  const trimmed = (text || "").trim();
-  if (!trimmed) {
-    return history;
-  }
-
-  const shouldStickToLatest = isInspectorChatAtLatest(container);
-  const userMessage = createChatMessage("user", trimmed);
-  const newHistory = [...history, userMessage];
-  renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
-  saveInspectorChatHistory(newHistory);
-
-  try {
-    const res = await fetch("/api/imagine/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: trimmed,
-        project_id: getActiveProjectId() || null,
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error(`request failed with status ${res.status}`);
-    }
-
-    const data = await res.json();
-    const assistantExtras = {};
-    if (data.asset) {
-      assistantExtras.asset = data.asset;
-    }
-
-    const assistantMsg = createChatMessage("assistant", data.reply || "(no response)", assistantExtras);
-
-    if (data.asset) {
-      if (typeof saveImagineAsset === "function") {
-        saveImagineAsset({
-          ...data.asset,
-          project_id: getActiveProjectId() || null,
-        });
-      }
-    }
-
-    newHistory.push(assistantMsg);
-    renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
-    saveInspectorChatHistory(newHistory);
-    return newHistory;
-  } catch (err) {
-    console.warn("[ui-shell] imagine chat failed", err);
-    newHistory.push(createChatMessage("assistant", "Error contacting imagine service."));
-    renderInspectorChat(container, newHistory, { scrollToLatest: shouldStickToLatest });
-    saveInspectorChatHistory(newHistory);
-    return newHistory;
-  }
-}
-
-function initInspectorChat() {
-  const chatContainer = document.getElementById("ct-inspector-chat");
-  const input = document.getElementById("ct-inspector-input");
-  const sendButton = document.getElementById("ct-inspector-send");
-  const closeBtn = document.getElementById("ct-inspector-close");
-
-  if (!chatContainer || !input || !sendButton) {
-    return;
-  }
-
-  if (chatContainer.dataset.chatBound === "1") {
-    return;
-  }
-
-  chatContainer.dataset.chatBound = "1";
-  inspectorChatHistory = normalizeChatHistory(loadInspectorChatHistory());
-  if (inspectorChatHistory.length) {
-    saveInspectorChatHistory(inspectorChatHistory);
-  }
-  renderInspectorChat(chatContainer, inspectorChatHistory);
-  attachInspectorChatScroll(chatContainer);
-  initInspectorScrollAwareness();
-  wireMessageActions(chatContainer);
-  initChatLatestControls();
-
-  const submit = async () => {
-    const value = input.value;
-    if (!value.trim()) {
-      return;
-    }
-
-    input.value = "";
-    sendButton.disabled = true;
-    input.disabled = true;
-
-    try {
-      inspectorChatHistory = await handleInspectorChatSubmit(value, inspectorChatHistory, chatContainer);
-    } finally {
-      sendButton.disabled = false;
-      input.disabled = false;
-      focusImagineInput();
-    }
-  };
-
-  sendButton.addEventListener("click", event => {
-    event.preventDefault();
-    submit();
-  });
-
-  input.addEventListener("keydown", event => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      submit();
-    }
-  });
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => toggleImagineInspector(false));
-  }
-}
-
 function renderInspector() {
   const inspector = document.getElementById("ct-inspector");
   if (!inspector) {
@@ -1079,38 +562,36 @@ function renderInspector() {
   if (!inner) return;
 
   inner.innerHTML = `
-    <div class="ct-inspector-header">
+    <button id="ct-inspector-toggle" class="ct-inspector__toggle" aria-label="Collapse Imagine panel" aria-expanded="true">
+      <span aria-hidden="true">›</span>
+    </button>
+    <header class="ct-inspector__header">
       <h2>IMAGINE</h2>
-      <button id="ct-inspector-close" class="ct-inspector-close" aria-label="Close imagine chat">×</button>
-    </div>
-    <div id="ct-inspector-chat" class="ct-inspector-chat" data-offset="0"></div>
-    <div class="ct-inspector-cards"></div>
-    <div class="ct-inspector-input-wrap">
-      <button id="ct-chat-jump-latest" class="ct-chat-jump-latest" hidden>Jump to latest ↓</button>
-      <div class="ct-inspector-input">
-        <textarea id="ct-inspector-input" placeholder="Describe the vibe..."></textarea>
-        <button id="ct-inspector-send" class="ct-inspector-send">Send</button>
+      <p class="ct-inspector__subtitle">Prompt tools & creative memory</p>
+    </header>
+    <div id="ct-inspector-body" class="ct-inspector__body">
+      <div id="ct-inspector-chat" class="ct-inspector-chat" role="log" aria-live="polite">
+        <div id="ct-inspector-messages" class="ct-inspector-chat__messages"></div>
+        <div class="ct-inspector-chat__overlay" aria-hidden="true"></div>
       </div>
-      <div id="ct-chat-history-overlay" class="ct-chat-history-overlay" hidden></div>
+      <div class="ct-inspector-input-group">
+        <textarea id="ct-inspector-input" class="ct-inspector-input" placeholder="Describe what you want to create..." rows="3"></textarea>
+        <button id="ct-inspector-send" class="ghost-btn ct-inspector-send">Send</button>
+      </div>
+    </div>
+    <div class="ct-inspector__footer">
+      <button id="ct-inspector-action" class="ghost-btn full">Create a new video</button>
     </div>
   `;
 
-  const cardsContainer = inner.querySelector(".ct-inspector-cards");
-  if (cardsContainer) {
-    INSPECTOR_CARDS.forEach(card => {
-      const cardEl = document.createElement("article");
-      cardEl.className = "ct-inspector-card";
-      const title = document.createElement("h3");
-      title.textContent = card.title;
-      const description = document.createElement("p");
-      description.textContent = card.description;
-      cardEl.appendChild(title);
-      cardEl.appendChild(description);
-      cardsContainer.appendChild(cardEl);
-    });
+  const messages = inner.querySelector("#ct-inspector-messages");
+  if (messages) {
+    messages.innerHTML = "";
+    const intro = document.createElement("div");
+    intro.className = "ct-inspector-message ct-inspector-message--system";
+    intro.textContent = "Describe what you want to create and Imagine will brainstorm with you.";
+    messages.appendChild(intro);
   }
-
-  initInspectorChat();
 
   console.log("[ui-shell] inspector rendered");
 }
@@ -1118,7 +599,8 @@ function renderInspector() {
 function bindShellControls() {
   const shell = document.getElementById("ct-shell");
   const sidebar = document.getElementById("ct-sidebar");
-  if (!shell || !sidebar) {
+  const inspector = document.getElementById("ct-inspector");
+  if (!shell || !sidebar || !inspector) {
     console.warn("[ui-shell] shell controls missing required elements");
     return;
   }
@@ -1135,6 +617,17 @@ function bindShellControls() {
     });
   }
 
+  const inspectorToggle = document.getElementById("ct-inspector-toggle");
+  if (inspectorToggle) {
+    inspectorToggle.addEventListener("click", () => {
+      const isClosed = inspector.classList.toggle("ct-inspector--closed");
+      inspector.classList.toggle("ct-inspector--open", !isClosed);
+      shell.classList.toggle("ct-shell--inspector-closed", isClosed);
+      inspectorToggle.setAttribute("aria-expanded", String(!isClosed));
+      inspectorToggle.innerHTML = `<span aria-hidden="true">${isClosed ? "‹" : "›"}</span>`;
+    });
+  }
+
   console.log("[ui-shell] shell controls bound");
 }
 
@@ -1143,8 +636,18 @@ function refreshShellRefs() {
   mainContentEl = document.getElementById("ct-main");
   legacyWorkspace = document.getElementById("ct-legacy-content");
   dynamicWorkspace = document.getElementById("ct-main-dynamic");
-  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
   inspectorActionButton = document.getElementById("ct-inspector-action");
+  inspectorEl = document.getElementById("ct-inspector");
+  inspectorToggleButton = document.getElementById("ct-inspector-toggle");
+  topbarDashboardButton = document.getElementById("ct-topbar-dashboard");
+  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
+  inspectorChatEl = document.getElementById("ct-inspector-chat");
+  inspectorMessagesEl = document.getElementById("ct-inspector-messages");
+  inspectorInputEl = document.getElementById("ct-inspector-input");
+  inspectorSendButton = document.getElementById("ct-inspector-send");
+  inspectorChatOverlayEl = inspectorChatEl
+    ? inspectorChatEl.querySelector(".ct-inspector-chat__overlay")
+    : null;
 }
 
 function handleNavSelection(btn, event) {
@@ -1169,8 +672,7 @@ function handleNavSelection(btn, event) {
   }
 
   if (target === "imagine-view") {
-    toggleImagineInspector(true);
-    return;
+    toggleInspectorVisibility();
   }
 
   const href = btn.tagName === "A" ? btn.getAttribute("href") : btn.dataset.path || VIEW_PATHS[target];
@@ -1197,15 +699,196 @@ function bindNavigationHandlers() {
   });
 }
 
-function bindInspectorActions() {
-  if (!inspectorActionButton || inspectorActionButton.dataset.shellBound === "1") {
+function bindTopbarNavigation() {
+  if (topbarDashboardButton && topbarDashboardButton.dataset.shellBound !== "1") {
+    topbarDashboardButton.dataset.shellBound = "1";
+    topbarDashboardButton.addEventListener("click", event => {
+      handleNavSelection(topbarDashboardButton, event);
+    });
+  }
+}
+
+function toggleInspectorVisibility() {
+  if (inspectorToggleButton) {
+    inspectorToggleButton.click();
+    updateInspectorChatOverlay();
     return;
   }
 
-  inspectorActionButton.dataset.shellBound = "1";
-  inspectorActionButton.addEventListener("click", () => {
-    changeView("create-view", { path: VIEW_PATHS["create-view"] });
+  if (!inspectorEl || !shellRoot) {
+    return;
+  }
+
+  const willBeClosed = !inspectorEl.classList.contains("ct-inspector--closed");
+  inspectorEl.classList.toggle("ct-inspector--closed", willBeClosed);
+  inspectorEl.classList.toggle("ct-inspector--open", !willBeClosed);
+  shellRoot.classList.toggle("ct-shell--inspector-closed", willBeClosed);
+  shellRoot.classList.toggle("ct-shell--inspector-open", !willBeClosed);
+  updateInspectorChatOverlay();
+}
+
+function bindInspectorActions() {
+  if (inspectorActionButton && inspectorActionButton.dataset.shellBound !== "1") {
+    inspectorActionButton.dataset.shellBound = "1";
+    inspectorActionButton.addEventListener("click", () => {
+      changeView("create-view", { path: VIEW_PATHS["create-view"] });
+    });
+  }
+
+  if (inspectorSendButton && inspectorSendButton.dataset.shellBound !== "1") {
+    inspectorSendButton.dataset.shellBound = "1";
+    inspectorSendButton.addEventListener("click", handleInspectorSend);
+  }
+
+  if (inspectorInputEl && inspectorInputEl.dataset.shellBound !== "1") {
+    inspectorInputEl.dataset.shellBound = "1";
+    inspectorInputEl.addEventListener("keydown", event => {
+      if (event.isComposing) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleInspectorSend(event);
+      }
+    });
+  }
+
+  if (inspectorChatEl && inspectorChatEl.dataset.shellScrollBound !== "1") {
+    inspectorChatEl.dataset.shellScrollBound = "1";
+    inspectorChatEl.addEventListener("scroll", updateInspectorChatOverlay);
+  }
+
+  updateInspectorChatOverlay();
+}
+
+function appendInspectorMessage(role, content) {
+  if (!inspectorMessagesEl) return null;
+  const msg = document.createElement("div");
+  msg.className = `ct-inspector-message ct-inspector-message--${role}`;
+  msg.textContent = content;
+  inspectorMessagesEl.appendChild(msg);
+  return msg;
+}
+
+function isInspectorChatAtBottom() {
+  if (!inspectorChatEl) return true;
+  const remaining =
+    inspectorChatEl.scrollHeight - inspectorChatEl.scrollTop - inspectorChatEl.clientHeight;
+  return remaining <= INSPECTOR_SCROLL_EPSILON;
+}
+
+function updateInspectorChatOverlay() {
+  if (!inspectorChatEl) return;
+  const atBottom = isInspectorChatAtBottom();
+  inspectorChatEl.classList.toggle("ct-inspector-chat--has-unread", !atBottom);
+  if (inspectorChatOverlayEl) {
+    inspectorChatOverlayEl.setAttribute("aria-hidden", atBottom ? "true" : "false");
+  }
+}
+
+function scrollInspectorChatToBottom(options = {}) {
+  if (!inspectorChatEl) return;
+  const behavior = options.behavior || "auto";
+  requestAnimationFrame(() => {
+    inspectorChatEl.scrollTo({ top: inspectorChatEl.scrollHeight, behavior });
+    updateInspectorChatOverlay();
   });
+}
+
+async function ensureInspectorThread() {
+  if (inspectorThreadId) {
+    return inspectorThreadId;
+  }
+
+  if (!inspectorThreadPromise) {
+    inspectorThreadPromise = (async () => {
+      try {
+        const resp = await postJSON("/imagine/thread", {});
+        const threadId = resp?.data?.thread_id;
+        if (!resp.ok || !threadId) {
+          const detail = resp?.data?.detail || resp?.data?.error;
+          throw new Error(detail || `Unable to start Imagine chat (${resp.status})`);
+        }
+        inspectorThreadId = threadId;
+        return inspectorThreadId;
+      } finally {
+        inspectorThreadPromise = null;
+      }
+    })();
+  }
+
+  return inspectorThreadPromise;
+}
+
+async function handleInspectorSend(event) {
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+
+  if (inspectorSendInProgress || !inspectorInputEl) {
+    return;
+  }
+
+  const userMessage = inspectorInputEl.value.trim();
+  if (!userMessage) {
+    return;
+  }
+
+  inspectorSendInProgress = true;
+  inspectorInputEl.value = "";
+
+  appendInspectorMessage("user", userMessage);
+  const assistantBubble = appendInspectorMessage("assistant", "...");
+  if (assistantBubble) {
+    assistantBubble.classList.add("is-pending");
+  }
+
+  scrollInspectorChatToBottom({ behavior: "smooth" });
+
+  try {
+    await withButtonWorkingState(inspectorSendButton, async () => {
+      const threadId = await ensureInspectorThread();
+      const resp = await postJSON("/imagine/send", {
+        thread_id: threadId,
+        message: userMessage,
+      });
+
+      if (!resp.ok || typeof resp?.data?.reply !== "string") {
+        const detail = resp?.data?.detail || resp?.data?.error;
+        throw new Error(detail || `Request failed (${resp.status})`);
+      }
+
+      if (assistantBubble) {
+        assistantBubble.textContent = resp.data.reply;
+        assistantBubble.classList.remove("is-pending");
+      }
+    });
+  } catch (err) {
+    const messageText = err && err.message ? err.message : "Unexpected error";
+    if (assistantBubble) {
+      assistantBubble.textContent = `Error: ${messageText}`;
+      assistantBubble.classList.remove("is-pending");
+      assistantBubble.classList.add("ct-inspector-message--error");
+    }
+    if (inspectorInputEl) {
+      inspectorInputEl.value = userMessage;
+      try {
+        inspectorInputEl.focus({ preventScroll: true });
+      } catch {
+        inspectorInputEl.focus();
+      }
+    }
+    console.error("[ui-shell] imagine send failed", err);
+  } finally {
+    inspectorSendInProgress = false;
+    scrollInspectorChatToBottom({ behavior: "smooth" });
+    updateInspectorChatOverlay();
+    if (inspectorInputEl) {
+      try {
+        inspectorInputEl.focus({ preventScroll: true });
+      } catch {
+        inspectorInputEl.focus();
+      }
+    }
+  }
 }
 
 function initializeShell() {
