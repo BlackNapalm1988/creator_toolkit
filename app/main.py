@@ -37,11 +37,16 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
+    # Decide docs exposure based on environment
+    settings_initial = get_settings()
+    docs_url = "/docs" if settings_initial.env == "dev" else None
+    openapi_url = "/openapi.json" if settings_initial.env == "dev" else None
+
     app = FastAPI(
         title="Creator Toolkit",
-        docs_url=None,
+        docs_url=docs_url,
         redoc_url=None,
-        openapi_url=None,
+        openapi_url=openapi_url,
         lifespan=lifespan,
     )
 
@@ -56,7 +61,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, error_handlers.generic_exception_handler)
 
     # Settings and static mounts
-    settings = get_settings()
+    settings = settings_initial
     settings.ensure_dirs()
     app.state.settings = settings
 
@@ -77,16 +82,17 @@ def create_app() -> FastAPI:
 
     # settings already attached above
 
-    # Doc endpoints guarded by dev_user
-    @app.get("/openapi.json", include_in_schema=False)
-    def custom_openapi(user=Depends(dev_user)):
-        return JSONResponse(app.openapi())
+    # Doc endpoints guarded by admin when not exposed globally
+    if app.openapi_url is None:
+        @app.get("/openapi.json", include_in_schema=False)
+        def custom_openapi(user=Depends(dev_user)):
+            return JSONResponse(app.openapi())
 
-    @app.get("/docs", include_in_schema=False)
-    def custom_docs(user=Depends(dev_user)):
-        return get_swagger_ui_html(
-            openapi_url="/openapi.json", title="Creator Toolkit API Docs"
-        )
+        @app.get("/docs", include_in_schema=False)
+        def custom_docs(user=Depends(dev_user)):
+            return get_swagger_ui_html(
+                openapi_url="/openapi.json", title="Creator Toolkit API Docs"
+            )
 
     # UI shell routes
     @app.get("/dashboard")
