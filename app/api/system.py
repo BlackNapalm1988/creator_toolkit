@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.deps import current_user, require_role
+from app.models.api import ErrorResponse, OkResp, OkUserResp, ProfileKeysListResp
 from app.models.system import (
     KeyUpsertReq,
     PasswordChangeReq,
@@ -26,7 +27,11 @@ from modules.users import (
 router = APIRouter(tags=["System"])
 
 
-@router.post("/profile/password")
+@router.post(
+    "/profile/password",
+    response_model=OkUserResp,
+    responses={401: {"model": ErrorResponse}, 400: {"model": ErrorResponse}},
+)
 def profile_password_change(
     req: PasswordChangeReq, user: Annotated[dict, Depends(current_user)]
 ):
@@ -42,7 +47,7 @@ def profile_password_change(
     return {"ok": True, "user": user_payload(refreshed)}
 
 
-@router.get("/profile/keys")
+@router.get("/profile/keys", response_model=ProfileKeysListResp)
 def profile_keys_list(
     user=Depends(require_role(["admin", "owner"], require_verified=True)),
 ):
@@ -50,7 +55,7 @@ def profile_keys_list(
     return {"providers": list(raw.keys())}
 
 
-@router.post("/profile/keys")
+@router.post("/profile/keys", response_model=OkResp)
 def profile_keys_upsert(
     req: KeyUpsertReq,
     user=Depends(require_role(["admin", "owner"], require_verified=True)),
@@ -74,5 +79,7 @@ __all__ = ["router"]
 
 # Lightweight stub to satisfy validation error test expectations.
 @router.post("/auth/register")
-def auth_register_stub(req: RegisterReq):  # pragma: no cover - only schema validation used in tests
+def auth_register_stub(
+    req: RegisterReq,
+):  # pragma: no cover - only schema validation used in tests
     return {"ok": True}

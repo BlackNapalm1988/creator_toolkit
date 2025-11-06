@@ -24,10 +24,19 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
 
 from app.core.constants import CREATOR_ROLES, PUBLISHER_ROLES
 from app.deps import require_role
+from app.models.api import (
+    EnqueueJobResp,
+    ErrorResponse,
+    JobDetail,
+    JobsListResp,
+    PackageResp,
+    QAResp,
+    YouTubeUploadResp,
+)
+from app.models.jobs import serialize_job, serialize_job_detail
 from app.models.publish import (
     EnqueuePackageReq,
     EnqueueQABatchReq,
@@ -36,7 +45,6 @@ from app.models.publish import (
     PublishPipelineReq,
     YouTubeUploadRequest,
 )
-from app.services.jobs import serialize_job, serialize_job_detail
 from app.services.keys import (
     YOUTUBE_SCOPES,
     exchange_youtube_refresh,
@@ -52,9 +60,11 @@ from modules.storage import (
     get_project,
     list_presets,
     list_projects,
-    project_path as _project_path_impl,
     upsert_preset,
     upsert_project,
+)
+from modules.storage import (
+    project_path as _project_path_impl,
 )
 from modules.users import get_user_by_id, upsert_user_key
 
@@ -208,7 +218,26 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [p for p in parts if p]
 
 
-@router.get("/youtube/auth/url", tags=["YouTube"])
+@router.get(
+    "/youtube/auth/url",
+    tags=["YouTube"],
+    responses={
+        500: {
+            "model": ErrorResponse,
+            "description": "OAuth not configured",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "internal_error",
+                            "message": "YouTube OAuth not configured",
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
 def youtube_auth_url(
     user: Annotated[
         dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
@@ -321,7 +350,26 @@ def youtube_channels_me(
     return resp.json()
 
 
-@router.post("/youtube/upload", tags=["YouTube"])
+@router.post(
+    "/youtube/upload",
+    tags=["YouTube"],
+    response_model=YouTubeUploadResp,
+    responses={
+        400: {
+            "model": ErrorResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "bad_request",
+                            "message": "video_path and title are required",
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
 def youtube_upload_video(
     req: YouTubeUploadRequest,
     user: Annotated[
@@ -346,7 +394,9 @@ def youtube_upload_video(
     try:
         from app import main as main_module  # type: ignore
 
-        uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+        uploader = getattr(
+            main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk
+        )
     except Exception:
         uploader = _youtube_upload_from_disk
 
@@ -369,7 +419,7 @@ def youtube_upload_video(
     }
 
 
-@router.post("/package_async")
+@router.post("/package_async", response_model=EnqueueJobResp)
 def package_async(
     req: EnqueuePackageReq,
     user: Annotated[
@@ -382,7 +432,7 @@ def package_async(
     return {"job_id": jid}
 
 
-@router.post("/qa/batch_async")
+@router.post("/qa/batch_async", response_model=EnqueueJobResp)
 def qa_batch_async(
     req: EnqueueQABatchReq,
     user: Annotated[
@@ -393,7 +443,11 @@ def qa_batch_async(
     return {"job_id": jid}
 
 
-@router.get("/jobs/{jid}")
+@router.get(
+    "/jobs/{jid}",
+    response_model=JobDetail,
+    responses={403: {"model": ErrorResponse}},
+)
 def jobs_get(
     jid: str,
     user: Annotated[
@@ -406,7 +460,9 @@ def jobs_get(
     return serialize_job_detail(job)
 
 
-@router.get("/jobs")
+@router.get(
+    "/jobs", response_model=JobsListResp, responses={403: {"model": ErrorResponse}}
+)
 def jobs_list(
     user: Annotated[
         dict, Depends(require_role(["admin", "owner", "editor"], require_verified=True))
@@ -439,7 +495,7 @@ def detect_watermark(video_path: str) -> bool:
     return "wm" in os.path.basename(video_path).lower()
 
 
-@router.post("/qa")
+@router.post("/qa", response_model=QAResp)
 def qa(
     loop_video_path: Annotated[str, Form(...)],
     palette: Annotated[str, Form()] = "[]",
@@ -525,7 +581,7 @@ def api_qa_batch_csv(
     return {"csv_path": csv_path, "count": len(rows)}
 
 
-@router.post("/package")
+@router.post("/package", response_model=PackageResp)
 def package(req: PackageReq):
     out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
     audio_ms = probe_audio_duration(req.audio_path)
@@ -690,7 +746,9 @@ def pipeline_publish_lofi(
     try:
         from app import main as main_module  # type: ignore
 
-        uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+        uploader = getattr(
+            main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk
+        )
     except Exception:
         uploader = _youtube_upload_from_disk
 
@@ -740,7 +798,9 @@ def youtube_upload_form(
         try:
             from app import main as main_module  # type: ignore
 
-            uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+            uploader = getattr(
+                main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk
+            )
         except Exception:
             uploader = _youtube_upload_from_disk
 

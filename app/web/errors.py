@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, Request
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 
-def error_envelope(code: str, message: str, details: Optional[Any] = None) -> Dict[str, Any]:
+def error_envelope(
+    code: str, message: str, details: Optional[Any] = None
+) -> Dict[str, Any]:
     return {"error": {"code": code, "message": message, "details": details}}
 
 
@@ -41,7 +43,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
     message = str(exc.detail) if exc.detail is not None else ""
     code = _code_for_status(int(exc.status_code))
-    return JSONResponse(status_code=exc.status_code, content=error_envelope(code, message))
+    return JSONResponse(
+        status_code=exc.status_code, content=error_envelope(code, message)
+    )
 
 
 async def request_validation_exception_handler(
@@ -50,7 +54,9 @@ async def request_validation_exception_handler(
     details = exc.errors()
     return JSONResponse(
         status_code=422,
-        content=error_envelope("validation_error", "Validation failed", details=details),
+        content=error_envelope(
+            "validation_error", "Validation failed", details=details
+        ),
     )
 
 
@@ -60,7 +66,9 @@ async def pydantic_validation_exception_handler(
     details = exc.errors()
     return JSONResponse(
         status_code=422,
-        content=error_envelope("validation_error", "Validation failed", details=details),
+        content=error_envelope(
+            "validation_error", "Validation failed", details=details
+        ),
     )
 
 
@@ -70,4 +78,3 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         status_code=500,
         content=error_envelope("internal_error", "Internal server error"),
     )
-

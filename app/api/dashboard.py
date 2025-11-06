@@ -7,7 +7,8 @@ from typing import Annotated, Dict, List
 from fastapi import APIRouter, Depends
 
 from app.deps import current_user
-from app.services.jobs import serialize_job
+from app.models.api import DashboardData, ErrorResponse
+from app.models.jobs import serialize_job
 from app.services.users import user_payload
 from modules.jobs import list_active_jobs, list_jobs
 from modules.users import list_user_keys
@@ -15,7 +16,23 @@ from modules.users import list_user_keys
 router = APIRouter(tags=["Dashboard"])
 
 
-@router.get("/dashboard/data")
+@router.get(
+    "/dashboard/data",
+    response_model=DashboardData,
+    responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {"code": "unauthorized", "message": "Missing token"}
+                    }
+                }
+            },
+        }
+    },
+)
 def dashboard_data(user: Annotated[dict, Depends(current_user)]):
     """Return aggregated dashboard data for the signed-in user."""
 

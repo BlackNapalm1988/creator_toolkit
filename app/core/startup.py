@@ -8,9 +8,15 @@ from __future__ import annotations
 
 from app.services.startup import (
     ensure_directories,
-    lifespan as lifespan,
     seed_if_needed,
+)
+from app.services.startup import (
+    lifespan as lifespan,
+)
+from app.services.startup import (
     start_queue_worker as start_queue_worker,
+)
+from app.services.startup import (
     stop_queue_worker as stop_queue_worker,
 )
 
@@ -21,4 +27,3 @@ __all__ = [
     "start_queue_worker",
     "stop_queue_worker",
 ]
-

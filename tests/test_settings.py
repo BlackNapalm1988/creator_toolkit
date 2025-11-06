@@ -1,5 +1,3 @@
-import importlib
-
 import pytest
 
 
@@ -21,4 +19,3 @@ def test_seeding_guard_helper(monkeypatch):
     assert main._should_seed_defaults("dev", False) is True
     assert main._should_seed_defaults("prod", False) is False
     assert main._should_seed_defaults("prod", True) is True
-

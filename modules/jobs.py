@@ -268,7 +268,9 @@ def _update(job_id: str, **kwargs: Any) -> None:
     with _conn() as conn:
         # Validate status transitions if status is present
         if any(s.startswith("status=") for s in sets):
-            cur = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+            cur = conn.execute(
+                "SELECT status FROM jobs WHERE id=?", (job_id,)
+            ).fetchone()
             if cur:
                 current = cur[0]
                 new_status = None
@@ -284,7 +286,9 @@ def _update(job_id: str, **kwargs: Any) -> None:
                         "failed": set(),
                     }
                     if new_status not in allowed.get(current, set()):
-                        raise ValueError(f"Illegal job status transition {current} -> {new_status}")
+                        raise ValueError(
+                            f"Illegal job status transition {current} -> {new_status}"
+                        )
 
         conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", (*params, job_id))
 
@@ -375,9 +379,12 @@ def set_error(
     # API consumers see the same shape they get from exception handlers.
     try:
         from app.web.errors import error_envelope  # local import to avoid cycles
+
         unified_error = error_envelope("job_failed", str(error), details=None)
     except Exception:  # pragma: no cover - defensive fallback
-        unified_error = {"error": {"code": "job_failed", "message": str(error), "details": None}}
+        unified_error = {
+            "error": {"code": "job_failed", "message": str(error), "details": None}
+        }
 
     update_kwargs: Dict[str, Any] = {
         "error_message": error,
@@ -416,7 +423,9 @@ class QueueWorker(threading.Thread):
                         continue
                     job_id, job_type, payload_json = row
                     # Transition queued -> running using validation
-                    update_job_status(job_id, status="running", stage="running", progress=0)
+                    update_job_status(
+                        job_id, status="running", stage="running", progress=0
+                    )
 
                 payload = json.loads(payload_json)
                 handler = self.handlers.get(job_type)

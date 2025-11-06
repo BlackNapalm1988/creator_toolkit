@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,13 +10,13 @@ TEMPLATES = ROOT / "templates"
 refs: set[str] = set()
 for tpl in TEMPLATES.glob("*.html"):
     text = tpl.read_text(encoding="utf-8")
-    for marker in ("href=\"/static/", "src=\"/static/"):
+    for marker in ('href="/static/', 'src="/static/'):
         start = 0
         while True:
             i = text.find(marker, start)
             if i == -1:
                 break
-            j = text.find("\"", i + len(marker))
+            j = text.find('"', i + len(marker))
             if j == -1:
                 break
             # slice is relative to marker start

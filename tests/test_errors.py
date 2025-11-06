@@ -1,6 +1,5 @@
 from typing import Dict
 
-import main
 from modules import auth as auth_module
 from modules import users as users_module
 

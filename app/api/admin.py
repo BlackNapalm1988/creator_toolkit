@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.settings import get_settings
 from app.deps import require_role
+from app.models.api import ErrorResponse, OkResp
 from app.models.system import SMTPConfigUpdate, SMTPTestRequest
 from modules.system import (
     get_public_smtp_settings,
@@ -19,14 +20,14 @@ from modules.system import (
 router = APIRouter(prefix="/admin/system", tags=["Admin"])
 
 
-@router.get("/smtp")
+@router.get("/smtp", responses={403: {"model": ErrorResponse}})
 def admin_get_smtp_settings(
     user=Depends(require_role(["admin"], require_verified=True)),
 ):
     return get_public_smtp_settings()
 
 
-@router.post("/smtp")
+@router.post("/smtp", response_model=OkResp, responses={400: {"model": ErrorResponse}})
 def admin_update_smtp_settings(
     config: SMTPConfigUpdate,
     user=Depends(require_role(["admin"], require_verified=True)),
@@ -41,7 +42,9 @@ def admin_update_smtp_settings(
     return {"ok": True, "settings": refreshed}
 
 
-@router.post("/smtp/test")
+@router.post(
+    "/smtp/test", response_model=OkResp, responses={400: {"model": ErrorResponse}}
+)
 def admin_test_smtp(
     req: SMTPTestRequest,
     user=Depends(require_role(["admin"], require_verified=True)),
@@ -61,7 +64,9 @@ def admin_test_smtp(
     timeout_seconds = get_settings().smtp_timeout_seconds
 
     try:
-        with smtplib.SMTP(host, int(settings.get("port") or 0), timeout=timeout_seconds) as smtp:
+        with smtplib.SMTP(
+            host, int(settings.get("port") or 0), timeout=timeout_seconds
+        ) as smtp:
             if bool(settings.get("use_tls", True)):
                 try:
                     smtp.starttls()
@@ -80,4 +85,3 @@ def admin_test_smtp(
 
 
 __all__ = ["router"]
-

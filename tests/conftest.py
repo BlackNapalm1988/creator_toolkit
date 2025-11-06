@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 # Ensure consistent secrets before importing the application.
 os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("ENV", "dev")
 os.environ.setdefault("DISABLE_QUEUE_WORKER", "1")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
