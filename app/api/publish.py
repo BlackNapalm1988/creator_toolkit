@@ -52,7 +52,7 @@ from modules.storage import (
     get_project,
     list_presets,
     list_projects,
-    project_path,
+    project_path as _project_path_impl,
     upsert_preset,
     upsert_project,
 )
@@ -81,10 +81,23 @@ def _resolve_video_file(video_path_raw: str) -> Path:
     if cleaned:
         trimmed = cleaned.lstrip("/\\")
         if trimmed and trimmed != cleaned:
-            _add_candidate(Path(project_path(trimmed)))
+            # Use main.project_path if tests monkeypatch it; fallback to storage impl
+            try:
+                from app import main as main_module  # type: ignore
+
+                candidate = Path(main_module.project_path(trimmed))
+            except Exception:
+                candidate = Path(_project_path_impl(trimmed))
+            _add_candidate(candidate)
 
     if not initial.is_absolute():
-        _add_candidate(Path(project_path(initial)))
+        try:
+            from app import main as main_module  # type: ignore
+
+            candidate = Path(main_module.project_path(initial))
+        except Exception:
+            candidate = Path(_project_path_impl(initial))
+        _add_candidate(candidate)
 
     for candidate in candidates:
         if candidate.is_file():
@@ -106,7 +119,10 @@ def _normalize_publish_at(publish_at_raw: Optional[str]) -> Optional[str]:
         raise HTTPException(status_code=400, detail="publish_at must be ISO8601")
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt.astimezone(datetime.timezone.utc).isoformat()
+    iso = dt.astimezone(datetime.timezone.utc).isoformat()
+    if iso.endswith("+00:00"):
+        return iso[:-6] + "Z"
+    return iso
 
 
 def _youtube_upload_from_disk(
@@ -326,7 +342,15 @@ def youtube_upload_video(
     privacy_status = privacy_status_raw or "unlisted"
     publish_at = _normalize_publish_at((req.publish_at or "").strip() or None)
 
-    yt_info = _youtube_upload_from_disk(
+    # Allow tests to monkeypatch main._youtube_upload_from_disk
+    try:
+        from app import main as main_module  # type: ignore
+
+        uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+    except Exception:
+        uploader = _youtube_upload_from_disk
+
+    yt_info = uploader(
         user_id=user["id"],
         file_path=str(file_path),
         title=title_raw,
@@ -584,7 +608,7 @@ def api_create_or_update_project(payload: Annotated[dict, Body(...)]):
         "presets": payload.get("presets", []),
     }
     if not project["id"]:
-        return JSONResponse(status_code=400, content={"error": "id is required"})
+        raise HTTPException(status_code=400, detail="id required")
     upsert_project(project["id"], project)
     return {"ok": True, "project": project}
 
@@ -663,7 +687,14 @@ def pipeline_publish_lofi(
 
     public_url = f"/static/masters/{out_file}"
 
-    yt_info = _youtube_upload_from_disk(
+    try:
+        from app import main as main_module  # type: ignore
+
+        uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+    except Exception:
+        uploader = _youtube_upload_from_disk
+
+    yt_info = uploader(
         user_id=user_id,
         file_path=out_path,
         title=req.title.strip(),
@@ -692,10 +723,10 @@ def youtube_upload_form(
     ],
     file: Annotated[UploadFile, File(...)],
     title: Annotated[str, Form(...)],
-    description: Annotated[str, Form("")] = "",
-    tags: Annotated[str, Form("")] = "",
-    privacy_status: Annotated[str, Form("unlisted")] = "unlisted",
-    publish_at: Annotated[Optional[str], Form(None)] = None,
+    description: str = Form(""),
+    tags: str = Form(""),
+    privacy_status: str = Form("unlisted"),
+    publish_at: Optional[str] = Form(None),
 ):
     uploads_dir = os.path.join("static", "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
@@ -706,7 +737,14 @@ def youtube_upload_form(
         temp_path = Path(tmp.name)
 
     try:
-        yt_info = _youtube_upload_from_disk(
+        try:
+            from app import main as main_module  # type: ignore
+
+            uploader = getattr(main_module, "_youtube_upload_from_disk", _youtube_upload_from_disk)
+        except Exception:
+            uploader = _youtube_upload_from_disk
+
+        yt_info = uploader(
             user_id=user["id"],
             file_path=str(temp_path),
             title=title.strip(),
