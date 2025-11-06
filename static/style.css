@@ -17,6 +17,9 @@ body {
   color: var(--text);
   font-family: var(--font);
   line-height: 1.4;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Top bar */
@@ -124,6 +127,25 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* Footer bar */
+.footerbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background-color: #181b29;
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Main app container grows between topbar and footer */
+.app-root {
+  flex: 1 0 auto;
+  display: block;
 }
 
 .verification-banner {
