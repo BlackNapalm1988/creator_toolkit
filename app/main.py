@@ -463,7 +463,14 @@ def custom_docs(user: Annotated[dict, Depends(dev_user)]):
 
 # init databases we'll need
 init_db()  # users / profile
-bootstrap_default_admin()
+if settings.env == "dev" or settings.allow_seeding:
+    bootstrap_default_admin()
+else:
+    logger.info(
+        "Skipping default admin/test user seeding (env=%s, allow_seeding=%s)",
+        settings.env,
+        settings.allow_seeding,
+    )
 init_jobs_db()  # job queue
 init_chat_db()  # imagine chat history
 

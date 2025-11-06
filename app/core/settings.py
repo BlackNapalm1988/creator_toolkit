@@ -6,7 +6,15 @@ from functools import lru_cache
 
 from dotenv import load_dotenv
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+try:  # pragma: no cover - tested indirectly via environment setup
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard
+    raise ModuleNotFoundError(
+        "Missing optional dependency 'pydantic-settings'. Install runtime requirements via "
+        "`pip install -r requirements.txt` before starting the app."
+    ) from exc
+
 
 load_dotenv()
 
@@ -17,6 +25,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     env: str = Field(default="dev", alias="ENV")
+    allow_seeding: bool = Field(default=False, alias="ALLOW_SEEDING")
     jwt_secret: str = Field(default="insecure-dev", alias="JWT_SECRET")
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
 
