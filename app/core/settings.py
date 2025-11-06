@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -30,6 +31,8 @@ class Settings(BaseSettings):
     allow_seeding: bool = Field(default=False, alias="ALLOW_SEEDING")
     jwt_secret: str = Field(default="insecure-dev", alias="JWT_SECRET")
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
+    # User-generated content root; never touched by pruning
+    USER_CONTENT_DIR: str = "user_content"
 
     def validate_for_runtime(self) -> None:
         """Ensure unsafe defaults are not used outside of development."""
@@ -38,6 +41,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Refusing to start with insecure defaults; set a strong JWT_SECRET for non-dev environments."
             )
+
+    def ensure_dirs(self) -> None:
+        """Create required directories for user content if missing."""
+
+        Path(self.USER_CONTENT_DIR).mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

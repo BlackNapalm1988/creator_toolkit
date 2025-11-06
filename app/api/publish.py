@@ -26,6 +26,7 @@ from fastapi import (
 )
 
 from app.core.constants import CREATOR_ROLES, PUBLISHER_ROLES
+from app.core.settings import get_settings
 from app.deps import require_role
 from app.models.api import (
     EnqueueJobResp,
@@ -559,8 +560,10 @@ def api_qa_batch_csv(
     palette: Annotated[Optional[list], Body()] = None,
     thresholds: Annotated[Optional[dict], Body()] = None,
 ):
-    os.makedirs(os.path.join("static", "reports"), exist_ok=True)
-    csv_path = os.path.join("static", "reports", f"qa_{uuid.uuid4().hex[:8]}.csv")
+    settings = get_settings()
+    reports_dir = os.path.join(settings.USER_CONTENT_DIR, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    csv_path = os.path.join(reports_dir, f"qa_{uuid.uuid4().hex[:8]}.csv")
     rows = api_qa_batch(paths, palette, thresholds)["results"]
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
@@ -583,7 +586,10 @@ def api_qa_batch_csv(
 
 @router.post("/package", response_model=PackageResp)
 def package(req: PackageReq):
-    out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
+    settings = get_settings()
+    out_path = req.out_path or os.path.join(
+        settings.USER_CONTENT_DIR, "uploads", "master.mp4"
+    )
     audio_ms = probe_audio_duration(req.audio_path)
     if audio_ms <= 0:
         raise HTTPException(
@@ -613,7 +619,8 @@ def package_master(
     req: PackageReqV2,
     user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
 ):
-    masters_dir = os.path.join("static", "masters")
+    settings = get_settings()
+    masters_dir = os.path.join(settings.USER_CONTENT_DIR, "masters")
     os.makedirs(masters_dir, exist_ok=True)
 
     out_file = (
@@ -632,7 +639,7 @@ def package_master(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
-    public_url = f"/static/masters/{out_file}"
+    public_url = f"/content/masters/{out_file}"
 
     return {
         "ok": True,
@@ -723,7 +730,8 @@ def pipeline_publish_lofi(
             model_id=None,
         )
 
-    masters_dir = os.path.join("static", "masters")
+    settings = get_settings()
+    masters_dir = os.path.join(settings.USER_CONTENT_DIR, "masters")
     os.makedirs(masters_dir, exist_ok=True)
 
     out_file = req.title.strip().replace(" ", "_") or "autopublish"
@@ -741,7 +749,7 @@ def pipeline_publish_lofi(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
-    public_url = f"/static/masters/{out_file}"
+    public_url = f"/content/masters/{out_file}"
 
     try:
         from app import main as main_module  # type: ignore

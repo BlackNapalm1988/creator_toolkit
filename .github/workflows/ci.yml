@@ -50,3 +50,13 @@ jobs:
         run: |
           pytest -q
 
+      - name: Prune assets (report only)
+        run: |
+          python scripts/prune_assets.py --report --days 7 > prune_report.txt || true
+
+      - name: Upload prune report
+        uses: actions/upload-artifact@v4
+        with:
+          name: prune-report
+          path: prune_report.txt
+

@@ -55,8 +55,16 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(Exception, error_handlers.generic_exception_handler)
 
-    # Static and templates
+    # Settings and static mounts
+    settings = get_settings()
+    settings.ensure_dirs()
+    app.state.settings = settings
+
+    # Static (bundled) and user content (uploads/exports)
     app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount(
+        "/content", StaticFiles(directory=settings.USER_CONTENT_DIR), name="content"
+    )
     templates = Jinja2Templates(directory="templates")
 
     # Include API routers
@@ -67,8 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(system_router)
     app.include_router(admin_router)
 
-    settings = get_settings()
-    app.state.settings = settings
+    # settings already attached above
 
     # Doc endpoints guarded by dev_user
     @app.get("/openapi.json", include_in_schema=False)

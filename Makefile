@@ -28,3 +28,15 @@ test:
 ci: install lint deadcode deps audit test
 	@echo "CI checks completed"
 
+# Safe prune for bundled static assets
+.PHONY: prune-report prune-apply prune-purge
+
+prune-report:
+	python scripts/prune_assets.py --report --days 7
+
+prune-apply:
+	python scripts/prune_assets.py --apply --days 7
+
+prune-purge:
+	python scripts/prune_assets.py --purge --days 14
+

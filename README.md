@@ -243,3 +243,15 @@ Pull requests are welcome! Please:
 ## License
 
 No license has been specified. Assume all rights reserved unless the repository owner states otherwise.
+
+## Folders & Safety
+- `/static`: Bundled assets only (CSS/JS/images). Subject to safe pruning via `scripts/prune_assets.py`.
+- `/content`: User-generated files (uploads, exports, reports). Never pruned. Mounted at `/content` in FastAPI.
+
+### Safe Prune Tool
+- Report candidates: `make prune-report`
+- Quarantine candidates: `make prune-apply` (moves to `._quarantine/static/<YYYYMMDD>/...`)
+- Purge quarantine: `make prune-purge` (deletes quarantined files older than N days)
+- Age threshold: `--days N` (default 7).
+- Scope: Only operates on `static/`. Never touches `user_content/`, `releases/`, `scenes/`, or `data/`.
+- References: Parses `templates/**/*.html` and optional `static/asset-manifest.json`, with optional allow/block lists at `static/.prune-allowlist` and `static/.prune-blocklist`.

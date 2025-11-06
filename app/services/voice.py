@@ -10,6 +10,7 @@ from typing import Optional
 import requests
 from fastapi import HTTPException
 
+from app.core.settings import get_settings
 from app.services.keys import get_eleven_key_for_user
 
 
@@ -23,7 +24,8 @@ def generate_voiceover_mp3_for_user(
 
     api_key = get_eleven_key_for_user(user_id)
 
-    out_dir = os.path.join("static", "tts")
+    settings = get_settings()
+    out_dir = os.path.join(settings.USER_CONTENT_DIR, "tts")
     os.makedirs(out_dir, exist_ok=True)
     out_name = f"{user_id}_{uuid.uuid4().hex}.mp3"
     out_path = os.path.join(out_dir, out_name)

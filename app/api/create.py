@@ -13,6 +13,7 @@ import requests
 from fastapi import APIRouter, Depends, Form, HTTPException
 
 from app.core.constants import CREATOR_ROLES
+from app.core.settings import get_settings
 from app.deps import require_role
 from app.models.create import (
     ElevenGenerateForm,
@@ -121,7 +122,8 @@ def eleven_generate_tts(
             detail="No voice_id provided and no default voice could be determined. Call /elevenlabs/voices to inspect.",
         )
 
-    out_dir = os.path.join("static", "tts")
+    settings = get_settings()
+    out_dir = os.path.join(settings.USER_CONTENT_DIR, "tts")
     os.makedirs(out_dir, exist_ok=True)
 
     out_name = f"{user['id']}_{uuid.uuid4().hex}.mp3"
@@ -167,7 +169,7 @@ def eleven_generate_tts(
             status_code=500, detail=f"Could not save MP3: {exc}"
         ) from exc
 
-    public_url = f"/static/tts/{out_name}"
+    public_url = f"/content/tts/{out_name}"
 
     return {
         "ok": True,
@@ -227,7 +229,8 @@ def generate_music(
 
     ctype = el_resp.headers.get("Content-Type", "").lower()
 
-    music_dir = os.path.join("static", "music")
+    settings = get_settings()
+    music_dir = os.path.join(settings.USER_CONTENT_DIR, "music")
     os.makedirs(music_dir, exist_ok=True)
 
     if "application/json" in ctype:
@@ -277,7 +280,7 @@ def generate_music(
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"static/music/{out_name}".replace("\\", "/"),
+                "song_path": f"content/music/{out_name}".replace("\\", "/"),
                 "note": "Generated via ElevenLabs (JSON->base64 path)",
             }
 
@@ -300,7 +303,7 @@ def generate_music(
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"static/music/{out_name}".replace("\\", "/"),
+                "song_path": f"content/music/{out_name}".replace("\\", "/"),
                 "note": "Generated via ElevenLabs (JSON->url path)",
             }
 
@@ -328,7 +331,7 @@ def generate_music(
     return {
         "ok": True,
         "status": "ready",
-        "song_path": f"static/music/{out_name}".replace("\\", "/"),
+        "song_path": f"content/music/{out_name}".replace("\\", "/"),
         "note": "Generated via ElevenLabs (direct binary path)",
     }
 
@@ -390,7 +393,8 @@ def get_music_status(
         )
 
     if status in ("completed", "succeeded", "ready"):
-        music_dir = os.path.join("static", "music")
+        settings = get_settings()
+        music_dir = os.path.join(settings.USER_CONTENT_DIR, "music")
         os.makedirs(music_dir, exist_ok=True)
 
         ts_tag = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -420,7 +424,7 @@ def get_music_status(
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"static/music/{out_name}".replace("\\", "/"),
+                "song_path": f"content/music/{out_name}".replace("\\", "/"),
             }
 
         if audio_url:
@@ -442,7 +446,7 @@ def get_music_status(
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"static/music/{out_name}".replace("\\", "/"),
+                "song_path": f"content/music/{out_name}".replace("\\", "/"),
             }
 
         return {
@@ -624,7 +628,7 @@ def generate_video(
                 "raw": payload,
             }
 
-        loop_path = f"static/uploads/{out_name}".replace("\\", "/")
+        loop_path = f"content/uploads/{out_name}".replace("\\", "/")
         return {
             "ok": True,
             "status": "ready",
@@ -642,7 +646,7 @@ def generate_video(
     with open(out_disk_path, "wb") as f:
         f.write(video_bytes)
 
-    loop_path = f"static/uploads/{out_name}".replace("\\", "/")
+    loop_path = f"content/uploads/{out_name}".replace("\\", "/")
     return {
         "ok": True,
         "status": "ready",
@@ -705,7 +709,8 @@ def get_video_status(
     if status == "completed":
         video_url = meta.get("video_url") or meta.get("result_url") or meta.get("url")
 
-        uploads_dir = os.path.join("static", "uploads")
+        settings = get_settings()
+        uploads_dir = os.path.join(settings.USER_CONTENT_DIR, "uploads")
         os.makedirs(uploads_dir, exist_ok=True)
 
         out_name = f"sora2_{user_id}_{job_id}.mp4"
@@ -749,7 +754,7 @@ def get_video_status(
         return {
             "ok": True,
             "status": "ready",
-            "loop_path": f"static/uploads/{out_name}".replace("\\", "/"),
+            "loop_path": f"content/uploads/{out_name}".replace("\\", "/"),
             "seconds": meta.get("seconds"),
             "size": meta.get("size"),
         }
