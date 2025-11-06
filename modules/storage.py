@@ -63,9 +63,7 @@ def get_project(project_id: str) -> Optional[Dict[str, Any]]:
 
     with _LOCK:
         db = _load()
-        return next(
-            (p for p in db.get("projects", []) if p.get("id") == project_id), None
-        )
+        return next((p for p in db.get("projects", []) if p.get("id") == project_id), None)
 
 
 def upsert_project(project: Dict[str, Any]) -> Dict[str, Any]:
@@ -90,9 +88,7 @@ def delete_project(project_id: str) -> bool:
     with _LOCK:
         db = _load()
         original_len = len(db.get("projects", []))
-        db["projects"] = [
-            p for p in db.get("projects", []) if p.get("id") != project_id
-        ]
+        db["projects"] = [p for p in db.get("projects", []) if p.get("id") != project_id]
         _save(db)
         return len(db["projects"]) < original_len
 

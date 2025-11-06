@@ -152,9 +152,7 @@ def _generate_verification_code() -> str:
     return f"{secrets.randbelow(900000) + 100000}"
 
 
-def _send_verification_email(
-    recipient: str, code: str, full_name: str | None = None
-) -> bool:
+def _send_verification_email(recipient: str, code: str, full_name: str | None = None) -> bool:
     """Send a verification code email using the configured SMTP settings."""
 
     smtp_settings = resolve_smtp_settings()
@@ -170,9 +168,7 @@ def _send_verification_email(
         return False
 
     if not smtp_host or not smtp_from:
-        logger.warning(
-            "SMTP not configured; verification code for %s is %s", recipient, code
-        )
+        logger.warning("SMTP not configured; verification code for %s is %s", recipient, code)
         return False
 
     msg = EmailMessage()
@@ -195,9 +191,7 @@ def _send_verification_email(
                 try:
                     smtp.starttls()
                 except smtplib.SMTPException:
-                    logger.debug(
-                        "SMTP server did not accept STARTTLS; continuing without TLS"
-                    )
+                    logger.debug("SMTP server did not accept STARTTLS; continuing without TLS")
             if smtp_user and smtp_password:
                 smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)
@@ -471,9 +465,7 @@ def custom_openapi(user: Annotated[dict, Depends(dev_user)]):
 def custom_docs(user: Annotated[dict, Depends(dev_user)]):
     """Serve Swagger UI for developers while keeping it hidden from public."""
 
-    return get_swagger_ui_html(
-        openapi_url="/openapi.json", title="Creator Toolkit API Docs"
-    )
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="Creator Toolkit API Docs")
 
 
 # init databases we'll need
@@ -599,9 +591,7 @@ def _youtube_get_access_token(refresh_token: str) -> str:
     js = r.json()
     at = js.get("access_token")
     if not at:
-        raise HTTPException(
-            status_code=500, detail="No access_token in refresh response"
-        )
+        raise HTTPException(status_code=500, detail="No access_token in refresh response")
     return at
 
 
@@ -614,9 +604,7 @@ def _normalize_publish_at(publish_at_raw: Optional[str]) -> Optional[str]:
     if not value:
         return None
 
-    normalized = (
-        value.replace(" ", "T", 1) if " " in value and "T" not in value else value
-    )
+    normalized = value.replace(" ", "T", 1) if " " in value and "T" not in value else value
     if normalized.endswith("Z"):
         normalized = normalized[:-1] + "+00:00"
 
@@ -719,9 +707,7 @@ def _youtube_upload_from_disk(
         + closing.encode("utf-8")
     )
 
-    upload_url = (
-        "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status"
-    )
+    upload_url = "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status"
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -731,9 +717,7 @@ def _youtube_upload_from_disk(
     r = requests.post(upload_url, headers=headers, data=body_bytes, timeout=90)
 
     if r.status_code >= 400:
-        raise HTTPException(
-            status_code=r.status_code, detail=f"YouTube upload error: {r.text}"
-        )
+        raise HTTPException(status_code=r.status_code, detail=f"YouTube upload error: {r.text}")
 
     try:
         yt_resp = r.json()
@@ -760,9 +744,7 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
     return [t.strip() for t in tags_raw.split(",") if t.strip()]
 
 
-def _dashboard_shell(
-    request: Request, *, active_view: str = "dashboard-view"
-) -> HTMLResponse:
+def _dashboard_shell(request: Request, *, active_view: str = "dashboard-view") -> HTMLResponse:
     """Render the dashboard shell with the requested active view highlighted."""
 
     return templates.TemplateResponse(
@@ -811,9 +793,7 @@ def _to_iso(ts: int | None) -> str | None:
     if not ts:
         return None
     try:
-        return datetime.datetime.fromtimestamp(
-            int(ts), tz=datetime.timezone.utc
-        ).isoformat()
+        return datetime.datetime.fromtimestamp(int(ts), tz=datetime.timezone.utc).isoformat()
     except Exception:
         return None
 
@@ -1202,9 +1182,7 @@ def eleven_generate_tts(
         with open(out_path, "wb") as f:
             f.write(audio_bytes)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Could not save MP3: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Could not save MP3: {exc}") from exc
 
     public_url = f"/static/tts/{out_name}"
 
@@ -1257,9 +1235,7 @@ def _generate_voiceover_mp3_for_user(
     )
 
     if resp.status_code >= 400:
-        raise HTTPException(
-            status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}"
-        )
+        raise HTTPException(status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}")
 
     audio_bytes = resp.content
     if not audio_bytes or len(audio_bytes) < 10:
@@ -1554,9 +1530,7 @@ def get_music_status(
     try:
         payload = last_resp.json()
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail="Music status response was not JSON"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Music status response was not JSON") from exc
 
     status = payload.get("status", "unknown")
 
@@ -1789,9 +1763,7 @@ def generate_video(
             }
 
         # maybe it inlined the video as base64 or gave us a direct URL
-        video_url = (
-            payload.get("video_url") or payload.get("url") or payload.get("result_url")
-        )
+        video_url = payload.get("video_url") or payload.get("url") or payload.get("result_url")
         video_b64 = payload.get("video_b64")
 
         if video_b64:
@@ -1866,9 +1838,7 @@ def generate_video(
 
 @app.get("/youtube/auth/url", tags=["YouTube"])
 def youtube_auth_url(
-    user: Annotated[
-        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
 ):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -1905,9 +1875,7 @@ def youtube_oauth2_callback(code: str, request: Request):
 
     payload = decode_access_token(token)
     if not payload:
-        raise HTTPException(
-            status_code=401, detail="Invalid or expired token during callback"
-        )
+        raise HTTPException(status_code=401, detail="Invalid or expired token during callback")
 
     uid_raw = payload.get("sub") or payload.get("id")
     if uid_raw is None:
@@ -1968,9 +1936,7 @@ def youtube_oauth2_callback(code: str, request: Request):
 
 @app.get("/youtube/channels/me", tags=["YouTube"])
 def youtube_channels_me(
-    user: Annotated[
-        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
 ):
     # 1. Get your encrypted refresh token from DB
     refresh_token = _get_youtube_refresh(user["id"])
@@ -2004,9 +1970,7 @@ class YouTubeUploadRequest(BaseModel):
     title: Optional[str] = Field(None, examples=["My Super Cool Video!"])
     description: Optional[str] = Field("", examples=["Created with Creator Toolkit"])
     tags: Optional[List[str]] = Field(None, examples=["#Cool, #Videos, #Only"])
-    privacy_status: Optional[str] = Field(
-        "unlisted", examples=["Public, Unlisted, Private"]
-    )
+    privacy_status: Optional[str] = Field("unlisted", examples=["Public, Unlisted, Private"])
     publish_at: Optional[str] = Field(None, examples=["2025-11-02T18:00:00Z"])
 
 
@@ -2055,9 +2019,7 @@ def _resolve_video_file(video_path_raw: str) -> Path:
 @app.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
     req: YouTubeUploadRequest,
-    user: Annotated[
-        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
 ):
     """Upload a rendered video residing on disk using a JSON request payload."""
 
@@ -2096,9 +2058,7 @@ def youtube_upload_video(
 
 @app.post("/youtube/upload-form", tags=["YouTube"])
 def youtube_upload_video_form(
-    user: Annotated[
-        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
     video_file: Annotated[UploadFile, File(...)],
     title: Annotated[str, Form(...)],
     description: Annotated[str, Form()] = "",
@@ -2111,9 +2071,7 @@ def youtube_upload_video_form(
     try:
         video_bytes = video_file.file.read()
     except Exception as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Could not read uploaded file: {exc}"
-        ) from exc
+        raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {exc}") from exc
 
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Empty video file")
@@ -2439,9 +2397,7 @@ def package(req: PackageReq):
     out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
     audio_ms = probe_audio_duration(req.audio_path)
     if audio_ms <= 0:
-        raise HTTPException(
-            status_code=400, detail="Invalid audio file (duration <= 0)"
-        )
+        raise HTTPException(status_code=400, detail="Invalid audio file (duration <= 0)")
 
     try:
         res = build_master_from_loop(
@@ -2478,9 +2434,7 @@ def package_master(
     masters_dir = os.path.join("static", "masters")
     os.makedirs(masters_dir, exist_ok=True)
 
-    out_file = (
-        req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
-    )
+    out_file = req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
     out_path = os.path.join(masters_dir, out_file)
 
     try:
@@ -2688,9 +2642,7 @@ def auth_login(req: LoginReq):
 
 
 @app.post("/auth/verify-email")
-def auth_verify_email(
-    req: VerifyEmailReq, user: Annotated[dict, Depends(current_user)]
-):
+def auth_verify_email(req: VerifyEmailReq, user: Annotated[dict, Depends(current_user)]):
     if user.get("is_verified"):
         return {"ok": True, "already_verified": True, "user": _user_payload(user)}
 
@@ -2721,9 +2673,7 @@ def auth_resend_verification(user: Annotated[dict, Depends(current_user)]):
     new_code = _generate_verification_code()
     set_verification_code(user["id"], new_code)
     refreshed = get_user_by_id(user["id"]) or user
-    email_sent = _send_verification_email(
-        user.get("email"), new_code, refreshed.get("full_name")
-    )
+    email_sent = _send_verification_email(user.get("email"), new_code, refreshed.get("full_name"))
     logger.info("Issued new verification code for user_id=%s", user["id"])
     message = "A new verification code has been emailed to you."
     if not email_sent:
@@ -2776,9 +2726,7 @@ def profile_update(req: ProfileUpdateReq, user: Annotated[dict, Depends(current_
     if email_changed:
         verification_code = _generate_verification_code()
         set_verification_code(user["id"], verification_code)
-        email_sent = _send_verification_email(
-            normalized_email, verification_code, req.full_name
-        )
+        email_sent = _send_verification_email(normalized_email, verification_code, req.full_name)
         logger.info("User %s updated email; verification reset", user["id"])
     refreshed = get_user_by_id(user["id"]) or user
     response = {"ok": True, "user": _user_payload(refreshed)}
@@ -2794,9 +2742,7 @@ def profile_update(req: ProfileUpdateReq, user: Annotated[dict, Depends(current_
 
 
 @app.post("/profile/password")
-def profile_password_change(
-    req: PasswordChangeReq, user: Annotated[dict, Depends(current_user)]
-):
+def profile_password_change(req: PasswordChangeReq, user: Annotated[dict, Depends(current_user)]):
     # user here includes password_hash (from DB via current_user)
     if not verify_password(req.current_password, user["password_hash"]):
         return JSONResponse(
@@ -2885,9 +2831,7 @@ def admin_test_smtp(
     msg.set_content(req.body or "This is a test email from Creator Toolkit.")
 
     try:
-        with smtplib.SMTP(
-            host, int(settings.get("port") or 0), timeout=SMTP_TIMEOUT
-        ) as smtp:
+        with smtplib.SMTP(host, int(settings.get("port") or 0), timeout=SMTP_TIMEOUT) as smtp:
             if bool(settings.get("use_tls", True)):
                 try:
                     smtp.starttls()
@@ -2906,9 +2850,7 @@ def admin_test_smtp(
 
 @app.get("/profile/keys")
 def profile_keys_list(
-    user: Annotated[
-        dict, Depends(require_role(["admin", "owner"], require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(["admin", "owner"], require_verified=True))],
 ):
     raw = list_user_keys(user["id"])
     # we do NOT return the decrypted secrets, just providers
@@ -2918,9 +2860,7 @@ def profile_keys_list(
 @app.post("/profile/keys")
 def profile_keys_upsert(
     req: KeyUpsertReq,
-    user: Annotated[
-        dict, Depends(require_role(["admin", "owner"], require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(["admin", "owner"], require_verified=True))],
 ):
     cipher = encrypt_value(req.secret)
     upsert_user_key(user["id"], req.provider.lower(), cipher)
@@ -2930,9 +2870,7 @@ def profile_keys_upsert(
 @app.delete("/profile/keys/{provider}")
 def profile_keys_delete(
     provider: str,
-    user: Annotated[
-        dict, Depends(require_role(["admin", "owner"], require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(["admin", "owner"], require_verified=True))],
 ):
     delete_user_key(user["id"], provider.lower())
     return {"ok": True, "deleted": provider.lower()}
@@ -2941,9 +2879,7 @@ def profile_keys_delete(
 @app.post("/pipeline/publish_lofi", tags=["Pipeline"])
 def pipeline_publish_lofi(
     req: PublishPipelineReq,
-    user: Annotated[
-        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
-    ],
+    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
 ):
     """
     One-shot pipeline:
@@ -3051,9 +2987,7 @@ def get_video_status(
     try:
         meta = meta_resp.json()
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail="Status response was not JSON"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Status response was not JSON") from exc
 
     status = meta.get("status", "unknown")
 
@@ -3070,9 +3004,7 @@ def get_video_status(
 
     # Failed?
     if status == "failed":
-        raise HTTPException(
-            status_code=500, detail=meta.get("error", "Generation failed")
-        )
+        raise HTTPException(status_code=500, detail=meta.get("error", "Generation failed"))
 
     # Completed. Now we actually need the bytes.
     if status == "completed":

@@ -69,9 +69,7 @@ def test_package_job_produces_unique_out_paths(monkeypatch):
 
     produced = []
 
-    def fake_build(
-        loop_clip_path, music_audio_path, out_path, target_ms, voiceover_audio_path
-    ):
+    def fake_build(loop_clip_path, music_audio_path, out_path, target_ms, voiceover_audio_path):
         produced.append(out_path)
         out_path_obj = Path(out_path)
         out_path_obj.parent.mkdir(parents=True, exist_ok=True)

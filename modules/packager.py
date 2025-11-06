@@ -98,9 +98,7 @@ def _strip_video_audio(in_video: str, workdir: str) -> str:
     return silent_out
 
 
-def _mix_audio_tracks(
-    music_audio_path: str, voiceover_audio_path: str | None, workdir: str
-) -> str:
+def _mix_audio_tracks(music_audio_path: str, voiceover_audio_path: str | None, workdir: str) -> str:
     """
     If voiceover_audio_path is None -> just transcode music to wav (normalized)
     Else -> blend music under VO.

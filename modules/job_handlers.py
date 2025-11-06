@@ -34,9 +34,7 @@ def _resolve_output_path(raw_path: str | None) -> Path:
         if not candidate.is_absolute():
             candidate = project_path(*candidate.parts)
     else:
-        candidate = project_path(
-            "static", "uploads", _timestamped_filename("master", ".mp4")
-        )
+        candidate = project_path("static", "uploads", _timestamped_filename("master", ".mp4"))
     candidate.parent.mkdir(parents=True, exist_ok=True)
     return candidate
 

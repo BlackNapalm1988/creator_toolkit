@@ -40,9 +40,7 @@ def init_chat_db() -> None:
                 created_at INTEGER NOT NULL
             )"""
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)")
 
 
 def now() -> int:
@@ -51,9 +49,7 @@ def now() -> int:
     return int(time.time())
 
 
-def create_thread(
-    thread_id: str, user_id: int, model: str, title: str = "New chat"
-) -> str:
+def create_thread(thread_id: str, user_id: int, model: str, title: str = "New chat") -> str:
     """Persist a new thread record and return its ID."""
 
     with _conn() as conn:
