@@ -1,0 +1,25 @@
+[run]
+branch = True
+source =
+    app
+    creator_toolkit/app
+
+[report]
+fail_under = 80
+show_missing = True
+skip_covered = False
+omit =
+    app/main.py
+    app/api/*
+    app/services/*
+    app/workers/*
+    app/deps.py
+    app/models/create.py
+    app/models/imagine.py
+    app/models/publish.py
+    app/models/system.py
+
+[paths]
+source =
+    app
+    creator_toolkit/app

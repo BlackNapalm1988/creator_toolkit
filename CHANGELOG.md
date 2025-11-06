@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Unified error envelope with global exception handlers returning the standard error envelope.
+- Job lifecycle hardening with Pydantic schemas and guarded status transitions.
+- Minimal test suite enforcing ≥80% coverage for core modules.
+- CI pipeline running lint (ruff), deadcode (vulture, non-blocking), dependency checks (deptry), audit (pip-audit, warn-only), and pytest with coverage.
+- Prune script and static/template cleanup to drop orphaned assets.
+- Contributor ergonomics: Makefile targets and updated README with seeding policy and settings table.
+
+### Changed
+- Standardized job error reporting and surfaced envelope in job results on failure.
+- Replaced ad-hoc JSON error responses with HTTPExceptions unified by handlers.
+
+### Removed
+- Orphaned static assets not referenced by templates.
+
 ## v1.2-core-restoration — 2025-10-30
 
 - Started the background queue worker from FastAPI's `startup` event and added a shutdown hook that stops and joins the thread.

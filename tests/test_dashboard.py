@@ -115,7 +115,9 @@ def test_dashboard_data_rejects_unauthenticated(client):
 
     response = client.get("/dashboard/data")
     assert response.status_code == 401
-    assert response.json()["detail"] in {"Missing token", "Invalid or expired token"}
+    payload = response.json()
+    assert payload["error"]["code"] == "unauthorized"
+    assert payload["error"]["message"] in {"Missing token", "Invalid or expired token"}
 
 
 def test_user_payload_exposes_expected_fields():

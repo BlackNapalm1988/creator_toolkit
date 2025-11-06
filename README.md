@@ -78,9 +78,14 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
    source .venv/bin/activate
    ```
 2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+   - With Make (recommended):
+     ```bash
+     make install
+     ```
+   - Or manually:
+     ```bash
+     pip install -r requirements.txt -r requirements-dev.txt
+     ```
 3. **Configure environment**
    Copy `.env.example` or create a `.env` file with at least:
    ```env
@@ -104,7 +109,9 @@ New users are provisioned as **owners** by default. API endpoints and the dashbo
 uvicorn main:app --reload
 ```
 
-The queue worker now starts from FastAPI's `startup` event. Direct `import main` will not spawn background threads; run the app (or trigger the startup hook) before enqueueing jobs. For CI or isolated tests you can disable the worker with `DISABLE_QUEUE_WORKER=1`.
+The queue worker now starts from FastAPI's `startup` event. Direct `import main` will not spawn background threads; run the app (or trigger the startup hook) before enqueueing jobs.
+
+For CI or isolated tests you can disable the worker with `DISABLE_QUEUE_WORKER=1`.
 
 If `JWT_SECRET` is missing the server falls back to an insecure development default and logs an error. Always set a unique secret in shared or production environments.
 
@@ -121,7 +128,9 @@ python scripts/worker.py
 - Administrators manage SMTP credentials via `/admin/system/smtp`. Non-admins receive `403 Forbidden` responses.
 - Startup logs warn if `JWT_SECRET` is left at the insecure default.
 
-### Pre-seeded Test Users
+### Seeding Policy
+
+Default admin and test users are created only when either `ENV=dev` or `ALLOW_SEEDING=true`.
 
 For manual testing the app seeds one verified account per role on startup. Each account uses the shared password `password`:
 
@@ -133,6 +142,39 @@ For manual testing the app seeds one verified account per role on startup. Each 
 | viewer | `user_viewer@testing.com` |
 
 These users are intended for local development only; rotate or remove them before deploying to a shared environment.
+
+### Settings
+
+Core environment variables (via `.env`):
+
+| Name | Default | Description |
+|------|---------|-------------|
+| `ENV` | `dev` | Environment name controlling seeding policy and guards. |
+| `ALLOW_SEEDING` | `false` | When true, seeds default admin and test users regardless of `ENV`. |
+| `JWT_SECRET` | `insecure-dev` | Secret for JWT signing. Required to be strong in non-`dev`. |
+| `SMTP_TIMEOUT_SECONDS` | `10` | SMTP timeout for email operations. |
+
+Optional provider settings (some are set at runtime per-user instead):
+
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — for YouTube OAuth helpers.
+- OpenAI and ElevenLabs API keys are stored per-user via profile endpoints; not required in `.env`.
+
+### Dev Workflow with Make
+
+```bash
+# install deps
+make install
+
+# lint, deadcode scan, dependency check, vulnerability audit, and tests
+make ci
+
+# or run individual steps
+make lint
+make deadcode
+make deps
+make audit
+make test
+```
 
 ## Testing
 

@@ -41,6 +41,7 @@ extend-exclude = [
     "static",
     "templates",
     "releases",
+    "scenes",
 ]
 
 [tool.ruff.lint]

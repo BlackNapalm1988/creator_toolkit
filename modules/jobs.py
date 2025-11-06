@@ -266,6 +266,26 @@ def _update(job_id: str, **kwargs: Any) -> None:
     sets.append("updated_at=?")
     params.append(now())
     with _conn() as conn:
+        # Validate status transitions if status is present
+        if any(s.startswith("status=") for s in sets):
+            cur = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if cur:
+                current = cur[0]
+                new_status = None
+                for idx, s in enumerate(sets):
+                    if s.startswith("status="):
+                        new_status = params[idx]
+                        break
+                if new_status is not None and new_status != current:
+                    allowed = {
+                        "queued": {"running", "failed", "complete"},
+                        "running": {"complete", "failed"},
+                        "complete": set(),
+                        "failed": set(),
+                    }
+                    if new_status not in allowed.get(current, set()):
+                        raise ValueError(f"Illegal job status transition {current} -> {new_status}")
+
         conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", (*params, job_id))
 
 
@@ -351,11 +371,20 @@ def set_error(
 ) -> None:
     """Record an error state for the job."""
 
+    # Attach a unified error envelope into the result field as well, so
+    # API consumers see the same shape they get from exception handlers.
+    try:
+        from app.web.errors import error_envelope  # local import to avoid cycles
+        unified_error = error_envelope("job_failed", str(error), details=None)
+    except Exception:  # pragma: no cover - defensive fallback
+        unified_error = {"error": {"code": "job_failed", "message": str(error), "details": None}}
+
     update_kwargs: Dict[str, Any] = {
         "error_message": error,
         "status": "failed",
         "stage": "failed",
         "progress": progress,
+        "result": unified_error,
     }
     if duration_ms is not None:
         update_kwargs["duration_ms"] = duration_ms
@@ -386,10 +415,8 @@ class QueueWorker(threading.Thread):
                         time.sleep(self.poll_interval)
                         continue
                     job_id, job_type, payload_json = row
-                    conn.execute(
-                        "UPDATE jobs SET status='running', stage='running', progress=0, updated_at=? WHERE id=?",
-                        (now(), job_id),
-                    )
+                    # Transition queued -> running using validation
+                    update_job_status(job_id, status="running", stage="running", progress=0)
 
                 payload = json.loads(payload_json)
                 handler = self.handlers.get(job_type)

@@ -96,7 +96,9 @@ def test_youtube_upload_json_missing_fields(client):
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "video_path and title are required"}
+    body = response.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "video_path and title are required"
 
 
 def test_youtube_upload_json_missing_file(client):
@@ -114,8 +116,9 @@ def test_youtube_upload_json_missing_file(client):
     )
 
     assert response.status_code == 404
-    detail = response.json()["detail"]
-    assert "File not found" in detail
+    err = response.json()["error"]
+    assert err["code"] == "not_found"
+    assert "File not found" in err["message"]
 
 
 def test_youtube_upload_json_leading_slash_path(client, tmp_path, monkeypatch):

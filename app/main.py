@@ -34,10 +34,11 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError
 
 from app.core.settings import get_settings
 from modules.auth import (
@@ -432,8 +433,25 @@ app = FastAPI(
     openapi_url=None,
     lifespan=app_lifespan,
 )
+
+# Job response schema helpers
+from app.models.jobs import build_job_base, build_job_detail
 app.state.worker = None
 app.state.settings = settings
+
+# Unified error handling – register global exception handlers that return
+# {"error": {"code", "message", "details"}}
+from app.web.errors import (
+    http_exception_handler,
+    request_validation_exception_handler,
+    pydantic_validation_exception_handler,
+    generic_exception_handler,
+)
+
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
+app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 admin_router = APIRouter(prefix="/admin/system", tags=["Admin"])
 
@@ -850,7 +868,7 @@ def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
     result_payload = _extract_result(job)
     out_path = _extract_out_path(result_payload)
 
-    return {
+    payload = {
         "id": job.get("id"),
         "type": job.get("type"),
         "status": job.get("status"),
@@ -860,6 +878,13 @@ def _serialize_job(job: Dict[str, object]) -> Dict[str, object]:
         "error_message": job.get("error_message"),
         "out_path": out_path,
     }
+
+    # If job failed and result contains a unified error envelope, expose it at top-level too
+    result_payload = _extract_result(job)
+    if job.get("status") == "failed" and isinstance(result_payload, dict) and "error" in result_payload:
+        payload["error"] = result_payload["error"]
+
+    return build_job_base(payload).model_dump()
 
 
 def _serialize_job_detail(job: Dict[str, object]) -> Dict[str, object]:
@@ -879,7 +904,7 @@ def _serialize_job_detail(job: Dict[str, object]) -> Dict[str, object]:
             "logs": (job.get("logs") or "").splitlines() if job.get("logs") else [],
         }
     )
-    return detail
+    return build_job_detail(detail | {"result": _extract_result(job)}).model_dump()
 
 
 @app.get("/dashboard/data", tags=["Dashboard"])
@@ -2273,7 +2298,7 @@ def upload(file: Annotated[UploadFile, File(...)]):
 def download(path: str):
     p = path.replace("..", "")
     if not os.path.exists(p):
-        return JSONResponse(status_code=404, content={"error": "not found"})
+        raise HTTPException(status_code=404, detail="not found")
     return FileResponse(p)
 
 
@@ -2526,10 +2551,7 @@ def api_create_or_update_project(payload: Annotated[dict, Body(...)]):
         "presets": payload.get("presets", []),
     }
     if not proj["id"]:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "id required"},
-        )
+        raise HTTPException(status_code=400, detail="id required")
     return upsert_project(proj)
 
 
@@ -2537,7 +2559,7 @@ def api_create_or_update_project(payload: Annotated[dict, Body(...)]):
 def api_get_project(pid: str):
     p = get_project(pid)
     if not p:
-        return JSONResponse(status_code=404, content={"error": "not found"})
+        raise HTTPException(status_code=404, detail="not found")
     return p
 
 
@@ -2559,10 +2581,7 @@ def api_upsert_preset(payload: Annotated[dict, Body(...)]):
         "title": payload.get("title", ""),
     }
     if not pr["id"] or not pr["scene_yaml"]:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "id and scene_yaml required"},
-        )
+        raise HTTPException(status_code=400, detail="id and scene_yaml required")
     return upsert_preset(pr)
 
 
@@ -2629,10 +2648,7 @@ class SMTPTestRequest(BaseModel):
 @app.post("/auth/register")
 def auth_register(req: RegisterReq):
     if get_user_by_email(req.email):
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Email already registered"},
-        )
+        raise HTTPException(status_code=400, detail="Email already registered")
     verification_code = _generate_verification_code()
     user_id = create_user(
         req.email,
@@ -2696,16 +2712,13 @@ def auth_verify_email(
 
     stored_code = user.get("verification_code")
     if not stored_code:
-        return JSONResponse(
+        raise HTTPException(
             status_code=400,
-            content={"error": "No verification code found. Request a new one."},
+            detail="No verification code found. Request a new one.",
         )
 
     if req.code.strip().upper() != str(stored_code).strip().upper():
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Invalid verification code"},
-        )
+        raise HTTPException(status_code=400, detail="Invalid verification code")
 
     mark_email_verified(user["id"])
     refreshed = get_user_by_id(user["id"]) or user
@@ -2764,10 +2777,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
 def profile_update(req: ProfileUpdateReq, user: Annotated[dict, Depends(current_user)]):
     existing = get_user_by_email(req.email)
     if existing and existing["id"] != user["id"]:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Email already in use"},
-        )
+        raise HTTPException(status_code=400, detail="Email already in use")
     normalized_email = req.email.lower().strip()
     email_changed = normalized_email != (user.get("email") or "").lower()
     update_user_profile(user["id"], req.full_name, req.email)
@@ -2799,10 +2809,7 @@ def profile_password_change(
 ):
     # user here includes password_hash (from DB via current_user)
     if not verify_password(req.current_password, user["password_hash"]):
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Current password incorrect"},
-        )
+        raise HTTPException(status_code=400, detail="Current password incorrect")
     update_password_hash(
         user["id"],
         hash_password(req.new_password),
@@ -2821,9 +2828,9 @@ def profile_role_update(
     desired = (req.role or "").strip().lower()
     valid_roles = {"admin", "owner", "editor", "viewer"}
     if desired not in valid_roles:
-        return JSONResponse(
+        raise HTTPException(
             status_code=400,
-            content={"error": "role must be one of admin, owner, editor, viewer"},
+            detail="role must be one of admin, owner, editor, viewer",
         )
 
     target_id = req.user_id or user["id"]
@@ -3143,3 +3150,6 @@ def get_video_status(
 
 
 app.include_router(admin_router)
+# Utility to centralize seeding guard logic (used by tests)
+def _should_seed_defaults(env: str, allow_seeding: bool) -> bool:
+    return env == "dev" or allow_seeding

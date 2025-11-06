@@ -62,6 +62,9 @@ def test_job_handle_package_failure_records_error(monkeypatch):
     assert job["stage"] == "failed"
     assert job["error_message"] == "Invalid audio asset"
     assert job["progress"] is None
+    # unified error envelope is stored in result
+    assert isinstance(job.get("result"), dict)
+    assert job["result"].get("error", {}).get("code") == "job_failed"
 
 
 def test_package_job_produces_unique_out_paths(monkeypatch):
