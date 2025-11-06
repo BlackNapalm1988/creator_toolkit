@@ -255,3 +255,19 @@ No license has been specified. Assume all rights reserved unless the repository 
 - Age threshold: `--days N` (default 7).
 - Scope: Only operates on `static/`. Never touches `user_content/`, `releases/`, `scenes/`, or `data/`.
 - References: Parses `templates/**/*.html` and optional `static/asset-manifest.json`, with optional allow/block lists at `static/.prune-allowlist` and `static/.prune-blocklist`.
+
+## UI Shell & Footer
+- The UI renders a 3-panel shell (sidebar, main, inspector) via `static/app.js`.
+- Sidebar and inspector toggle classes on `#app`: `ct-shell--sidebar-collapsed`, `ct-inspector--closed`.
+- Footer (`.footerbar`) appears on every page and matches the top bar styling.
+
+### Login Flow
+- Click “Log In” in the top bar to open the modal.
+- Enter email/password; the client posts to `/auth/login` and stores a session cookie.
+- On success, the header shows your greeting and, for admins, the Docs link.
+- Logout clears the cookie via `/auth/logout` and resets the UI to viewer mode.
+
+### Developer Notes
+- `ENV=dev` and `ALLOW_SEEDING=1` seeds a default admin for easy login.
+- User-generated files are stored under `user_content/` and served at `/content`.
+- The prune tool only scans `/static` and never touches `/content`.

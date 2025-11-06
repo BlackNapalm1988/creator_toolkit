@@ -23,8 +23,8 @@ from modules.auth import (
 )
 from modules.users import (
     delete_user_key,
-    get_user_by_id,
     get_user_by_email,
+    get_user_by_id,
     list_user_keys,
     set_must_change_password,
     update_password_hash,
@@ -90,6 +90,8 @@ def auth_register_stub(
     req: RegisterReq,
 ):  # pragma: no cover - only schema validation used in tests
     return {"ok": True}
+
+
 @router.get("/me", response_model=OkUserResp, responses={401: {"model": ErrorResponse}})
 def api_me(user=Depends(current_user)):
     """Return the current authenticated user's public payload."""
@@ -97,14 +99,20 @@ def api_me(user=Depends(current_user)):
     return {"ok": True, "user": user_payload(user)}
 
 
-@router.get("/api/me", response_model=OkUserResp, responses={401: {"model": ErrorResponse}})
+@router.get(
+    "/api/me", response_model=OkUserResp, responses={401: {"model": ErrorResponse}}
+)
 def api_me_alias(user=Depends(current_user)):
     """Alias for front-end fetch compatibility."""
 
     return {"ok": True, "user": user_payload(user)}
 
 
-@router.post("/auth/login", response_model=OkUserResp, responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
+@router.post(
+    "/auth/login",
+    response_model=OkUserResp,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+)
 def auth_login(req: LoginReq, resp: Response):
     user = get_user_by_email(req.email)
     if not user:

@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
+          python -m playwright install --with-deps
 
       - name: Ruff (lint)
         run: |

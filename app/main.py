@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
 
     # Doc endpoints guarded by admin when not exposed globally
     if app.openapi_url is None:
+
         @app.get("/openapi.json", include_in_schema=False)
         def custom_openapi(user=Depends(dev_user)):
             return JSONResponse(app.openapi())
