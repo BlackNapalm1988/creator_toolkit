@@ -20,12 +20,14 @@ const VIEW_PATHS = {
 
 const NAV_SECTIONS = [
   {
-    label: "Dashboard",
-    id: "dashboard",
-    navId: "navDashboard",
-    view: "dashboard-view",
-    roles: "admin owner editor viewer",
-    icon: "🏠",
+    label: "Jobs",
+    id: "jobs",
+    navId: "navJobs",
+    view: "jobs",
+    children: [
+      { label: "Active Jobs", id: "jobs-active" },
+      { label: "History", id: "jobs-history" },
+    ],
   },
   {
     label: "Imagine",
@@ -33,7 +35,6 @@ const NAV_SECTIONS = [
     navId: "navImagine",
     view: "imagine-view",
     roles: "admin owner editor",
-    icon: "🎨",
   },
   {
     label: "Create",
@@ -41,7 +42,6 @@ const NAV_SECTIONS = [
     navId: "navCreate",
     view: "create-view",
     roles: "admin owner editor",
-    icon: "✨",
     children: [
       { label: "New Project", id: "create-new" },
       { label: "Image from Text", id: "create-image-text" },
@@ -50,24 +50,11 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: "Library",
-    id: "library",
-    view: "library",
-    icon: "📚",
-    children: [
-      { label: "Scenes", id: "library-scenes" },
-      { label: "Video", id: "library-video" },
-      { label: "Audio", id: "library-audio" },
-      { label: "Other", id: "library-other" },
-    ],
-  },
-  {
     label: "Publish",
     id: "publish",
     navId: "navPublish",
     view: "publish-view",
     roles: "admin owner",
-    icon: "🚀",
     children: [
       { label: "YouTube", id: "publish-youtube" },
       { label: "Facebook", id: "publish-facebook" },
@@ -76,41 +63,18 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: "Jobs",
-    id: "jobs",
-    view: "jobs",
-    icon: "📋",
+    label: "Library",
+    id: "library",
+    view: "library",
     children: [
-      { label: "Active Jobs", id: "jobs-active" },
-      { label: "History", id: "jobs-history" },
+      { label: "Scenes", id: "library-scenes" },
+      { label: "Video", id: "library-video" },
+      { label: "Audio", id: "library-audio" },
+      { label: "Other", id: "library-other" },
     ],
-  },
-  {
-    label: "System",
-    id: "system",
-    navId: "navSystem",
-    view: "system-view",
-    roles: "admin",
-    icon: "⚙️",
   },
 ];
 
-const INSPECTOR_CARDS = [
-  {
-    title: "Music created and added to assets",
-    description:
-      "Latest audio generations appear in your Library. Drag them into new edits or share with collaborators.",
-  },
-  {
-    title: "Scene created and added to assets",
-    description:
-      "Keep iterating on your scenes. Refresh prompts, remix scripts, and stage shots before packaging.",
-  },
-  {
-    title: "What would you like to do?",
-    description: "Prompt Imagine with goals or paste scripts to generate beat boards, voiceover, and music cues.",
-  },
-];
 
 const LEGACY_VIEWS = new Set([
   "dashboard-view",
@@ -119,6 +83,8 @@ const LEGACY_VIEWS = new Set([
   "publish-view",
   "system-view",
 ]);
+
+const INSPECTOR_SCROLL_EPSILON = 8;
 
 let emojiSupportChecked = false;
 
@@ -205,6 +171,17 @@ let shellRoot = null;
 let mainContentEl = null;
 let navButtons = [];
 let inspectorActionButton = null;
+let inspectorEl = null;
+let inspectorToggleButton = null;
+let topbarDashboardButton = null;
+let inspectorChatEl = null;
+let inspectorMessagesEl = null;
+let inspectorInputEl = null;
+let inspectorSendButton = null;
+let inspectorChatOverlayEl = null;
+let inspectorThreadId = null;
+let inspectorThreadPromise = null;
+let inspectorSendInProgress = false;
 let legacyWorkspace = null;
 let dynamicWorkspace = null;
 let initialActiveView = "dashboard-view";
@@ -249,6 +226,7 @@ function renderShell(activeViewOverride) {
   bindShellControls();
   refreshShellRefs();
   bindNavigationHandlers();
+  bindTopbarNavigation();
   bindInspectorActions();
 
   return true;
@@ -591,27 +569,29 @@ function renderInspector() {
       <h2>IMAGINE</h2>
       <p class="ct-inspector__subtitle">Prompt tools & creative memory</p>
     </header>
-    <div id="ct-inspector-body" class="ct-inspector__body"></div>
+    <div id="ct-inspector-body" class="ct-inspector__body">
+      <div id="ct-inspector-chat" class="ct-inspector-chat" role="log" aria-live="polite">
+        <div id="ct-inspector-messages" class="ct-inspector-chat__messages"></div>
+        <div class="ct-inspector-chat__overlay" aria-hidden="true"></div>
+      </div>
+      <div class="ct-inspector-input-group">
+        <textarea id="ct-inspector-input" class="ct-inspector-input" placeholder="Describe what you want to create..." rows="3"></textarea>
+        <button id="ct-inspector-send" class="ghost-btn ct-inspector-send">Send</button>
+      </div>
+    </div>
     <div class="ct-inspector__footer">
       <button id="ct-inspector-action" class="ghost-btn full">Create a new video</button>
     </div>
   `;
 
-  const body = inner.querySelector("#ct-inspector-body");
-  if (!body) return;
-
-  // Placeholder Imagine activity cards; Step 2+ will replace these with live data.
-  INSPECTOR_CARDS.forEach(card => {
-    const cardEl = document.createElement("article");
-    cardEl.className = "ct-inspector__card";
-    const title = document.createElement("h3");
-    title.textContent = card.title;
-    const description = document.createElement("p");
-    description.textContent = card.description;
-    cardEl.appendChild(title);
-    cardEl.appendChild(description);
-    body.appendChild(cardEl);
-  });
+  const messages = inner.querySelector("#ct-inspector-messages");
+  if (messages) {
+    messages.innerHTML = "";
+    const intro = document.createElement("div");
+    intro.className = "ct-inspector-message ct-inspector-message--system";
+    intro.textContent = "Describe what you want to create and Imagine will brainstorm with you.";
+    messages.appendChild(intro);
+  }
 
   console.log("[ui-shell] inspector rendered");
 }
@@ -656,8 +636,18 @@ function refreshShellRefs() {
   mainContentEl = document.getElementById("ct-main");
   legacyWorkspace = document.getElementById("ct-legacy-content");
   dynamicWorkspace = document.getElementById("ct-main-dynamic");
-  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
   inspectorActionButton = document.getElementById("ct-inspector-action");
+  inspectorEl = document.getElementById("ct-inspector");
+  inspectorToggleButton = document.getElementById("ct-inspector-toggle");
+  topbarDashboardButton = document.getElementById("ct-topbar-dashboard");
+  navButtons = Array.from(document.querySelectorAll(".ct-nav-item[data-view]"));
+  inspectorChatEl = document.getElementById("ct-inspector-chat");
+  inspectorMessagesEl = document.getElementById("ct-inspector-messages");
+  inspectorInputEl = document.getElementById("ct-inspector-input");
+  inspectorSendButton = document.getElementById("ct-inspector-send");
+  inspectorChatOverlayEl = inspectorChatEl
+    ? inspectorChatEl.querySelector(".ct-inspector-chat__overlay")
+    : null;
 }
 
 function handleNavSelection(btn, event) {
@@ -679,6 +669,10 @@ function handleNavSelection(btn, event) {
 
   if (event && typeof event.preventDefault === "function") {
     event.preventDefault();
+  }
+
+  if (target === "imagine-view") {
+    toggleInspectorVisibility();
   }
 
   const href = btn.tagName === "A" ? btn.getAttribute("href") : btn.dataset.path || VIEW_PATHS[target];
@@ -705,15 +699,196 @@ function bindNavigationHandlers() {
   });
 }
 
-function bindInspectorActions() {
-  if (!inspectorActionButton || inspectorActionButton.dataset.shellBound === "1") {
+function bindTopbarNavigation() {
+  if (topbarDashboardButton && topbarDashboardButton.dataset.shellBound !== "1") {
+    topbarDashboardButton.dataset.shellBound = "1";
+    topbarDashboardButton.addEventListener("click", event => {
+      handleNavSelection(topbarDashboardButton, event);
+    });
+  }
+}
+
+function toggleInspectorVisibility() {
+  if (inspectorToggleButton) {
+    inspectorToggleButton.click();
+    updateInspectorChatOverlay();
     return;
   }
 
-  inspectorActionButton.dataset.shellBound = "1";
-  inspectorActionButton.addEventListener("click", () => {
-    changeView("create-view", { path: VIEW_PATHS["create-view"] });
+  if (!inspectorEl || !shellRoot) {
+    return;
+  }
+
+  const willBeClosed = !inspectorEl.classList.contains("ct-inspector--closed");
+  inspectorEl.classList.toggle("ct-inspector--closed", willBeClosed);
+  inspectorEl.classList.toggle("ct-inspector--open", !willBeClosed);
+  shellRoot.classList.toggle("ct-shell--inspector-closed", willBeClosed);
+  shellRoot.classList.toggle("ct-shell--inspector-open", !willBeClosed);
+  updateInspectorChatOverlay();
+}
+
+function bindInspectorActions() {
+  if (inspectorActionButton && inspectorActionButton.dataset.shellBound !== "1") {
+    inspectorActionButton.dataset.shellBound = "1";
+    inspectorActionButton.addEventListener("click", () => {
+      changeView("create-view", { path: VIEW_PATHS["create-view"] });
+    });
+  }
+
+  if (inspectorSendButton && inspectorSendButton.dataset.shellBound !== "1") {
+    inspectorSendButton.dataset.shellBound = "1";
+    inspectorSendButton.addEventListener("click", handleInspectorSend);
+  }
+
+  if (inspectorInputEl && inspectorInputEl.dataset.shellBound !== "1") {
+    inspectorInputEl.dataset.shellBound = "1";
+    inspectorInputEl.addEventListener("keydown", event => {
+      if (event.isComposing) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleInspectorSend(event);
+      }
+    });
+  }
+
+  if (inspectorChatEl && inspectorChatEl.dataset.shellScrollBound !== "1") {
+    inspectorChatEl.dataset.shellScrollBound = "1";
+    inspectorChatEl.addEventListener("scroll", updateInspectorChatOverlay);
+  }
+
+  updateInspectorChatOverlay();
+}
+
+function appendInspectorMessage(role, content) {
+  if (!inspectorMessagesEl) return null;
+  const msg = document.createElement("div");
+  msg.className = `ct-inspector-message ct-inspector-message--${role}`;
+  msg.textContent = content;
+  inspectorMessagesEl.appendChild(msg);
+  return msg;
+}
+
+function isInspectorChatAtBottom() {
+  if (!inspectorChatEl) return true;
+  const remaining =
+    inspectorChatEl.scrollHeight - inspectorChatEl.scrollTop - inspectorChatEl.clientHeight;
+  return remaining <= INSPECTOR_SCROLL_EPSILON;
+}
+
+function updateInspectorChatOverlay() {
+  if (!inspectorChatEl) return;
+  const atBottom = isInspectorChatAtBottom();
+  inspectorChatEl.classList.toggle("ct-inspector-chat--has-unread", !atBottom);
+  if (inspectorChatOverlayEl) {
+    inspectorChatOverlayEl.setAttribute("aria-hidden", atBottom ? "true" : "false");
+  }
+}
+
+function scrollInspectorChatToBottom(options = {}) {
+  if (!inspectorChatEl) return;
+  const behavior = options.behavior || "auto";
+  requestAnimationFrame(() => {
+    inspectorChatEl.scrollTo({ top: inspectorChatEl.scrollHeight, behavior });
+    updateInspectorChatOverlay();
   });
+}
+
+async function ensureInspectorThread() {
+  if (inspectorThreadId) {
+    return inspectorThreadId;
+  }
+
+  if (!inspectorThreadPromise) {
+    inspectorThreadPromise = (async () => {
+      try {
+        const resp = await postJSON("/imagine/thread", {});
+        const threadId = resp?.data?.thread_id;
+        if (!resp.ok || !threadId) {
+          const detail = resp?.data?.detail || resp?.data?.error;
+          throw new Error(detail || `Unable to start Imagine chat (${resp.status})`);
+        }
+        inspectorThreadId = threadId;
+        return inspectorThreadId;
+      } finally {
+        inspectorThreadPromise = null;
+      }
+    })();
+  }
+
+  return inspectorThreadPromise;
+}
+
+async function handleInspectorSend(event) {
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+
+  if (inspectorSendInProgress || !inspectorInputEl) {
+    return;
+  }
+
+  const userMessage = inspectorInputEl.value.trim();
+  if (!userMessage) {
+    return;
+  }
+
+  inspectorSendInProgress = true;
+  inspectorInputEl.value = "";
+
+  appendInspectorMessage("user", userMessage);
+  const assistantBubble = appendInspectorMessage("assistant", "...");
+  if (assistantBubble) {
+    assistantBubble.classList.add("is-pending");
+  }
+
+  scrollInspectorChatToBottom({ behavior: "smooth" });
+
+  try {
+    await withButtonWorkingState(inspectorSendButton, async () => {
+      const threadId = await ensureInspectorThread();
+      const resp = await postJSON("/imagine/send", {
+        thread_id: threadId,
+        message: userMessage,
+      });
+
+      if (!resp.ok || typeof resp?.data?.reply !== "string") {
+        const detail = resp?.data?.detail || resp?.data?.error;
+        throw new Error(detail || `Request failed (${resp.status})`);
+      }
+
+      if (assistantBubble) {
+        assistantBubble.textContent = resp.data.reply;
+        assistantBubble.classList.remove("is-pending");
+      }
+    });
+  } catch (err) {
+    const messageText = err && err.message ? err.message : "Unexpected error";
+    if (assistantBubble) {
+      assistantBubble.textContent = `Error: ${messageText}`;
+      assistantBubble.classList.remove("is-pending");
+      assistantBubble.classList.add("ct-inspector-message--error");
+    }
+    if (inspectorInputEl) {
+      inspectorInputEl.value = userMessage;
+      try {
+        inspectorInputEl.focus({ preventScroll: true });
+      } catch {
+        inspectorInputEl.focus();
+      }
+    }
+    console.error("[ui-shell] imagine send failed", err);
+  } finally {
+    inspectorSendInProgress = false;
+    scrollInspectorChatToBottom({ behavior: "smooth" });
+    updateInspectorChatOverlay();
+    if (inspectorInputEl) {
+      try {
+        inspectorInputEl.focus({ preventScroll: true });
+      } catch {
+        inspectorInputEl.focus();
+      }
+    }
+  }
 }
 
 function initializeShell() {
