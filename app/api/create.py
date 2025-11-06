@@ -17,9 +17,7 @@ from app.deps import require_role
 from app.models.create import (
     ElevenGenerateForm,
     MusicGenReq,
-    MusicStatusReq,
     VideoGenReq,
-    VideoStatusReq,
 )
 from app.services.keys import get_eleven_key_for_user, get_openai_key_for_user
 
@@ -165,7 +163,9 @@ def eleven_generate_tts(
         with open(out_path, "wb") as f:
             f.write(audio_bytes)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save MP3: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Could not save MP3: {exc}"
+        ) from exc
 
     public_url = f"/static/tts/{out_name}"
 
@@ -314,7 +314,9 @@ def generate_music(
 
     audio_bytes = el_resp.content
     if len(audio_bytes) < 20000:
-        raise HTTPException(status_code=500, detail="Direct audio too small; likely invalid")
+        raise HTTPException(
+            status_code=500, detail="Direct audio too small; likely invalid"
+        )
 
     ts_tag = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
     out_name = f"track_{user_id}_{ts_tag}.mp3"
@@ -366,7 +368,9 @@ def get_music_status(
     try:
         payload = last_resp.json()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Music status response was not JSON") from exc
+        raise HTTPException(
+            status_code=500, detail="Music status response was not JSON"
+        ) from exc
 
     status = payload.get("status", "unknown")
 
@@ -496,7 +500,9 @@ def generate_video(
     aspect_for_prompt = req.aspect_ratio
     if not aspect_for_prompt:
         gcd = math.gcd(width, height)
-        aspect_for_prompt = f"{width // gcd}:{height // gcd}" if gcd else f"{width}:{height}"
+        aspect_for_prompt = (
+            f"{width // gcd}:{height // gcd}" if gcd else f"{width}:{height}"
+        )
 
     prompt_bits = [req.prompt.strip()]
 
@@ -578,7 +584,9 @@ def generate_video(
                 "raw": payload,
             }
 
-        video_url = payload.get("video_url") or payload.get("url") or payload.get("result_url")
+        video_url = (
+            payload.get("video_url") or payload.get("url") or payload.get("result_url")
+        )
         video_b64 = payload.get("video_b64")
 
         if video_b64:
@@ -673,7 +681,9 @@ def get_video_status(
     try:
         meta = meta_resp.json()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Status response was not JSON") from exc
+        raise HTTPException(
+            status_code=500, detail="Status response was not JSON"
+        ) from exc
 
     status = meta.get("status", "unknown")
 
@@ -688,7 +698,9 @@ def get_video_status(
         }
 
     if status == "failed":
-        raise HTTPException(status_code=500, detail=meta.get("error", "Generation failed"))
+        raise HTTPException(
+            status_code=500, detail=meta.get("error", "Generation failed")
+        )
 
     if status == "completed":
         video_url = meta.get("video_url") or meta.get("result_url") or meta.get("url")

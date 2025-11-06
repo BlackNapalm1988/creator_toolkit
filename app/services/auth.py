@@ -19,7 +19,9 @@ def generate_verification_code() -> str:
     return f"{secrets.randbelow(900000) + 100000}"
 
 
-def send_verification_email(recipient: str, code: str, full_name: str | None = None) -> bool:
+def send_verification_email(
+    recipient: str, code: str, full_name: str | None = None
+) -> bool:
     """Send a verification code email using the configured SMTP settings."""
 
     smtp_settings = resolve_smtp_settings()
@@ -37,7 +39,9 @@ def send_verification_email(recipient: str, code: str, full_name: str | None = N
         return False
 
     if not smtp_host or not smtp_from:
-        logger.warning("SMTP not configured; verification code for %s is %s", recipient, code)
+        logger.warning(
+            "SMTP not configured; verification code for %s is %s", recipient, code
+        )
         return False
 
     msg = EmailMessage()
@@ -60,7 +64,9 @@ def send_verification_email(recipient: str, code: str, full_name: str | None = N
                 try:
                     smtp.starttls()
                 except smtplib.SMTPException:
-                    logger.debug("SMTP server did not accept STARTTLS; continuing without TLS")
+                    logger.debug(
+                        "SMTP server did not accept STARTTLS; continuing without TLS"
+                    )
             if smtp_user and smtp_password:
                 smtp.login(smtp_user, smtp_password)
             smtp.send_message(msg)

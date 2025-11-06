@@ -7,7 +7,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from modules.auth import decode_access_token, require_role as base_require_role
+from modules.auth import decode_access_token
+from modules.auth import require_role as base_require_role
 from modules.users import get_user_by_id
 
 auth_scheme = HTTPBearer(auto_error=False)

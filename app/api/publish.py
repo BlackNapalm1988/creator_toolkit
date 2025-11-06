@@ -11,6 +11,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Annotated, Dict, List, Optional
+from urllib.parse import urlencode
 
 import requests
 from fastapi import (
@@ -24,7 +25,6 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import JSONResponse
-from urllib.parse import urlencode
 
 from app.core.constants import CREATOR_ROLES, PUBLISHER_ROLES
 from app.deps import require_role
@@ -144,7 +144,9 @@ def _youtube_upload_from_disk(
         "X-Upload-Content-Type": "video/mp4",
     }
 
-    init_resp = requests.post(upload_url, headers=session_headers, json=metadata, timeout=30)
+    init_resp = requests.post(
+        upload_url, headers=session_headers, json=metadata, timeout=30
+    )
     if init_resp.status_code >= 400:
         raise HTTPException(
             status_code=init_resp.status_code,
@@ -153,7 +155,9 @@ def _youtube_upload_from_disk(
 
     upload_endpoint = init_resp.headers.get("Location")
     if not upload_endpoint:
-        raise HTTPException(status_code=500, detail="YouTube upload session missing Location header")
+        raise HTTPException(
+            status_code=500, detail="YouTube upload session missing Location header"
+        )
 
     with open(file_path, "rb") as fh:
         data = fh.read()
@@ -164,7 +168,9 @@ def _youtube_upload_from_disk(
         "Content-Length": str(len(data)),
     }
 
-    upload_resp = requests.put(upload_endpoint, headers=upload_headers, data=data, timeout=120)
+    upload_resp = requests.put(
+        upload_endpoint, headers=upload_headers, data=data, timeout=120
+    )
     if upload_resp.status_code >= 400:
         raise HTTPException(
             status_code=upload_resp.status_code,
@@ -188,7 +194,9 @@ def _parse_tags(tags_raw: Optional[str]) -> List[str]:
 
 @router.get("/youtube/auth/url", tags=["YouTube"])
 def youtube_auth_url(
-    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -220,7 +228,9 @@ def youtube_oauth2_callback(code: str, request: Request):
 
     payload = decode_access_token(token)
     if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token during callback")
+        raise HTTPException(
+            status_code=401, detail="Invalid or expired token during callback"
+        )
 
     uid_raw = payload.get("sub") or payload.get("id")
     if uid_raw is None:
@@ -275,7 +285,9 @@ def youtube_oauth2_callback(code: str, request: Request):
 
 @router.get("/youtube/channels/me", tags=["YouTube"])
 def youtube_channels_me(
-    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     refresh_token = get_youtube_refresh_token(user["id"])
     access_token = exchange_youtube_refresh(refresh_token)
@@ -296,7 +308,9 @@ def youtube_channels_me(
 @router.post("/youtube/upload", tags=["YouTube"])
 def youtube_upload_video(
     req: YouTubeUploadRequest,
-    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     video_path_raw = (req.video_path or "").strip()
     title_raw = (req.title or "").strip()
@@ -470,7 +484,9 @@ def api_qa_batch_csv(
     rows = api_qa_batch(paths, palette, thresholds)["results"]
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["path", "loop_score", "style_score", "watermark", "verdict", "error"])
+        writer.writerow(
+            ["path", "loop_score", "style_score", "watermark", "verdict", "error"]
+        )
         for row in rows:
             writer.writerow(
                 [
@@ -490,7 +506,9 @@ def package(req: PackageReq):
     out_path = req.out_path or os.path.join("static", "uploads", "master.mp4")
     audio_ms = probe_audio_duration(req.audio_path)
     if audio_ms <= 0:
-        raise HTTPException(status_code=400, detail="Invalid audio file (duration <= 0)")
+        raise HTTPException(
+            status_code=400, detail="Invalid audio file (duration <= 0)"
+        )
 
     try:
         result = build_master_from_loop(
@@ -518,7 +536,9 @@ def package_master(
     masters_dir = os.path.join("static", "masters")
     os.makedirs(masters_dir, exist_ok=True)
 
-    out_file = req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
+    out_file = (
+        req.out_name if req.out_name.lower().endswith(".mp4") else req.out_name + ".mp4"
+    )
     out_path = os.path.join(masters_dir, out_file)
 
     try:
@@ -603,7 +623,9 @@ def api_delete_preset(pid: str):
 @router.post("/pipeline/publish_lofi", tags=["Pipeline"])
 def pipeline_publish_lofi(
     req: PublishPipelineReq,
-    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
 ):
     user_id = user["id"]
 
@@ -665,7 +687,9 @@ def pipeline_publish_lofi(
 
 @router.post("/youtube/upload-form", tags=["YouTube"])
 def youtube_upload_form(
-    user: Annotated[dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))],
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
     file: Annotated[UploadFile, File(...)],
     title: Annotated[str, Form(...)],
     description: Annotated[str, Form("")] = "",

@@ -59,12 +59,16 @@ def exchange_youtube_refresh(refresh_token: str) -> str:
 
     r = requests.post("https://oauth2.googleapis.com/token", data=data, timeout=30)
     if r.status_code >= 400:
-        raise HTTPException(status_code=500, detail=f"Could not refresh YouTube token: {r.text}")
+        raise HTTPException(
+            status_code=500, detail=f"Could not refresh YouTube token: {r.text}"
+        )
 
     token_payload = r.json()
     access_token = token_payload.get("access_token")
     if not access_token:
-        raise HTTPException(status_code=500, detail="Missing access_token in refresh response")
+        raise HTTPException(
+            status_code=500, detail="Missing access_token in refresh response"
+        )
     return access_token
 
 

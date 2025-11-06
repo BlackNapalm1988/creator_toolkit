@@ -15,6 +15,7 @@ from app.models.imagine import (
     ImagineSendReq,
     ImagineThreadCreateReq,
 )
+from app.services.keys import get_openai_key_for_user
 from modules.chat import (
     add_message,
     create_thread,
@@ -22,7 +23,6 @@ from modules.chat import (
     get_thread,
     list_threads,
 )
-from app.services.keys import get_openai_key_for_user
 
 router = APIRouter(tags=["Imagine"])
 

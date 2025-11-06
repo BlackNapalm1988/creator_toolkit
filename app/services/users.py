@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 def user_payload(user: dict) -> dict:
     """Return the subset of user columns that should be exposed externally."""
 

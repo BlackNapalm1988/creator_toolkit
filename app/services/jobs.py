@@ -10,7 +10,9 @@ def to_iso(ts: int | None) -> str | None:
     if not ts:
         return None
     try:
-        return datetime.datetime.fromtimestamp(int(ts), tz=datetime.timezone.utc).isoformat()
+        return datetime.datetime.fromtimestamp(
+            int(ts), tz=datetime.timezone.utc
+        ).isoformat()
     except Exception:  # pragma: no cover - defensive
         return None
 

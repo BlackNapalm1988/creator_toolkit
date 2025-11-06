@@ -48,7 +48,9 @@ def generate_voiceover_mp3_for_user(
     )
 
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}")
+        raise HTTPException(
+            status_code=resp.status_code, detail=f"ElevenLabs error: {resp.text}"
+        )
 
     audio_bytes = resp.content
     if not audio_bytes or len(audio_bytes) < 10:

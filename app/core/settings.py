@@ -22,7 +22,9 @@ load_dotenv()
 class Settings(BaseSettings):
     """Runtime configuration for the Creator Toolkit API server."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="allow"
+    )
 
     env: str = Field(default="dev", alias="ENV")
     allow_seeding: bool = Field(default=False, alias="ALLOW_SEEDING")
