@@ -8,16 +8,17 @@ import time
 from typing import Any, Callable, Dict, Iterable, Optional
 
 from cryptography.fernet import Fernet
-from dotenv import load_dotenv
 from fastapi import Depends, HTTPException
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-load_dotenv()
+from app.core.settings import get_settings
 
 PWD_CTX = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
+settings = get_settings()
+
+JWT_SECRET = settings.jwt_secret
 JWT_ALG = os.getenv("JWT_ALG", "HS256")
 JWT_EXPIRE_MIN = int(os.getenv("JWT_EXPIRE_MIN", "43200"))
 
