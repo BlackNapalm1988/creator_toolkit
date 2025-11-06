@@ -1,3 +1,9 @@
 pre-commit==3.7.0
 ruff==0.4.3
 vulture==2.11
+deptry==0.16.2
+pip-audit==2.7.3
+black==24.8.0
+httpx==0.26.0
+pytest==7.4.4
+pytest-asyncio==0.21.1
