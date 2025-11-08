@@ -45,8 +45,10 @@ node_modules/
 
 # Pinegrow editor files
 pinegrow.json
-._pginfo
-._pgbackup/
-.pgthumbs/
+.pgthumbs/*
 .pgcache/
 .pinegrow/
+_pgbackup/*
+_pginfo/*
+projectdb.pgml
+mapped_urls/
