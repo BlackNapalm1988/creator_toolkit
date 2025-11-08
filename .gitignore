@@ -39,3 +39,14 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Node / build
+node_modules/
+
+# Pinegrow editor files
+pinegrow.json
+.pginfo
+.pgbackup/
+.pgthumbs/
+.pgcache/
+.pinegrow/
