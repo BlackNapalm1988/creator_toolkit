@@ -62,6 +62,8 @@ def create_app() -> FastAPI:
 
     # Settings and static mounts
     settings = settings_initial
+    # Validate safety for non-dev environments and ensure required dirs exist
+    settings.validate_for_runtime()
     settings.ensure_dirs()
     app.state.settings = settings
 
@@ -99,31 +101,31 @@ def create_app() -> FastAPI:
     @app.get("/dashboard")
     def ui_dashboard(request: Request):
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "active_view": "dashboard-view"}
+            request, "dashboard.html", {"active_view": "dashboard-view"}
         )
 
     @app.get("/imagine")
     def ui_imagine(request: Request):
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "active_view": "imagine-view"}
+            request, "dashboard.html", {"active_view": "imagine-view"}
         )
 
     @app.get("/create")
     def ui_create(request: Request):
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "active_view": "create-view"}
+            request, "dashboard.html", {"active_view": "create-view"}
         )
 
     @app.get("/publish")
     def ui_publish(request: Request):
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "active_view": "publish-view"}
+            request, "dashboard.html", {"active_view": "publish-view"}
         )
 
     @app.get("/system")
     def ui_system(request: Request):
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "active_view": "system-view"}
+            request, "dashboard.html", {"active_view": "system-view"}
         )
 
     return app
