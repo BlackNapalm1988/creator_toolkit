@@ -1,0 +1,12 @@
+/* static/css/tw.css */
+@import "tailwindcss";
+
+/* Tell Tailwind where to scan for class names (v4) */
+@source "../templates";
+@source "../static/js";
+
+/* Optional theme tokens (v4 replaces tailwind.config.js) */
+@theme {
+  --color-brand: #3b82f6;
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+}

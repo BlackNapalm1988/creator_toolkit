@@ -45,8 +45,8 @@ node_modules/
 
 # Pinegrow editor files
 pinegrow.json
-.pginfo
-.pgbackup/
+._pginfo
+._pgbackup/
 .pgthumbs/
 .pgcache/
 .pinegrow/

@@ -1,432 +1,388 @@
 {% extends "base.html" %}
-
 {% block content %}
-<section id="dashboard-view" class="view app-view active">
-  <div class="view-intro">
-    <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p>
-    <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p>
-  </div>
-
-  <div class="dashboard-grid">
-    <div class="card account-card">
-      <div class="card-header">
-        <h2>Your Account</h2>
-        <span id="dashboardRoleBadge" class="role-pill">Viewer</span>
-      </div>
-      <ul id="dashboardProfileList" class="dashboard-list">
-        <li class="dashboard-placeholder">Sign in to view your profile.</li>
-      </ul>
-    </div>
-
-    <div class="card status-card">
-      <div class="card-header">
-        <h2>Provider Status</h2>
-      </div>
-      <div id="dashboardProviders" class="status-grid">
-        <p class="dashboard-placeholder">Sign in to view connected services.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="card active-jobs-card">
-    <div class="card-header with-action">
-      <h2>Active Jobs</h2>
-      <button id="refreshJobsButton" class="ghost-btn small">Refresh</button>
-    </div>
-    <div id="activeJobsList" class="jobs-list">
-      <p class="dashboard-placeholder">No active jobs yet.</p>
-    </div>
-  </div>
-
-  <div class="card recent-jobs-card">
-    <h2>Recent Jobs</h2>
-    <div class="table-wrapper">
-      <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Stage</th>
-            <th>Progress</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody id="recentJobsBody">
-          <tr>
-            <td colspan="6" class="dashboard-placeholder">Sign in to view recent jobs.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card recent-assets-card">
-    <h2>Recent Assets</h2>
-    <ul id="recentAssetsList" class="dashboard-list">
-      <li class="dashboard-placeholder">Sign in to view recent assets.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="imagine-view" class="view app-view">
-  <h2>IMAGINE · Chat / Prompt R&amp;D</h2>
-
-  <div class="card">
-    <div class="row">
-      <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea>
-    </div>
-    <div class="row">
-      <button id="imagineSendBtn">Send to Chat</button>
-    </div>
-    <div class="row">
-      <label>Assistant Response</label>
-      <pre id="imagineOutput" class="output-box"></pre>
-    </div>
-  </div>
-</section>
-
-<section id="create-view" class="view app-view">
-  <div class="card">
-    <h2>CREATE · Video / Music / Master</h2>
-
-    <div class="row">
-      <label>Visual Prompt</label>
-      <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
-    </div>
-
-    <div class="row two-col">
-      <div>
-        <label>Duration (sec)</label>
-        <select id="videoDuration">
-          <option value="4">4 seconds</option>
-          <option value="8" selected>8 seconds</option>
-          <option value="12">12 seconds</option>
-        </select>
-      </div>
-      <div>
-        <label>Size</label>
-        <select id="videoSize">
-          <option value="1280x720">1280 x 720 (Landscape)</option>
-          <option value="720x1280" selected>720 x 1280 (Portrait)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row">
-      <label><input id="videoLoop" type="checkbox" checked /> Seamless loop</label>
-    </div>
-
-    <div class="row">
-      <button id="videoGenerateBtn">Generate Video</button>
-    </div>
-
-    <div class="row">
-      <label>Video Job / Result</label>
-      <pre id="videoResult" class="output-box"></pre>
-    </div>
-
-    <div class="row">
-      <video id="videoPreview" controls class="preview-video"></video>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Generate Music (ElevenLabs)</h3>
-
-    <div class="row">
-      <label>Music Prompt</label>
-      <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
-    </div>
-
-    <div class="row two-col">
-      <div>
-        <label>Duration (sec)</label>
-        <input id="musicDuration" type="number" value="180" min="10" />
-      </div>
-      <div>
-        <label>Mood</label>
-        <input id="musicMood" type="text" value="chill" />
-      </div>
-    </div>
-
-    <div class="row">
-      <label>Genre</label>
-      <input id="musicGenre" type="text" value="lofi" />
-    </div>
-
-    <div class="row">
-      <button id="musicGenerateBtn">Generate Music</button>
-    </div>
-
-    <div class="row">
-      <label>Music Job / Result</label>
-      <pre id="musicResult" class="output-box"></pre>
-    </div>
-
-    <div class="row">
-      <audio id="musicPreview" controls class="preview-audio"></audio>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Master Final Video (Loop + Music)</h3>
-
-    <div class="row">
-      <label>Loop Video Path (from above)</label>
-      <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
-    </div>
-
-    <div class="row">
-      <label>Song Path (from above)</label>
-      <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
-    </div>
-
-    <div class="row">
-      <label>Voiceover Path (optional)</label>
-      <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
-    </div>
-
-    <div class="row">
-      <button id="masterBuildBtn">Build Final Video</button>
-    </div>
-
-    <div class="row">
-      <label>Master Result</label>
-      <pre id="masterResult" class="output-box"></pre>
-    </div>
-
-    <div class="row">
-      <video id="masterPreview" controls class="preview-video"></video>
-    </div>
-  </div>
-</section>
-
-<section id="publish-view" class="view app-view">
-  <div class="card">
-    <h2>PUBLISH · Upload to YouTube</h2>
-
-    <div class="row">
-      <label>Final MP4 Path (from Master)</label>
-      <input id="ytVideoPath" type="text" placeholder="static/final/finished.mp4" />
-    </div>
-
-    <div class="row">
-      <label>Title</label>
-      <input id="ytTitle" type="text" placeholder="lofi beats to study to 🌧️" />
-    </div>
-
-    <div class="row">
-      <label>Description</label>
-      <textarea id="ytDesc" placeholder="relaxing rainy-late-night study beat with looping neon visuals..."></textarea>
-    </div>
-
-    <div class="row">
-      <label>Tags (comma separated)</label>
-      <input id="ytTags" type="text" value="lofi, chill, study music" />
-    </div>
-
-    <div class="row two-col">
-      <div>
-        <label>Visibility</label>
-        <select id="ytVisibility">
-          <option value="public">Public</option>
-          <option value="unlisted" selected>Unlisted</option>
-          <option value="private">Private</option>
-        </select>
-      </div>
-      <div>
-        <label>Schedule Date (optional)
-          <input id="ytPublishDate" type="date" />
-        </label>
-        <label>Schedule Time
-          <input id="ytPublishTime" type="time" step="60" />
-        </label>
-      </div>
-    </div>
-    <p class="help-text" id="ytScheduleHint">Scheduling is available only when visibility is Public.</p>
-
-    <div class="row">
-      <button id="ytUploadBtn">Upload to YouTube</button>
-    </div>
-
-    <div class="row">
-      <label>YouTube Upload Result</label>
-      <pre id="ytResult" class="output-box"></pre>
-    </div>
-    <div id="publishAuthHint" class="help-text">
-      You must be logged in to publish.
-      <button type="button" id="openAuthFromPublish" class="ghost-btn small">Log in</button>
-    </div>
-  </div>
-</section>
-
-<section id="system-view" class="view app-view">
-  <div class="card">
-    <h2>System Controls</h2>
-    <p class="help-text">Admin-only platform settings will appear here. Use the Profile modal to manage SMTP and API keys today.</p>
-    <ul class="dashboard-list">
-      <li>Review SMTP configuration used for verification and notifications.</li>
-      <li>Audit stored API keys before enabling publishing flows.</li>
-      <li>Monitor account password rotation requirements.</li>
-    </ul>
-    <div class="row">
-      <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>
-    </div>
-    <div id="verifyFeedback" class="form-feedback"></div>
-  </div>
-</section>
+<section id="dashboard-view" class="view app-view active"> 
+    <div class="view-intro"> 
+        <p id="dashboardInfo" class="help-text">Sign in to view your account overview.</p> 
+        <p id="dashboardError" class="help-text error hidden">Unable to load dashboard data.</p> 
+    </div>     
+    <div class="dashboard-grid"> 
+        <div class="card account-card"> 
+            <div class="card-header"> 
+                <h2>Your Account</h2> <span id="dashboardRoleBadge" class="role-pill">Viewer</span> 
+            </div>             
+            <ul id="dashboardProfileList" class="dashboard-list"> 
+                <li class="dashboard-placeholder">Sign in to view your profile.</li>                 
+            </ul>             
+        </div>         
+        <div class="card status-card"> 
+            <div class="card-header"> 
+                <h2>Provider Status</h2> 
+            </div>             
+            <div id="dashboardProviders" class="status-grid"> 
+                <p class="dashboard-placeholder">Sign in to view connected services.</p> 
+            </div>             
+        </div>         
+    </div>     
+    <div class="card active-jobs-card"> 
+        <div class="card-header with-action"> 
+            <h2>Active Jobs</h2> 
+            <button id="refreshJobsButton" class="ghost-btn small">Refresh</button>             
+        </div>         
+        <div id="activeJobsList" class="jobs-list"> 
+            <p class="dashboard-placeholder">No active jobs yet.</p> 
+        </div>         
+    </div>     
+    <div class="card recent-jobs-card"> 
+        <h2>Recent Jobs</h2> 
+        <div class="table-wrapper"> 
+            <table class="dashboard-table"> 
+                <thead> 
+                    <tr> 
+                        <th>ID</th> 
+                        <th>Type</th> 
+                        <th>Status</th> 
+                        <th>Stage</th> 
+                        <th>Progress</th> 
+                        <th>Updated</th> 
+                    </tr>                     
+                </thead>                 
+                <tbody id="recentJobsBody"> 
+                    <tr> 
+                        <td colspan="6" class="dashboard-placeholder">Sign in to view recent jobs.</td> 
+                    </tr>                     
+                </tbody>                 
+            </table>             
+        </div>         
+    </div>     
+    <div class="card recent-assets-card"> 
+        <h2>Recent Assets</h2> 
+        <ul id="recentAssetsList" class="dashboard-list"> 
+            <li class="dashboard-placeholder">Sign in to view recent assets.</li>             
+        </ul>         
+    </div>     
+</section> 
+<section id="imagine-view" class="view app-view"> 
+    <h2>IMAGINE · Chat / Prompt R&amp;D</h2> 
+    <div class="card"> 
+        <div class="row"> 
+            <textarea id="imagineInput" placeholder="Describe the vibe, story, visual aesthetic, etc..."></textarea> 
+        </div>         
+        <div class="row"> 
+            <button id="imagineSendBtn">Send to Chat</button>             
+        </div>         
+        <div class="row"> 
+            <label>Assistant Response</label>             
+            <pre id="imagineOutput" class="output-box"></pre> 
+        </div>         
+    </div>     
+</section> 
+<section id="create-view" class="view app-view"> 
+    <div class="card"> 
+        <h2>CREATE · Video / Music / Master</h2> 
+        <div class="row"> 
+            <label>Visual Prompt</label>             
+            <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea> 
+        </div>         
+        <div class="row two-col"> 
+            <div> 
+                <label>Duration (sec)</label>                 
+                <select id="videoDuration"> 
+                    <option value="4">4 seconds</option>                     
+                    <option value="8" selected>8 seconds</option>                     
+                    <option value="12">12 seconds</option>                     
+                </select>                 
+            </div>             
+            <div> 
+                <label>Size</label>                 
+                <select id="videoSize"> 
+                    <option value="1280x720">1280 x 720 (Landscape)</option>                     
+                    <option value="720x1280" selected>720 x 1280 (Portrait)</option>                     
+                </select>                 
+            </div>             
+        </div>         
+        <div class="row"> 
+            <label>
+                <input id="videoLoop" type="checkbox" checked/> Seamless loop
+            </label>             
+        </div>         
+        <div class="row"> 
+            <button id="videoGenerateBtn">Generate Video</button>             
+        </div>         
+        <div class="row"> 
+            <label>Video Job / Result</label>             
+            <pre id="videoResult" class="output-box"></pre> 
+        </div>         
+        <div class="row"> 
+            <video id="videoPreview" controls class="preview-video"></video>             
+        </div>         
+    </div>     
+    <div class="card"> 
+        <h3>Generate Music (ElevenLabs)</h3> 
+        <div class="row"> 
+            <label>Music Prompt</label>             
+            <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea> 
+        </div>         
+        <div class="row two-col"> 
+            <div> 
+                <label>Duration (sec)</label>                 
+                <input id="musicDuration" type="number" value="180" min="10"/> 
+            </div>             
+            <div> 
+                <label>Mood</label>                 
+                <input id="musicMood" type="text" value="chill"/> 
+            </div>             
+        </div>         
+        <div class="row"> 
+            <label>Genre</label>             
+            <input id="musicGenre" type="text" value="lofi"/> 
+        </div>         
+        <div class="row"> 
+            <button id="musicGenerateBtn">Generate Music</button>             
+        </div>         
+        <div class="row"> 
+            <label>Music Job / Result</label>             
+            <pre id="musicResult" class="output-box"></pre> 
+        </div>         
+        <div class="row"> 
+            <audio id="musicPreview" controls class="preview-audio"></audio>             
+        </div>         
+    </div>     
+    <div class="card"> 
+        <h3>Master Final Video (Loop + Music)</h3> 
+        <div class="row"> 
+            <label>Loop Video Path (from above)</label>             
+            <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4"/> 
+        </div>         
+        <div class="row"> 
+            <label>Song Path (from above)</label>             
+            <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3"/> 
+        </div>         
+        <div class="row"> 
+            <label>Voiceover Path (optional)</label>             
+            <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)"/> 
+        </div>         
+        <div class="row"> 
+            <button id="masterBuildBtn">Build Final Video</button>             
+        </div>         
+        <div class="row"> 
+            <label>Master Result</label>             
+            <pre id="masterResult" class="output-box"></pre> 
+        </div>         
+        <div class="row"> 
+            <video id="masterPreview" controls class="preview-video"></video>             
+        </div>         
+    </div>     
+</section> 
+<section id="publish-view" class="view app-view"> 
+    <div class="card"> 
+        <h2>PUBLISH · Upload to YouTube</h2> 
+        <div class="row"> 
+            <label>Final MP4 Path (from Master)</label>             
+            <input id="ytVideoPath" type="text" placeholder="static/final/finished.mp4"/> 
+        </div>         
+        <div class="row"> 
+            <label>Title</label>             
+            <input id="ytTitle" type="text" placeholder="lofi beats to study to 🌧️"/> 
+        </div>         
+        <div class="row"> 
+            <label>Description</label>             
+            <textarea id="ytDesc" placeholder="relaxing rainy-late-night study beat with looping neon visuals..."></textarea> 
+        </div>         
+        <div class="row"> 
+            <label>Tags (comma separated)</label>             
+            <input id="ytTags" type="text" value="lofi, chill, study music"/> 
+        </div>         
+        <div class="row two-col"> 
+            <div> 
+                <label>Visibility</label>                 
+                <select id="ytVisibility"> 
+                    <option value="public">Public</option>                     
+                    <option value="unlisted" selected>Unlisted</option>                     
+                    <option value="private">Private</option>                     
+                </select>                 
+            </div>             
+            <div> 
+                <label>Schedule Date (optional)
+                    <input id="ytPublishDate" type="date"/> 
+                </label>                 
+                <label>Schedule Time
+                    <input id="ytPublishTime" type="time" step="60"/> 
+                </label>                 
+            </div>             
+        </div>         
+        <p class="help-text" id="ytScheduleHint">Scheduling is available only when visibility is Public.</p> 
+        <div class="row"> 
+            <button id="ytUploadBtn">Upload to YouTube</button>             
+        </div>         
+        <div class="row"> 
+            <label>YouTube Upload Result</label>             
+            <pre id="ytResult" class="output-box"></pre> 
+        </div>         
+        <div id="publishAuthHint" class="help-text"> 
+            You must be logged in to publish.
+            <button type="button" id="openAuthFromPublish" class="ghost-btn small">Log in</button>             
+        </div>         
+    </div>     
+</section> 
+<section id="system-view" class="view app-view"> 
+    <div class="card"> 
+        <h2>System Controls</h2> 
+        <p class="help-text">Admin-only platform settings will appear here. Use the Profile modal to manage SMTP and API keys today.</p> 
+        <ul class="dashboard-list"> 
+            <li>Review SMTP configuration used for verification and notifications.</li>             
+            <li>Audit stored API keys before enabling publishing flows.</li>             
+            <li>Monitor account password rotation requirements.</li>             
+        </ul>         
+        <div class="row"> 
+            <button id="openSystemProfileButton" class="ghost-btn">Open Profile Settings</button>             
+        </div>         
+        <div id="verifyFeedback" class="form-feedback"></div>         
+    </div>     
+</section> 
 {% endblock %}
-
 {% block modals %}
-<div id="authOverlay" class="modal-overlay hidden">
-  <div class="modal-card">
-    <h2 class="modal-title">Welcome to Creator Toolkit</h2>
-    <p class="modal-subtitle">Log in to continue or create a new account to get started.</p>
-    <div class="modal-tabs">
-      <button class="modal-tab active" data-mode="login">Log In</button>
-      <button class="modal-tab" data-mode="register">Register</button>
-    </div>
-    <form id="overlayLoginForm" class="modal-form active">
-      <label>Email</label>
-      <input id="overlayLoginEmail" type="email" autocomplete="email" required />
-      <label>Password</label>
-      <input id="overlayLoginPassword" type="password" autocomplete="current-password" required />
-      <button type="submit">Log In</button>
-    </form>
-    <form id="overlayRegisterForm" class="modal-form">
-      <label>Full Name</label>
-      <input id="overlayRegisterName" type="text" autocomplete="name" required />
-      <label>Email</label>
-      <input id="overlayRegisterEmail" type="email" autocomplete="email" required />
-      <label>Password</label>
-      <input id="overlayRegisterPassword" type="password" autocomplete="new-password" required />
-      <button type="submit">Create Account</button>
-    </form>
-    <div id="authFeedback" class="form-feedback"></div>
-  </div>
-</div>
-
-<div id="verificationOverlay" class="modal-overlay hidden">
-  <div class="modal-card small">
-    <h2 class="modal-title">Verify Your Email</h2>
-    <p class="modal-subtitle">Enter the 6-digit code sent to your email to unlock API integrations.</p>
-    <form id="verifyForm" class="modal-form active">
-      <label>Verification Code</label>
-      <input id="verifyCode" type="text" inputmode="numeric" maxlength="6" required />
-      <button type="submit">Verify Email</button>
-    </form>
-    <button id="resendCodeButton" class="ghost-btn full">Resend Code</button>
-    <div class="modal-actions inline">
-      <button id="verifyOpenProfile" type="button" class="ghost-btn small">Open Profile</button>
-      <button id="verifyLogout" type="button" class="ghost-btn small danger">Log Out</button>
-    </div>
-    <div id="verifyFeedback" class="form-feedback"></div>
-  </div>
-</div>
-
-<div id="profileModal" class="modal-overlay hidden">
-  <div class="modal-card wide">
-    <button class="close-modal" id="closeProfileModal" aria-label="Close profile">&times;</button>
-    <h2 class="modal-title">Your Profile</h2>
-    <p class="modal-subtitle">Manage account details, roles, and API keys.</p>
-
-    <section class="modal-section">
-      <h3>Account Information</h3>
-      <form id="profileForm" class="modal-form inline active">
-        <div class="two-col">
-          <label>Full Name
-            <input id="profileName" type="text" required />
-          </label>
-          <label>Email
-            <input id="profileEmail" type="email" required />
-          </label>
-        </div>
-        <button type="submit">Save Profile</button>
-      </form>
-      <div id="profileFormFeedback" class="form-feedback"></div>
-      <div class="profile-meta">
-        <span id="profileVerificationStatus"></span>
-        <span id="profileRole"></span>
-      </div>
-    </section>
-
-    <section class="modal-section">
-      <h3>Change Password</h3>
-      <form id="passwordForm" class="modal-form inline active">
-        <div class="two-col">
-          <label>Current Password
-            <input id="currentPassword" type="password" autocomplete="current-password" required />
-          </label>
-          <label>New Password
-            <input id="newPassword" type="password" autocomplete="new-password" required />
-          </label>
-        </div>
-        <button type="submit">Update Password</button>
-      </form>
-      <div id="passwordFormFeedback" class="form-feedback"></div>
-    </section>
-
-    <section class="modal-section">
-      <h3>Role &amp; Permissions</h3>
-      <div class="profile-role-overview">
-        <p id="profileRole" class="profile-role-label"></p>
-        <ul id="rolePermissionsList" class="help-text"></ul>
-      </div>
-      <p class="help-text">Role assignments are managed by administrators.</p>
-    </section>
-
-    <section class="modal-section">
-      <h3>API Keys</h3>
-      <div id="apiKeysList" class="api-keys-list"></div>
-      <div id="apiKeysFeedback" class="form-feedback"></div>
-      <form id="apiKeyForm" class="modal-form inline active">
-        <div class="two-col">
-          <label>Provider
-            <input id="apiKeyProvider" type="text" placeholder="openai" required />
-          </label>
-          <label>Secret
-            <input id="apiKeySecret" type="text" placeholder="sk-..." required />
-          </label>
-        </div>
-        <button type="submit">Add / Update Key</button>
-      </form>
-    </section>
-
-    <section class="modal-section hidden" id="smtpConfigSection">
-      <h3>SMTP Settings</h3>
-      <form id="smtpConfigForm" class="modal-form inline active">
-        <div class="two-col">
-          <label>SMTP Host
-            <input id="smtpHost" type="text" placeholder="smtp.example.com" />
-          </label>
-          <label>Port
-            <input id="smtpPort" type="number" min="0" placeholder="587" />
-          </label>
-        </div>
-        <div class="two-col">
-          <label>Username
-            <input id="smtpUsername" type="text" />
-          </label>
-          <label>From Address
-            <input id="smtpFromAddress" type="email" placeholder="no-reply@example.com" />
-          </label>
-        </div>
-        <label><input id="smtpUseTls" type="checkbox" checked /> Use TLS</label>
-        <label>SMTP Password (leave blank to keep existing)
-          <input id="smtpPassword" type="password" placeholder="Leave blank to keep existing" />
-        </label>
-        <button type="submit">Save SMTP Settings</button>
-      </form>
-      <div id="smtpConfigFeedback" class="form-feedback"></div>
-      <form id="smtpTestForm" class="modal-form inline">
-        <label>Test Email Recipient
-          <input id="smtpTestRecipient" type="email" placeholder="admin@example.com" required />
-        </label>
-        <button type="submit">Send Test Email</button>
-      </form>
-      <div id="smtpTestFeedback" class="form-feedback"></div>
-    </section>
-  </div>
+<div id="authOverlay" class="modal-overlay hidden"> 
+    <div class="modal-card"> 
+        <h2 class="modal-title">Welcome to Creator Toolkit</h2> 
+        <p class="modal-subtitle">Log in to continue or create a new account to get started.</p> 
+        <div class="modal-tabs"> 
+            <button class="modal-tab active" data-mode="login">Log In</button>             
+            <button class="modal-tab" data-mode="register">Register</button>             
+        </div>         
+        <form id="overlayLoginForm" class="modal-form active"> 
+            <label>Email</label>             
+            <input id="overlayLoginEmail" type="email" autocomplete="email" required/> 
+            <label>Password</label>             
+            <input id="overlayLoginPassword" type="password" autocomplete="current-password" required/> 
+            <button type="submit">Log In</button>             
+        </form>         
+        <form id="overlayRegisterForm" class="modal-form"> 
+            <label>Full Name</label>             
+            <input id="overlayRegisterName" type="text" autocomplete="name" required/> 
+            <label>Email</label>             
+            <input id="overlayRegisterEmail" type="email" autocomplete="email" required/> 
+            <label>Password</label>             
+            <input id="overlayRegisterPassword" type="password" autocomplete="new-password" required/> 
+            <button type="submit">Create Account</button>             
+        </form>         
+        <div id="authFeedback" class="form-feedback"></div>         
+    </div>     
+</div> 
+<div id="verificationOverlay" class="modal-overlay hidden"> 
+    <div class="modal-card small"> 
+        <h2 class="modal-title">Verify Your Email</h2> 
+        <p class="modal-subtitle">Enter the 6-digit code sent to your email to unlock API integrations.</p> 
+        <form id="verifyForm" class="modal-form active"> 
+            <label>Verification Code</label>             
+            <input id="verifyCode" type="text" inputmode="numeric" maxlength="6" required/> 
+            <button type="submit">Verify Email</button>             
+        </form>         
+        <button id="resendCodeButton" class="ghost-btn full">Resend Code</button>         
+        <div class="modal-actions inline"> 
+            <button id="verifyOpenProfile" type="button" class="ghost-btn small">Open Profile</button>             
+            <button id="verifyLogout" type="button" class="ghost-btn small danger">Log Out</button>             
+        </div>         
+        <div id="verifyFeedback" class="form-feedback"></div>         
+    </div>     
+</div> 
+<div id="profileModal" class="modal-overlay hidden"> 
+    <div class="modal-card wide"> 
+        <button class="close-modal" id="closeProfileModal" aria-label="Close profile">&times;</button>         
+        <h2 class="modal-title">Your Profile</h2> 
+        <p class="modal-subtitle">Manage account details, roles, and API keys.</p> 
+        <section class="modal-section"> 
+            <h3>Account Information</h3> 
+            <form id="profileForm" class="modal-form inline active"> 
+                <div class="two-col"> 
+                    <label>Full Name
+                        <input id="profileName" type="text" required/> 
+                    </label>                     
+                    <label>Email
+                        <input id="profileEmail" type="email" required/> 
+                    </label>                     
+                </div>                 
+                <button type="submit">Save Profile</button>                 
+            </form>             
+            <div id="profileFormFeedback" class="form-feedback"></div>             
+            <div class="profile-meta"> <span id="profileVerificationStatus"></span> <span id="profileRole"></span> 
+            </div>             
+        </section>         
+        <section class="modal-section"> 
+            <h3>Change Password</h3> 
+            <form id="passwordForm" class="modal-form inline active"> 
+                <div class="two-col"> 
+                    <label>Current Password
+                        <input id="currentPassword" type="password" autocomplete="current-password" required/> 
+                    </label>                     
+                    <label>New Password
+                        <input id="newPassword" type="password" autocomplete="new-password" required/> 
+                    </label>                     
+                </div>                 
+                <button type="submit">Update Password</button>                 
+            </form>             
+            <div id="passwordFormFeedback" class="form-feedback"></div>             
+        </section>         
+        <section class="modal-section"> 
+            <h3>Role &amp; Permissions</h3> 
+            <div class="profile-role-overview"> 
+                <p id="profileRole" class="profile-role-label"></p> 
+                <ul id="rolePermissionsList" class="help-text"></ul>                 
+            </div>             
+            <p class="help-text">Role assignments are managed by administrators.</p> 
+        </section>         
+        <section class="modal-section"> 
+            <h3>API Keys</h3> 
+            <div id="apiKeysList" class="api-keys-list"></div>             
+            <div id="apiKeysFeedback" class="form-feedback"></div>             
+            <form id="apiKeyForm" class="modal-form inline active"> 
+                <div class="two-col"> 
+                    <label>Provider
+                        <input id="apiKeyProvider" type="text" placeholder="openai" required/> 
+                    </label>                     
+                    <label>Secret
+                        <input id="apiKeySecret" type="text" placeholder="sk-..." required/> 
+                    </label>                     
+                </div>                 
+                <button type="submit">Add / Update Key</button>                 
+            </form>             
+        </section>         
+        <section class="modal-section hidden" id="smtpConfigSection"> 
+            <h3>SMTP Settings</h3> 
+            <form id="smtpConfigForm" class="modal-form inline active"> 
+                <div class="two-col"> 
+                    <label>SMTP Host
+                        <input id="smtpHost" type="text" placeholder="smtp.example.com"/> 
+                    </label>                     
+                    <label>Port
+                        <input id="smtpPort" type="number" min="0" placeholder="587"/> 
+                    </label>                     
+                </div>                 
+                <div class="two-col"> 
+                    <label>Username
+                        <input id="smtpUsername" type="text"/> 
+                    </label>                     
+                    <label>From Address
+                        <input id="smtpFromAddress" type="email" placeholder="no-reply@example.com"/> 
+                    </label>                     
+                </div>                 
+                <label>
+                    <input id="smtpUseTls" type="checkbox" checked/> Use TLS
+                </label>                 
+                <label>SMTP Password (leave blank to keep existing)
+                    <input id="smtpPassword" type="password" placeholder="Leave blank to keep existing"/> 
+                </label>                 
+                <button type="submit">Save SMTP Settings</button>                 
+            </form>             
+            <div id="smtpConfigFeedback" class="form-feedback"></div>             
+            <form id="smtpTestForm" class="modal-form inline"> 
+                <label>Test Email Recipient
+                    <input id="smtpTestRecipient" type="email" placeholder="admin@example.com" required/> 
+                </label>                 
+                <button type="submit">Send Test Email</button>                 
+            </form>             
+            <div id="smtpTestFeedback" class="form-feedback"></div>             
+        </section>         
+    </div>     
 </div>
 {% endblock %}
+

@@ -20,6 +20,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-height: 100vh
 }
 
 /* Top bar */
@@ -134,19 +135,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0px;
   background-color: #181b29;
   border-top: 1px solid var(--border);
   padding: 10px 16px;
   font-size: 12px;
   color: var(--text-dim);
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 /* Main app container grows between topbar and footer */
 .app-root {
   flex: 1 0 auto;
   display: block;
+  flex-direction: column;
 }
+
 
 .verification-banner {
   display: flex;
@@ -160,18 +165,20 @@ body {
   color: var(--text);
 }
 
-.app-root {
+/* .app-root {
   display: block;
   min-height: calc(100vh - 60px);
-}
+} */
+
 
 .ct-shell {
   display: grid;
   grid-template-columns: 240px 1fr 320px;
-  min-height: calc(100vh - 120px);
   background: #0f1115;
   color: var(--text);
   transition: grid-template-columns 0.25s ease;
+  flex: 1;
+  min-height: auto;
 }
 
 .ct-shell--sidebar-collapsed {
