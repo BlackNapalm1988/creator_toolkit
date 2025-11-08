@@ -1,11 +1,13 @@
 # Release Schedule
 
 ## Project: Creator Toolkit
+
 ## Current Track: 0.1.x → 0.2.0
 
 ---
 
 ## 1. Release Categories
+
 - **alpha**: feature present, API may change, UI rough, warnings allowed
 - **beta**: feature locked, API stable, UI ≥ 80% there, no breaking changes without note
 - **stable**: ready for wider use, CI must be green, docs present
@@ -20,9 +22,9 @@
    - Assign responsible agent (`@codex-backend`, `@codex-ui`, `@codex-release`)
 
 2. **Implement**
-   - Create short-lived branch:  
-     - `fix/...` for bugs  
-     - `feature/...` for new flows  
+   - Create short-lived branch:
+     - `fix/...` for bugs
+     - `feature/...` for new flows
      - `chore/...` for CI / Ruff / Black
    - Run locally:
      ```bash
@@ -54,6 +56,7 @@
 ---
 
 ## 3. CI / Quality Gates
+
 - **Required before merge:**
   - ✅ `ruff check .`
   - ✅ `black --check .`
@@ -64,6 +67,7 @@
 ---
 
 ## 4. Milestone Structure
+
 - `v0.1.3` → polish / UI / UX / warnings
 - `v0.1.4` → integrations / automation / agents
 - `v0.2.0` → feature-level upgrade (Imagine → Create → Publish fully wired)
@@ -71,6 +75,7 @@
 ---
 
 ## 5. Agent Responsibilities
+
 - **@codex-backend**: API changes, YouTube routes, auth, storage
 - **@codex-ui**: sidebar, publish panel, layout, padding, labels
 - **@codex-lint**: open `chore/lint-fixes` PRs when code drifts

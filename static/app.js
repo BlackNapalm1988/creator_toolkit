@@ -1,38 +1,71 @@
 // Creator Toolkit front-end shell
 (function () {
-  const ROOT = document.getElementById('app');
+  const ROOT = document.getElementById("app");
   if (!ROOT) return;
 
-  const initialActive = ROOT.getAttribute('data-active-view') || 'dashboard-view';
+  const initialActive =
+    ROOT.getAttribute("data-active-view") || "dashboard-view";
 
   const state = {
     user: null,
     // Navigation model: label + view id + role gating + endpoint path
     nav: [
-      { id: 'nav-dashboard', label: 'Dashboard', view: 'dashboard-view', roles: ['admin','owner','editor','viewer'], path: '/dashboard' },
-      { id: 'nav-imagine', label: 'Imagine', view: 'imagine-view', roles: ['admin','owner','editor'], path: '/imagine' },
-      { id: 'nav-create', label: 'Create', view: 'create-view', roles: ['admin','owner','editor'], path: '/create' },
-      { id: 'nav-publish', label: 'Publish', view: 'publish-view', roles: ['admin','owner'], path: '/publish' },
-      { id: 'nav-system', label: 'System', view: 'system-view', roles: ['admin'], path: '/system' },
+      {
+        id: "nav-dashboard",
+        label: "Dashboard",
+        view: "dashboard-view",
+        roles: ["admin", "owner", "editor", "viewer"],
+        path: "/dashboard",
+      },
+      {
+        id: "nav-imagine",
+        label: "Imagine",
+        view: "imagine-view",
+        roles: ["admin", "owner", "editor"],
+        path: "/imagine",
+      },
+      {
+        id: "nav-create",
+        label: "Create",
+        view: "create-view",
+        roles: ["admin", "owner", "editor"],
+        path: "/create",
+      },
+      {
+        id: "nav-publish",
+        label: "Publish",
+        view: "publish-view",
+        roles: ["admin", "owner"],
+        path: "/publish",
+      },
+      {
+        id: "nav-system",
+        label: "System",
+        view: "system-view",
+        roles: ["admin"],
+        path: "/system",
+      },
     ],
     activeView: initialActive,
   };
 
   function renderNavItems() {
-    const role = (state.user?.role || 'viewer').toLowerCase();
+    const role = (state.user?.role || "viewer").toLowerCase();
     return state.nav
-      .filter(item => item.roles.includes(role))
-      .map(item => (
-        `<button type="button" class="ct-nav-link ${state.activeView===item.view?'active':''}" data-view="${item.view}" data-path="${item.path}" id="${item.id}">
+      .filter((item) => item.roles.includes(role))
+      .map(
+        (item) =>
+          `<button type="button" class="ct-nav-link ${state.activeView === item.view ? "active" : ""}" data-view="${item.view}" data-path="${item.path}" id="${item.id}">
            <span class="ct-nav-link__icon" aria-hidden="true"></span>
            <span class="ct-nav-link__label">${item.label}</span>
-         </button>`
-      )).join('');
+         </button>`,
+      )
+      .join("");
   }
 
   function renderShell() {
     // Preserve legacy content (views) while rebuilding the shell
-    const prevViews = document.getElementById('legacyContent');
+    const prevViews = document.getElementById("legacyContent");
     const viewsNode = prevViews ? prevViews : null;
 
     const shell = `
@@ -69,127 +102,148 @@
     ROOT.innerHTML = shell;
 
     // Re-attach the legacy view containers into the workspace
-    const target = ROOT.querySelector('#ct-workspace');
+    const target = ROOT.querySelector("#ct-workspace");
     if (target && viewsNode) {
       target.appendChild(viewsNode);
     }
 
-    ROOT.setAttribute('data-active-view', state.activeView);
+    ROOT.setAttribute("data-active-view", state.activeView);
     applyActiveView(state.activeView, { updateHistory: false });
   }
 
   function applyActiveView(viewId, opts = {}) {
     state.activeView = viewId;
     // Update nav active state
-    ROOT.querySelectorAll('#ct-nav .ct-nav-link').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-view') === viewId);
+    ROOT.querySelectorAll("#ct-nav .ct-nav-link").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-view") === viewId);
     });
     // Update topbar active state if present
-    document.querySelectorAll('.ct-topbar-nav.ct-nav-item').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-view') === viewId);
+    document.querySelectorAll(".ct-topbar-nav.ct-nav-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-view") === viewId);
     });
     // Toggle view sections (those provided by the server templates)
-    document.querySelectorAll('.app-view').forEach(sec => {
-      sec.classList.toggle('active', sec.id === viewId);
+    document.querySelectorAll(".app-view").forEach((sec) => {
+      sec.classList.toggle("active", sec.id === viewId);
     });
     // Update data attribute and optionally history
-    ROOT.setAttribute('data-active-view', viewId);
+    ROOT.setAttribute("data-active-view", viewId);
     if (opts.updateHistory) {
-      const navItem = state.nav.find(n => n.view === viewId);
+      const navItem = state.nav.find((n) => n.view === viewId);
       if (navItem && navItem.path) {
-        try { window.history.pushState({ view: viewId }, '', navItem.path); } catch {}
+        try {
+          window.history.pushState({ view: viewId }, "", navItem.path);
+        } catch {}
       }
     }
     // Ensure workspace scroll position is reset
-    ROOT.querySelector('.ct-main-workspace')?.scrollTo({ top: 0, behavior: 'instant' });
+    ROOT.querySelector(".ct-main-workspace")?.scrollTo({
+      top: 0,
+      behavior: "instant",
+    });
   }
 
   function attachHandlers() {
-    const shellEl = ROOT.querySelector('#ct-shell-root');
-    const inspectorEl = ROOT.querySelector('#ct-inspector');
+    const shellEl = ROOT.querySelector("#ct-shell-root");
+    const inspectorEl = ROOT.querySelector("#ct-inspector");
 
     // Side nav buttons
-    ROOT.querySelectorAll('#ct-nav .ct-nav-link').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const view = btn.getAttribute('data-view');
+    ROOT.querySelectorAll("#ct-nav .ct-nav-link").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const view = btn.getAttribute("data-view");
         applyActiveView(view, { updateHistory: true });
       });
     });
 
     // Also wire any topbar nav items declared in HTML
-    document.querySelectorAll('.ct-topbar-nav.ct-nav-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const view = btn.getAttribute('data-view');
+    document.querySelectorAll(".ct-topbar-nav.ct-nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const view = btn.getAttribute("data-view");
         applyActiveView(view, { updateHistory: true });
       });
     });
 
     // Sidebar collapse/expand
-    ROOT.querySelector('#collapseSidebar')?.addEventListener('click', () => {
-      shellEl.classList.toggle('ct-shell--sidebar-collapsed');
-      const expanded = !shellEl.classList.contains('ct-shell--sidebar-collapsed');
-      ROOT.querySelector('#ct-sidebar')?.setAttribute('data-expanded', String(expanded));
+    ROOT.querySelector("#collapseSidebar")?.addEventListener("click", () => {
+      shellEl.classList.toggle("ct-shell--sidebar-collapsed");
+      const expanded = !shellEl.classList.contains(
+        "ct-shell--sidebar-collapsed",
+      );
+      ROOT.querySelector("#ct-sidebar")?.setAttribute(
+        "data-expanded",
+        String(expanded),
+      );
     });
 
     // Inspector toggle
-    ROOT.querySelector('#toggleInspector')?.addEventListener('click', () => {
-      shellEl.classList.toggle('ct-shell--inspector-closed');
-      inspectorEl.classList.toggle('ct-inspector--closed');
+    ROOT.querySelector("#toggleInspector")?.addEventListener("click", () => {
+      shellEl.classList.toggle("ct-shell--inspector-closed");
+      inspectorEl.classList.toggle("ct-inspector--closed");
     });
 
     // Login modal using the existing overlay in templates/dashboard.html
-    const openBtn = document.getElementById('openLoginButton');
-    const overlay = document.getElementById('authOverlay');
-    const loginForm = document.getElementById('overlayLoginForm');
-    const loginEmail = document.getElementById('overlayLoginEmail');
-    const loginPassword = document.getElementById('overlayLoginPassword');
-    const authFeedback = document.getElementById('authFeedback');
+    const openBtn = document.getElementById("openLoginButton");
+    const overlay = document.getElementById("authOverlay");
+    const loginForm = document.getElementById("overlayLoginForm");
+    const loginEmail = document.getElementById("overlayLoginEmail");
+    const loginPassword = document.getElementById("overlayLoginPassword");
+    const authFeedback = document.getElementById("authFeedback");
 
-    openBtn?.addEventListener('click', () => overlay?.classList.remove('hidden'));
+    openBtn?.addEventListener("click", () =>
+      overlay?.classList.remove("hidden"),
+    );
 
-    loginForm?.addEventListener('submit', async (e) => {
+    loginForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (authFeedback) authFeedback.textContent = '';
-      const email = (loginEmail?.value || '').trim();
-      const password = loginPassword?.value || '';
+      if (authFeedback) authFeedback.textContent = "";
+      const email = (loginEmail?.value || "").trim();
+      const password = loginPassword?.value || "";
       if (!email || !password) {
-        if (authFeedback) authFeedback.textContent = 'Email and password are required';
+        if (authFeedback)
+          authFeedback.textContent = "Email and password are required";
         return;
       }
       try {
-        const resp = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+        const resp = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ email, password }),
         });
         if (!resp.ok) {
           const txt = await resp.text();
-          throw new Error(txt || 'Login failed');
+          throw new Error(txt || "Login failed");
         }
-        overlay?.classList.add('hidden');
-        if (loginEmail) loginEmail.value = '';
-        if (loginPassword) loginPassword.value = '';
+        overlay?.classList.add("hidden");
+        if (loginEmail) loginEmail.value = "";
+        if (loginPassword) loginPassword.value = "";
         await fetchMeAndUpdateUI();
       } catch (err) {
-        if (authFeedback) authFeedback.textContent = err.message || 'Login failed';
+        if (authFeedback)
+          authFeedback.textContent = err.message || "Login failed";
       }
     });
 
     // Logout
-    document.getElementById('logoutButton')?.addEventListener('click', async () => {
-      try { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-      document.cookie = 'token=; Max-Age=0; path=/';
-      state.user = null;
-      renderShell();
-      attachHandlers();
-    });
+    document
+      .getElementById("logoutButton")
+      ?.addEventListener("click", async () => {
+        try {
+          await fetch("/auth/logout", {
+            method: "POST",
+            credentials: "include",
+          });
+        } catch {}
+        document.cookie = "token=; Max-Age=0; path=/";
+        state.user = null;
+        renderShell();
+        attachHandlers();
+      });
   }
 
   async function fetchMeAndUpdateUI() {
     let me = null;
     try {
-      const resp = await fetch('/api/me', { credentials: 'include' });
+      const resp = await fetch("/api/me", { credentials: "include" });
       if (resp.ok) {
         const data = await resp.json();
         me = data.user || null;
@@ -200,23 +254,24 @@
 
     state.user = me;
     // Update header auth area
-    const auth = document.getElementById('authActions');
-    const userActions = document.getElementById('userActions');
-    const greet = document.getElementById('userGreeting');
-    const docsLink = document.getElementById('docsLink');
+    const auth = document.getElementById("authActions");
+    const userActions = document.getElementById("userActions");
+    const greet = document.getElementById("userGreeting");
+    const docsLink = document.getElementById("docsLink");
     if (me) {
-      auth?.classList.add('hidden');
-      userActions?.classList.remove('hidden');
-      if (greet) greet.textContent = `Hi, ${me.full_name || me.email || 'creator'}`;
+      auth?.classList.add("hidden");
+      userActions?.classList.remove("hidden");
+      if (greet)
+        greet.textContent = `Hi, ${me.full_name || me.email || "creator"}`;
       if (docsLink) {
-        const isAdmin = (me.role || '').toLowerCase() === 'admin';
-        if (isAdmin) docsLink.classList.remove('hidden');
-        else docsLink.classList.add('hidden');
+        const isAdmin = (me.role || "").toLowerCase() === "admin";
+        if (isAdmin) docsLink.classList.remove("hidden");
+        else docsLink.classList.add("hidden");
       }
     } else {
-      userActions?.classList.add('hidden');
-      auth?.classList.remove('hidden');
-      docsLink?.classList.add('hidden');
+      userActions?.classList.add("hidden");
+      auth?.classList.remove("hidden");
+      docsLink?.classList.add("hidden");
     }
 
     // Re-render shell to apply role filters on nav while preserving views

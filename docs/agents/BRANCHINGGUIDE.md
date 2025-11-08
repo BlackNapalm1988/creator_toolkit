@@ -1,6 +1,7 @@
 # 🧭 Creator Toolkit: Branching & Milestone Convention Guide
 
 ### 🧩 Purpose
+
 Provide a shared structure for **Codex** and all automation agents so every PR, branch, and release remains consistent across backend, UI, and deployment workflows.
 
 ---
@@ -9,17 +10,18 @@ Provide a shared structure for **Codex** and all automation agents so every PR, 
 
 Each branch name should describe its purpose and scope clearly:
 
-| Type | Pattern | Example |
-|------|----------|----------|
-| Feature | `feature/<short-description>` | `feature/youtube-json-upload` |
-| Fix / Bug | `fix/<short-description>` | `fix/ui-publish-button` |
-| Chore / Maintenance | `chore/<description>` | `chore/update-dependencies` |
-| Documentation | `docs/<description>` | `docs/add-agent-guidelines` |
-| Release Prep | `release/v<version>` | `release/v0.1.3` |
+| Type                | Pattern                       | Example                       |
+| ------------------- | ----------------------------- | ----------------------------- |
+| Feature             | `feature/<short-description>` | `feature/youtube-json-upload` |
+| Fix / Bug           | `fix/<short-description>`     | `fix/ui-publish-button`       |
+| Chore / Maintenance | `chore/<description>`         | `chore/update-dependencies`   |
+| Documentation       | `docs/<description>`          | `docs/add-agent-guidelines`   |
+| Release Prep        | `release/v<version>`          | `release/v0.1.3`              |
 
 > **Rules**
-> - Use lowercase and hyphens only.  
-> - Keep under 40 chars if possible.  
+>
+> - Use lowercase and hyphens only.
+> - Keep under 40 chars if possible.
 > - Branch names must be short-lived (merge/delete within 3 days).
 
 ---
@@ -29,11 +31,13 @@ Each branch name should describe its purpose and scope clearly:
 Every agent (or human) should open PRs with this structure:
 
 **Title**
+
 ```
 [feature|fix|chore|docs]: short, imperative description
 ```
 
 **Description**
+
 ```
 ### Summary
 Brief explanation of what this branch accomplishes.
@@ -55,7 +59,7 @@ Fixes #23, Fixes #25  ← auto-closes issues when merged
 
 ## 🗓️ 3. Milestones and Releases
 
-- Each release milestone corresponds to a semantic version (e.g. `v0.1.2`, `v0.1.3`).  
+- Each release milestone corresponds to a semantic version (e.g. `v0.1.2`, `v0.1.3`).
 - Use milestones in **GitHub Issues** to group all work planned for that release.
 - When ready:
   1. Merge all feature/fix branches into `main`
@@ -71,6 +75,7 @@ Fixes #23, Fixes #25  ← auto-closes issues when merged
 ## 🧮 4. Testing & Linting Consistency
 
 All branches (human or agent) **must** pass before merge:
+
 ```bash
 ruff check .
 black --check .
@@ -78,6 +83,7 @@ pytest
 ```
 
 Agents responsible for formatting or backend changes should run:
+
 - **Ruff** for lint
 - **Black** for code format
 - **Pytest** for validation
@@ -86,17 +92,18 @@ Agents responsible for formatting or backend changes should run:
 
 ## ⚙️ 5. Automation Rules for Agents
 
-| Agent | Primary Role | Workflow |
-|--------|---------------|----------|
-| `@codex-backend` | Backend features & tests | Create `feature/...` or `fix/...` → Run tests + Ruff/Black |
-| `@codex-ui` | Frontend or UX | Group UI issues into one branch per milestone |
-| `@codex-lint` | Continuous lint enforcement | Auto-fix with Ruff/Black → open `chore/lint-fixes` PR |
-| `@codex-release` | Prepare release & tag | Create `release/vX.Y.Z` → merge and tag |
-| `@codex-docs` | Docs / metadata | Maintain `/docs/` consistency and changelogs |
+| Agent            | Primary Role                | Workflow                                                   |
+| ---------------- | --------------------------- | ---------------------------------------------------------- |
+| `@codex-backend` | Backend features & tests    | Create `feature/...` or `fix/...` → Run tests + Ruff/Black |
+| `@codex-ui`      | Frontend or UX              | Group UI issues into one branch per milestone              |
+| `@codex-lint`    | Continuous lint enforcement | Auto-fix with Ruff/Black → open `chore/lint-fixes` PR      |
+| `@codex-release` | Prepare release & tag       | Create `release/vX.Y.Z` → merge and tag                    |
+| `@codex-docs`    | Docs / metadata             | Maintain `/docs/` consistency and changelogs               |
 
 ---
 
 ## 🧭 6. Commit Message Guidelines
+
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
@@ -109,7 +116,9 @@ docs: clarify branch naming in Agents guide
 ---
 
 ## 📦 7. Folder for Agents Docs
+
 All coordination and conventions should live under:
+
 ```
 /docs/agents/
     ├── Agents.md

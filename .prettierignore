@@ -1,0 +1,9 @@
+# Ignore build & runtime outputs
+node_modules/
+__pycache__/
+static/css/app.css
+static/css/tw.css
+.pgbackup/
+.pgcache/
+.pinegrow/
+mapped_urls/

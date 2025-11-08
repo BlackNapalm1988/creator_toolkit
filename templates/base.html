@@ -1,45 +1,73 @@
-<!DOCTYPE html> 
-<html lang="en"> 
-    <head> 
-        <meta charset="utf-8"/> 
-        <title>Creator Toolkit</title>         
-        <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}" type="text/css">
-        <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}"> 
-        <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}"> 
-        <meta name="viewport" content="width=device-width, initial-scale=1"/> 
-        {% block head_extra %}{% endblock %}
-    </head>     
-    <body> 
-        <header class="topbar"> 
-            <div class="brand">Creator Toolkit</div>             
-            <button id="ct-topbar-dashboard" type="button" class="ghost-btn ct-topbar-nav ct-nav-item" data-view="dashboard-view" data-roles="admin owner editor viewer" data-path="/dashboard"> 
-                Dashboard
-</button>             
-            <div class="spacer"></div>             
-            <div class="auth-actions" id="authActions"> 
-                <button id="openLoginButton" class="ghost-btn filled">Log In</button>                 
-            </div>             
-            <div class="user-actions hidden" id="userActions"> <span id="userGreeting" class="user-greeting"></span> <a id="docsLink" class="ghost-btn hidden" href="/docs" target="_blank" rel="noopener">Docs</a> 
-                <button id="profileButton" class="ghost-btn">Profile</button>                 
-                <button id="logoutButton" class="ghost-btn">Log Out</button>                 
-            </div>             
-        </header>         
-        <div id="verificationBanner" class="verification-banner hidden"> <span>Email verification required to unlock all creator features.</span> 
-            <button id="openVerificationButton" class="ghost-btn">Verify Now</button>             
-        </div>         
-        <div id="passwordResetBanner" class="verification-banner warning hidden"> <span>Password update required. Update it from your profile to continue.</span> 
-            <button id="openPasswordResetButton" class="ghost-btn">Update Password</button>             
-        </div>         
-        {% set nav_active = active_view or 'dashboard-view' %}
-        <div id="app" class="app-root" data-active-view="{{ nav_active }}"> 
-            <div id="legacyContent" class="legacy-content"> 
-                {% block content %}{% endblock %}
-</div>             
-        </div>         
-        {% block modals %}{% endblock %}
-        <script src="/static/app.js"></script>         
-        <footer class="footerbar"> 
-            <div class="brand">Creator Toolkit</div>             <span>&copy; 2025 Creator Toolkit. All rights reserved.</span> 
-        </footer>         
-    </body>     
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Creator Toolkit</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='css/theme.css') }}"
+      type="text/css"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {% block head_extra %}{% endblock %}
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Creator Toolkit</div>
+      <button
+        id="ct-topbar-dashboard"
+        type="button"
+        class="ghost-btn ct-topbar-nav ct-nav-item"
+        data-view="dashboard-view"
+        data-roles="admin owner editor viewer"
+        data-path="/dashboard"
+      >
+        Dashboard
+      </button>
+      <div class="spacer"></div>
+      <div class="auth-actions" id="authActions">
+        <button id="openLoginButton" class="ghost-btn filled">Log In</button>
+      </div>
+      <div class="user-actions hidden" id="userActions">
+        <span id="userGreeting" class="user-greeting"></span>
+        <a
+          id="docsLink"
+          class="ghost-btn hidden"
+          href="/docs"
+          target="_blank"
+          rel="noopener"
+          >Docs</a
+        >
+        <button id="profileButton" class="ghost-btn">Profile</button>
+        <button id="logoutButton" class="ghost-btn">Log Out</button>
+      </div>
+    </header>
+    <div id="verificationBanner" class="verification-banner hidden">
+      <span>Email verification required to unlock all creator features.</span>
+      <button id="openVerificationButton" class="ghost-btn">Verify Now</button>
+    </div>
+    <div id="passwordResetBanner" class="verification-banner warning hidden">
+      <span
+        >Password update required. Update it from your profile to
+        continue.</span
+      >
+      <button id="openPasswordResetButton" class="ghost-btn">
+        Update Password
+      </button>
+    </div>
+    {% set nav_active = active_view or 'dashboard-view' %}
+    <div id="app" class="app-root" data-active-view="{{ nav_active }}">
+      <div id="legacyContent" class="legacy-content">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+    {% block modals %}{% endblock %}
+    <script src="/static/app.js"></script>
+    <footer class="footerbar">
+      <div class="brand">Creator Toolkit</div>
+      <span>&copy; 2025 Creator Toolkit. All rights reserved.</span>
+    </footer>
+  </body>
 </html>

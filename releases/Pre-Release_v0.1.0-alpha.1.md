@@ -1,6 +1,7 @@
 # Pre-release: Creator Toolkit v0.1.0-alpha.1
 
 ## Overview
+
 Creator Toolkit is an early-stage content operations stack for AI-driven media production.  
 It centralizes prompt iteration, batch QA, packaging, asset management, and publishing (YouTube) behind one API and dashboard.
 
@@ -11,6 +12,7 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 ## Current Capabilities (Implemented)
 
 ### 1. Auth / User Management
+
 - Email + password registration and login
 - Email verification flow
 - JWT-based session model
@@ -18,6 +20,7 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 - Access group / role field on the user profile for future permission control
 
 ### 2. “Imagine” / Prompt Workspace
+
 - Create and manage creative threads for ideation and style direction
 - Append new messages/prompts to a thread
 - Retrieve thread history for continuity
@@ -25,27 +28,32 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 - This is the start of a reusable "creative brain" for a project or series
 
 ### 3. QA and Packaging Pipeline
+
 - `/qa` and `/qa/batch`: run quality/consistency checks on single or multiple inputs
 - `/qa/batch_csv`: upload CSV and run QA across each row (bulk script review / content audit)
 - `/package` and `/package/master`: create exportable content bundles for downstream publishing
 - Async variants (`/qa/batch_async`, `/package_async`) offload heavy work to a background job queue
 
 ### 4. Background Worker / Job Queue
+
 - Jobs are stored in `jobs.db`
 - A separate worker process (`scripts/worker.py`) polls for queued jobs, executes them, and writes back status/results
 - Long-running or rate-limited work (batch QA, packaging, etc.) does not block the main API
 - This is the foundation for scalable “generate 20 clips and prep them for upload” style workflows
 
 ### 5. YouTube Integration
+
 - OAuth flow and channel lookup
 - Upload endpoint for pushing packaged output to YouTube
 - This is the first publishing backend (TikTok / Reels style publishing is planned to build on this)
 
 ### 6. Projects / Presets
+
 - Ability to store and retrieve project definitions and presets
 - Used to keep creative style, tone, or series assets consistent across multiple generations
 
 ### 7. Dashboard (Early UI)
+
 - Basic dashboard page (`/dashboard`) and static assets
 - This is the initial surface for turning the API into something an actual content lead can drive without touching the terminal
 
@@ -54,6 +62,7 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 ## Coming Next (Planned / In Progress)
 
 ### 1. Dashboard Data Binding
+
 - New route: `GET /dashboard/data`
 - `/dashboard` will display live data for the signed-in user:
   - Profile info (name, access group, email verified)
@@ -63,27 +72,32 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 - Goal: You can log in and immediately see “what’s happening in the studio” without looking at logs or the DB.
 
 ### 2. Roles / Access Control / Quotas
+
 - Lock down “dangerous” actions like uploading to YouTube or spending money on an API
 - Add basic per-user rate limiting / quotas for generation endpoints
 - Prepare for onboarding collaborators without giving them full keys
 
 ### 3. Job Progress & Error Surfacing
+
 - Worker will start writing `progress` and `stage` back to each job row
 - `/jobs/{id}` will return `status`, `progress`, and failure reasons
 - Dashboard will show a proper progress bar and human-readable error messages
 
 ### 4. Project-aware Views
+
 - Tie jobs and assets to a specific project/series
 - Filter dashboard by project to get a “production view” for each show / campaign / series
 - Foundation for per-project analytics and cost tracking
 
 ### 5. Multi-Platform Publishing
+
 - Abstract publisher logic so YouTube upload is just the first target
 - Add placeholders for TikTok / Reels-style publishing under a unified `/publish` flow
 
 ---
 
 ## Known Limitations / Warnings
+
 - Security hardening is not complete:
   - No full RBAC (role-based access control) enforcement yet
   - Some endpoints assume trusted usage and may allow expensive actions or publishing
@@ -95,11 +109,13 @@ This is an **alpha build**. Expect breaking changes, missing guardrails, and sha
 ---
 
 ## Intended Audience for This Pre-release
+
 - Contributors who want to help shape the architecture
 - Early testers running this locally for their own creative pipeline
 - People evaluating whether to build tooling on top of this (e.g. “Can I run my shorts pipeline through this?”)
 
 This is **NOT** production-ready for:
+
 - Handing to paying customers
 - Exposing to untrusted end-users
 - Unattended scheduled publishing
@@ -107,6 +123,7 @@ This is **NOT** production-ready for:
 ---
 
 ## Versioning / Stability Notes
+
 **Tag:** `v0.1.0-alpha.1`
 
 - Currently using `0.x.y` semver (pre-1.0 unstable API).
@@ -143,12 +160,14 @@ python scripts/worker.py
 ```
 
 Visit:
+
 - API Docs → [http://localhost:8000/docs](http://localhost:8000/docs)
 - Dashboard → [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
 
 ---
 
 ## Final Notes
+
 This release marks a major milestone in the Creator Toolkit journey:
 
 - The core shape of the platform exists.

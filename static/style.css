@@ -8,7 +8,9 @@
   --radius: 8px;
   --pad: 16px;
   --gap: 12px;
-  --font: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", Roboto, sans-serif;
+  --font:
+    system-ui, -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text",
+    Roboto, sans-serif;
 }
 
 body {
@@ -20,7 +22,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 100vh
+  min-height: 100vh;
 }
 
 /* Top bar */
@@ -84,7 +86,10 @@ body {
   border-radius: var(--radius);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
   text-decoration: none;
 }
 .ghost-btn:hover {
@@ -152,7 +157,6 @@ body {
   flex-direction: column;
 }
 
-
 .verification-banner {
   display: flex;
   align-items: center;
@@ -169,7 +173,6 @@ body {
   display: block;
   min-height: calc(100vh - 60px);
 } */
-
 
 .ct-shell {
   display: grid;
@@ -227,7 +230,9 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
   flex-shrink: 0;
 }
 
@@ -282,7 +287,10 @@ body {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.7);
   border: 1px solid transparent;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .ct-nav-link:hover {
@@ -363,7 +371,10 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   cursor: pointer;
   align-items: center;
   justify-content: flex-start;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .ct-nav-child__button:hover,
@@ -379,7 +390,6 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   border-color: rgba(107, 92, 255, 0.45);
   background: rgba(107, 92, 255, 0.24);
 }
-
 
 .ct-sidebar--collapsed .ct-sidebar__header {
   justify-content: center;
@@ -532,7 +542,9 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .ct-inspector__toggle:hover {
@@ -721,7 +733,10 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .sidebar-link:hover {
@@ -1379,4 +1394,3 @@ body:not(.dev-mode) .output-box::after {
     display: none;
   }
 }
-

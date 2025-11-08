@@ -3,19 +3,12 @@
     {
       "id": "lofi_album_autumn",
       "title": "Lo-Fi Album \u2022 Autumn Study",
-      "palette": [
-        "#7359B6",
-        "#1A1C2C",
-        "#F2E9E4"
-      ],
+      "palette": ["#7359B6", "#1A1C2C", "#F2E9E4"],
       "thresholds": {
         "loop": 0.92,
         "style": 75
       },
-      "presets": [
-        "rainy_window_v1",
-        "candle_desk_v2"
-      ]
+      "presets": ["rainy_window_v1", "candle_desk_v2"]
     }
   ],
   "presets": [

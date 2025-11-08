@@ -16,12 +16,12 @@ Creator Toolkit is a FastAPI application that stitches together creative tooling
 
 The toolkit includes role-based access control (RBAC) with four tiers:
 
-| Role   | Capabilities |
-|--------|--------------|
-| **admin** | Full platform control: manage SMTP/system settings, publish content, update user roles, and maintain all provider keys. |
-| **owner** | Produce and publish content for their environment and manage their own provider keys. |
-| **editor** | Generate, QA, and package content but cannot publish or manage API keys. |
-| **viewer** | Read-only access to dashboard data and generated assets. |
+| Role       | Capabilities                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **admin**  | Full platform control: manage SMTP/system settings, publish content, update user roles, and maintain all provider keys. |
+| **owner**  | Produce and publish content for their environment and manage their own provider keys.                                   |
+| **editor** | Generate, QA, and package content but cannot publish or manage API keys.                                                |
+| **viewer** | Read-only access to dashboard data and generated assets.                                                                |
 
 New users are provisioned as **owners** by default. API endpoints and the dashboard automatically adapt their behaviour based on the active role.
 
@@ -134,10 +134,10 @@ Default admin and test users are created only when either `ENV=dev` or `ALLOW_SE
 
 For manual testing the app seeds one verified account per role on startup. Each account uses the shared password `password`:
 
-| Role | Email |
-|------|-------|
-| admin | `user_admin@testing.com` |
-| owner | `user_owner@testing.com` |
+| Role   | Email                     |
+| ------ | ------------------------- |
+| admin  | `user_admin@testing.com`  |
+| owner  | `user_owner@testing.com`  |
 | editor | `user_editor@testing.com` |
 | viewer | `user_viewer@testing.com` |
 
@@ -147,12 +147,12 @@ These users are intended for local development only; rotate or remove them befor
 
 Core environment variables (via `.env`):
 
-| Name | Default | Description |
-|------|---------|-------------|
-| `ENV` | `dev` | Environment name controlling seeding policy and guards. |
-| `ALLOW_SEEDING` | `false` | When true, seeds default admin and test users regardless of `ENV`. |
-| `JWT_SECRET` | `insecure-dev` | Secret for JWT signing. Required to be strong in non-`dev`. |
-| `SMTP_TIMEOUT_SECONDS` | `10` | SMTP timeout for email operations. |
+| Name                   | Default        | Description                                                        |
+| ---------------------- | -------------- | ------------------------------------------------------------------ |
+| `ENV`                  | `dev`          | Environment name controlling seeding policy and guards.            |
+| `ALLOW_SEEDING`        | `false`        | When true, seeds default admin and test users regardless of `ENV`. |
+| `JWT_SECRET`           | `insecure-dev` | Secret for JWT signing. Required to be strong in non-`dev`.        |
+| `SMTP_TIMEOUT_SECONDS` | `10`           | SMTP timeout for email operations.                                 |
 
 Optional provider settings (some are set at runtime per-user instead):
 
@@ -245,10 +245,12 @@ Pull requests are welcome! Please:
 No license has been specified. Assume all rights reserved unless the repository owner states otherwise.
 
 ## Folders & Safety
+
 - `/static`: Bundled assets only (CSS/JS/images). Subject to safe pruning via `scripts/prune_assets.py`.
 - `/content`: User-generated files (uploads, exports, reports). Never pruned. Mounted at `/content` in FastAPI.
 
 ### Safe Prune Tool
+
 - Report candidates: `make prune-report`
 - Quarantine candidates: `make prune-apply` (moves to `._quarantine/static/<YYYYMMDD>/...`)
 - Purge quarantine: `make prune-purge` (deletes quarantined files older than N days)
@@ -257,17 +259,20 @@ No license has been specified. Assume all rights reserved unless the repository 
 - References: Parses `templates/**/*.html` and optional `static/asset-manifest.json`, with optional allow/block lists at `static/.prune-allowlist` and `static/.prune-blocklist`.
 
 ## UI Shell & Footer
+
 - The UI renders a 3-panel shell (sidebar, main, inspector) via `static/app.js`.
 - Sidebar and inspector toggle classes on `#app`: `ct-shell--sidebar-collapsed`, `ct-inspector--closed`.
 - Footer (`.footerbar`) appears on every page and matches the top bar styling.
 
 ### Login Flow
-- Click “Log In” in the top bar to open the modal.
+
+- Click ï¿½Log Inï¿½ in the top bar to open the modal.
 - Enter email/password; the client posts to `/auth/login` and stores a session cookie.
 - On success, the header shows your greeting and, for admins, the Docs link.
 - Logout clears the cookie via `/auth/logout` and resets the UI to viewer mode.
 
 ### Developer Notes
+
 - `ENV=dev` and `ALLOW_SEEDING=1` seeds a default admin for easy login.
 - User-generated files are stored under `user_content/` and served at `/content`.
 - The prune tool only scans `/static` and never touches `/content`.

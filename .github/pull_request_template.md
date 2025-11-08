@@ -15,4 +15,3 @@ Provide a concise description of the change and its rationale.
 ## Screenshots / Notes (optional)
 
 Include screenshots, logs, or migration notes if helpful.
-

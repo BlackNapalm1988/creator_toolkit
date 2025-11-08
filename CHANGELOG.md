@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+
 - Unified error envelope with global exception handlers returning the standard error envelope.
 - Job lifecycle hardening with Pydantic schemas and guarded status transitions.
 - Minimal test suite enforcing ≥80% coverage for core modules.
@@ -11,10 +12,12 @@
 - Contributor ergonomics: Makefile targets and updated README with seeding policy and settings table.
 
 ### Changed
+
 - Standardized job error reporting and surfaced envelope in job results on failure.
 - Replaced ad-hoc JSON error responses with HTTPExceptions unified by handlers.
 
 ### Removed
+
 - Orphaned static assets not referenced by templates.
 
 ## v1.2-core-restoration — 2025-10-30

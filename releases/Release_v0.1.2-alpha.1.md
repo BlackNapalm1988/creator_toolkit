@@ -1,10 +1,13 @@
 # 🧩 Creator Toolkit — Release Notes
+
 ### Version: `v0.1.2-alpha.1`
-### Date: *(to be filled on release)*
+
+### Date: _(to be filled on release)_
 
 ---
 
 ## 🚀 Summary
+
 This **alpha release** restores and stabilizes core functionality, enhances CI automation, enforces code consistency through Ruff and Black, and transitions the YouTube publishing workflow to a JSON-based API for full frontend compatibility.  
 It establishes a clean foundation for upcoming feature work and UI/UX refinements in `v0.1.3`.
 
@@ -13,6 +16,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ## 🧠 Highlights
 
 ### ✅ **Backend Updates**
+
 - Reimplemented and stabilized **dashboard**, **sidebar**, and **core navigation** functionality.
 - Restored missing **IMAGINE** and **PUBLISH** buttons.
 - Introduced a new **JSON-based YouTube upload endpoint**, replacing the previous multipart version:
@@ -25,6 +29,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### ⚙️ **DevOps / CI Enhancements**
+
 - Added **branch protection** to the `main` branch requiring all CI checks to pass before merging.
 - Integrated **Ruff** and **Black** into the CI workflow for linting and formatting enforcement:
   - `ruff check .` for lint validation.
@@ -36,6 +41,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### 🧰 **Testing & Stability**
+
 - **21 total tests passed** with **0 failures** (warnings temporarily left in place).
 - Improved import order and removed lint issues (`E402`, `E722`, etc.) across modules.
 - Consolidated test warnings and validated consistent behavior across all core modules.
@@ -44,6 +50,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### 🪄 **Frontend / UI**
+
 - Restored full sidebar functionality and navigation links.
 - Confirmed accessibility of **Create** and **System** tabs.
 - Verified integration between frontend and backend routes for publish workflow.
@@ -52,6 +59,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### 🧱 **Project Structure & Documentation**
+
 - Added **Branching & Milestone Convention Guide** to `/docs/agents/`.
 - Updated **Agents.md** for consistent behavior across Codex automation agents.
 - Added **Codex prompt templates** for backend and automation tasks.
@@ -60,6 +68,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### 🧩 **Known Issues**
+
 - Some minor **UI/UX refinements** (spacing, padding, and label alignment) are deferred to `v0.1.3`.
 - **Pydantic warnings** (`protected_namespaces`) remain non-breaking and are planned for resolution in the next release.
 - Future iteration will enhance YouTube upload progress indicators.
@@ -67,6 +76,7 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 ---
 
 ### 🧭 **Next Steps — Planned for v0.1.3**
+
 - Add visual feedback for YouTube upload progress and success states.
 - Expand test coverage for new endpoints and background tasks.
 - Implement issue-to-branch automation for Codex workflows.
@@ -76,11 +86,11 @@ It establishes a clean foundation for upcoming feature work and UI/UX refinement
 
 ### 📦 **Changelog Summary**
 
-| Type | Description |
-|------|--------------|
-| ✨ Feature | Added JSON-based YouTube publishing route |
-| 🔧 Fix | Restored missing IMAGINE / PUBLISH UI buttons |
-| 🧹 Chore | Integrated Ruff + Black linting enforcement |
-| 🧪 Tests | 21 total tests passing, 0 failures |
-| 🧱 Docs | Added BranchingGuide and Codex prompt templates |
-| 🚀 CI | Added branch protection and CI gating for merges |
+| Type       | Description                                      |
+| ---------- | ------------------------------------------------ |
+| ✨ Feature | Added JSON-based YouTube publishing route        |
+| 🔧 Fix     | Restored missing IMAGINE / PUBLISH UI buttons    |
+| 🧹 Chore   | Integrated Ruff + Black linting enforcement      |
+| 🧪 Tests   | 21 total tests passing, 0 failures               |
+| 🧱 Docs    | Added BranchingGuide and Codex prompt templates  |
+| 🚀 CI      | Added branch protection and CI gating for merges |
