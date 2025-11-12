@@ -1,7 +1,8 @@
+import re
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
-from pathlib import Path
-import re
 
 WORKSPACES_ROOT = Path("workspaces")
 DEFAULT_NAME = "Default"
@@ -47,4 +48,3 @@ def create_workspace(ws: WorkspaceIn):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True, "name": ws.name}
-

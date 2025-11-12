@@ -1,6 +1,5 @@
-import os
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 
 def test_list_workspaces_includes_default(client):
