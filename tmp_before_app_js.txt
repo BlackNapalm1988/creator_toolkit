@@ -8,19 +8,11 @@
 
   const state = {
     user: null,
-    ls: { collapsed: "sidebarCollapsed", workspace: "activeWorkspace", pending: "pendingWorkspace" },
-    get collapsed() { return localStorage.getItem(this.ls.collapsed) === "true"; },
-    set collapsed(v) { localStorage.setItem(this.ls.collapsed, v ? "true" : "false"); },
-    get workspace() { return localStorage.getItem(this.ls.workspace) || "Default"; },
-    set workspace(n) { localStorage.setItem(this.ls.workspace, n); },
-    set pending(n) { localStorage.setItem(this.ls.pending, n); },
-    get pending() { return localStorage.getItem(this.ls.pending) || null; },
     // Navigation model: label + view id + role gating + endpoint path
     nav: [
       {
         id: "nav-dashboard",
         label: "Dashboard",
-        icon: "🏠",
         view: "dashboard-view",
         roles: ["admin", "owner", "editor", "viewer"],
         path: "/dashboard",
@@ -28,7 +20,6 @@
       {
         id: "nav-imagine",
         label: "Imagine",
-        icon: "✨",
         view: "imagine-view",
         roles: ["admin", "owner", "editor"],
         path: "/imagine",
@@ -36,7 +27,6 @@
       {
         id: "nav-create",
         label: "Create",
-        icon: "🎬",
         view: "create-view",
         roles: ["admin", "owner", "editor"],
         path: "/create",
@@ -44,7 +34,6 @@
       {
         id: "nav-publish",
         label: "Publish",
-        icon: "📣",
         view: "publish-view",
         roles: ["admin", "owner"],
         path: "/publish",
@@ -52,7 +41,6 @@
       {
         id: "nav-system",
         label: "System",
-        icon: "🛠️",
         view: "system-view",
         roles: ["admin"],
         path: "/system",
@@ -67,7 +55,10 @@
       .filter((item) => item.roles.includes(role))
       .map(
         (item) =>
-          `<button type=\"button\" class=\"ct-nav-link ${state.activeView === item.view ? "active" : ""}\" data-view=\"${item.view}\" data-path=\"${item.path}\" id=\"${item.id}\">\n           <span class=\"ct-nav-link__icon\" aria-hidden=\"true\">${item.icon || ""}</span>\n           <span class=\"ct-nav-link__label label\">${item.label}</span>\n         </button>`,
+          `<button type="button" class="ct-nav-link ${state.activeView === item.view ? "active" : ""}" data-view="${item.view}" data-path="${item.path}" id="${item.id}">
+           <span class="ct-nav-link__icon" aria-hidden="true"></span>
+           <span class="ct-nav-link__label">${item.label}</span>
+         </button>`,
       )
       .join("");
   }
@@ -82,14 +73,10 @@
         <aside id="ct-sidebar" class="ct-sidebar" data-expanded="true">
           <div class="ct-sidebar__inner">
             <div class="ct-sidebar__header">
-              <button id="workspaceDropdownBtn" class="ct-workspace__title ghost-btn" aria-expanded="false" aria-haspopup="menu">&#x1F5C2;&#xFE0F; <span id="workspaceTitleLabel" class="label"></span></button>
-              <div id="workspaceMenu" class="menu hidden" role="menu"></div>
-              <button id="collapseSidebar" class="ct-sidebar__toggle" type="button" title="Toggle sidebar">&#x1F354;</button>
+              <div class="ct-sidebar__title">Workspace</div>
+              <button id="collapseSidebar" class="ct-sidebar__toggle" type="button" title="Collapse sidebar">⏪</button>
             </div>
             <nav id="ct-nav" class="ct-sidebar__nav">${renderNavItems()}</nav>
-            <div class="ct-sidebar-bottom" style="padding: 0.75rem 0.85rem 1rem;">
-              <a href="/settings/project" class="ct-nav-link" aria-label="Project Settings">&#x2699;&#xFE0F; <span class="ct-nav-link__label label">Project Settings</span></a>
-            </div>
           </div>
         </aside>
         <main id="ct-main" class="ct-main">
@@ -122,9 +109,6 @@
 
     ROOT.setAttribute("data-active-view", state.activeView);
     applyActiveView(state.activeView, { updateHistory: false });
-    const shellRoot = ROOT.querySelector("#ct-shell-root");
-    if (state.collapsed) shellRoot?.classList.add("ct-shell--sidebar-collapsed");
-    setWorkspaceTitle(state.workspace);
   }
 
   function applyActiveView(viewId, opts = {}) {
@@ -178,12 +162,16 @@
       });
     });
 
-    // Sidebar collapse/expand with persistence
+    // Sidebar collapse/expand
     ROOT.querySelector("#collapseSidebar")?.addEventListener("click", () => {
       shellEl.classList.toggle("ct-shell--sidebar-collapsed");
-      const collapsed = shellEl.classList.contains("ct-shell--sidebar-collapsed");
-      state.collapsed = collapsed;
-      ROOT.querySelector("#ct-sidebar")?.setAttribute("data-expanded", String(!collapsed));
+      const expanded = !shellEl.classList.contains(
+        "ct-shell--sidebar-collapsed",
+      );
+      ROOT.querySelector("#ct-sidebar")?.setAttribute(
+        "data-expanded",
+        String(expanded),
+      );
     });
 
     // Inspector toggle
@@ -203,20 +191,6 @@
     openBtn?.addEventListener("click", () =>
       overlay?.classList.remove("hidden"),
     );
-
-    // Profile modal open/close
-    const profileBtn = document.getElementById("profileButton");
-    const profileModal = document.getElementById("profileModal");
-    const closeProfileBtn = document.getElementById("closeProfileModal");
-    profileBtn?.addEventListener("click", () => profileModal?.classList.remove("hidden"));
-    closeProfileBtn?.addEventListener("click", () => profileModal?.classList.add("hidden"));
-    // Allow opening profile from verification overlay shortcut
-    const verifyOpenProfile = document.getElementById("verifyOpenProfile");
-    const verificationOverlay = document.getElementById("verificationOverlay");
-    verifyOpenProfile?.addEventListener("click", () => {
-      verificationOverlay?.classList.add("hidden");
-      profileModal?.classList.remove("hidden");
-    });
 
     loginForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -264,64 +238,6 @@
         renderShell();
         attachHandlers();
       });
-
-    // Workspace dropdown behaviors
-    const ddBtn = document.getElementById("workspaceDropdownBtn");
-    const menu = document.getElementById("workspaceMenu");
-    ddBtn?.addEventListener("click", () => {
-      const open = ddBtn.getAttribute("aria-expanded") === "true";
-      ddBtn.setAttribute("aria-expanded", String(!open));
-      if (menu) menu.classList.toggle("hidden", open);
-    });
-    document.addEventListener("click", (e) => {
-      if (!ddBtn || !menu) return;
-      const t = e.target;
-      const clickedInside = ddBtn.contains(t) || menu.contains(t);
-      if (!clickedInside) {
-        ddBtn.setAttribute("aria-expanded", "false");
-        menu.classList.add("hidden");
-      }
-    });
-
-    // Global click handler for workspace actions
-    document.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-action]");
-      if (!t) return;
-      const action = t.getAttribute("data-action");
-      if (action === "open-workspace-create") {
-        document.getElementById("createWorkspaceModal")?.classList.remove("hidden");
-      }
-      if (action === "create-workspace-cancel") {
-        document.getElementById("createWorkspaceModal")?.classList.add("hidden");
-        const fb = document.getElementById("createWorkspaceFeedback");
-        if (fb) fb.textContent = "";
-      }
-      if (action === "create-workspace-submit") {
-        const input = document.getElementById("newWorkspaceName");
-        const name = (input?.value || "").trim();
-        if (name) createWorkspace(name);
-      }
-      if (action === "select-workspace") {
-        const name = t.getAttribute("data-name");
-        if (name) openConfirmSwitch(name);
-      }
-      if (action === "confirm-switch-cancel") {
-        document.getElementById("confirmSwitchModal")?.classList.add("hidden");
-        state.pending = "";
-      }
-      if (action === "confirm-switch-continue") {
-        const name = state.pending || "Default";
-        state.workspace = name;
-        state.pending = "";
-        // Update title immediately before navigating
-        setWorkspaceTitle(name);
-        document.getElementById("confirmSwitchModal")?.classList.add("hidden");
-        window.location.href = "/settings/project";
-      }
-    });
-
-    // Load workspaces
-    loadWorkspaces();
   }
 
   async function fetchMeAndUpdateUI() {
@@ -361,75 +277,6 @@
     // Re-render shell to apply role filters on nav while preserving views
     renderShell();
     attachHandlers();
-  }
-
-  // Workspace helpers
-  function renderWorkspaceMenu(items) {
-    const menu = document.getElementById("workspaceMenu");
-    if (!menu) return;
-    menu.innerHTML = "";
-    const addBtn = document.createElement("button");
-    addBtn.className = "menu-item";
-    addBtn.setAttribute("data-action", "open-workspace-create");
-    addBtn.textContent = "Add New Workspace…";
-    menu.appendChild(addBtn);
-    const hr = document.createElement("div");
-    hr.style.margin = "6px 0";
-    hr.style.height = "1px";
-    hr.style.background = "var(--border, #2a2a2a)";
-    menu.appendChild(hr);
-    (items || []).forEach((name) => {
-      const btn = document.createElement("button");
-      btn.className = "menu-item";
-      btn.setAttribute("data-action", "select-workspace");
-      btn.setAttribute("data-name", name);
-      btn.textContent = name;
-      menu.appendChild(btn);
-    });
-  }
-
-  async function loadWorkspaces() {
-    try {
-      const r = await fetch("/api/workspaces");
-      if (!r.ok) throw new Error("Failed to load workspaces");
-      const { items } = await r.json();
-      renderWorkspaceMenu(items || ["Default"]);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn("Failed to load workspaces", e);
-      renderWorkspaceMenu(["Default"]);
-    }
-  }
-
-  function setWorkspaceTitle(name) {
-    const el = document.getElementById("workspaceTitleLabel");
-    if (el) el.textContent = name || (localStorage.getItem("activeWorkspace") || "Default");
-  }
-
-  function openConfirmSwitch(name) {
-    state.pending = name;
-    document.getElementById("confirmSwitchModal")?.classList.remove("hidden");
-  }
-
-  async function createWorkspace(name) {
-    const feedback = document.getElementById("createWorkspaceFeedback");
-    if (feedback) feedback.textContent = "";
-    try {
-      const r = await fetch("/api/workspaces", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({ detail: "Error" }));
-        throw new Error(j.detail || "Failed to create workspace");
-      }
-      document.getElementById("createWorkspaceModal")?.classList.add("hidden");
-      openConfirmSwitch(name);
-      loadWorkspaces();
-    } catch (err) {
-      if (feedback) feedback.textContent = err.message;
-    }
   }
 
   // Initial boot

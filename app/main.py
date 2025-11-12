@@ -31,6 +31,7 @@ from app.services.seeding import (
 )
 from app.services.users import user_payload as _user_payload
 from app.web import errors as error_handlers
+from app.web.workspaces import router as workspaces_router
 from modules.storage import project_path
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(publish_router)
     app.include_router(system_router)
     app.include_router(admin_router)
+    app.include_router(workspaces_router)
 
     # settings already attached above
 
@@ -96,6 +98,13 @@ def create_app() -> FastAPI:
             return get_swagger_ui_html(
                 openapi_url="/openapi.json", title="Creator Toolkit API Docs"
             )
+
+    # Ensure default workspace exists at startup
+    @app.on_event("startup")
+    def ensure_workspaces():
+        from pathlib import Path
+
+        (Path("workspaces") / "Default").mkdir(parents=True, exist_ok=True)
 
     # UI shell routes
     @app.get("/dashboard")
@@ -126,6 +135,12 @@ def create_app() -> FastAPI:
     def ui_system(request: Request):
         return templates.TemplateResponse(
             request, "dashboard.html", {"active_view": "system-view"}
+        )
+
+    @app.get("/settings/project")
+    def project_settings(request: Request):
+        return templates.TemplateResponse(
+            request, "settings_project.html", {"request": request}
         )
 
     return app

@@ -255,8 +255,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  /* Remove extra space inside the sidebar nav */
-  padding: 0;
+  /* Add breathing room inside the sidebar nav */
+  padding: 12px;
+  align-items: center; /* center children horizontally */
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -264,6 +265,17 @@ body {
 
 .ct-sidebar__nav::-webkit-scrollbar {
   display: none;
+}
+
+/* Margin and padding for elements inside the sidebar nav */
+.ct-sidebar__nav > * {
+  margin: 4px;
+}
+
+/* Center the nav items themselves (do not stretch full width) */
+.ct-sidebar__nav .ct-nav-link,
+.ct-sidebar__nav .ct-nav-item {
+  width: auto;
 }
 
 .ct-nav-section {
@@ -348,7 +360,7 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
 }
 
 .ct-nav-link__label {
-  flex: 1;
+  flex: 0;
   white-space: nowrap;
 }
 
@@ -461,6 +473,7 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   overflow-y: auto;
   /* Remove inner padding to eliminate gaps with adjacent areas */
   padding: 0;
+  margin-top: 12px; /* space below top header */
 }
 
 .ct-main-dynamic {
@@ -596,12 +609,9 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   width: 100%;
 }
 
-/* Workspace dropdown */
-#workspaceBlock {
-  position: relative;
-  margin-top: 8px;
-}
-#workspaceBlock .menu {
+/* Workspace dropdown anchored in header */
+.ct-sidebar__header { position: relative; }
+.ct-sidebar__header .menu {
   position: absolute;
   top: 100%;
   left: 0;
@@ -614,23 +624,18 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   padding: 6px;
   z-index: 50;
 }
-#workspaceBlock .menu.hidden {
-  display: none;
-}
-#workspaceBlock .menu .menu-item {
+.ct-sidebar__header .menu.hidden { display: none; }
+.ct-sidebar__header .menu .menu-item {
   display: block;
   width: 100%;
   text-align: left;
   padding: 8px 10px;
   border-radius: 6px;
 }
-#workspaceBlock .menu .menu-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-.ct-shell--sidebar-collapsed #workspaceBlock {
-  display: none;
-}
-.ct-sidebar[data-expanded="false"] #workspaceBlock { display: none; }
+.ct-sidebar__header .menu .menu-item:hover { background: rgba(255, 255, 255, 0.06); }
+.ct-shell--sidebar-collapsed .ct-workspace__title { display: none; }
+.ct-sidebar[data-expanded="false"] .ct-workspace__title { display: none; }
+.ct-shell--sidebar-collapsed .ct-sidebar__header { justify-content: center; }
 
 .ct-inspector-chat {
   position: relative;
