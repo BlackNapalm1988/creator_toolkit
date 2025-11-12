@@ -52,4 +52,7 @@ _pgbackup/*
 _pginfo/*
 projectdb.pgml
 mapped_urls/
+
+# coverage files
 .coverage
+.coveragerc
