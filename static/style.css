@@ -153,7 +153,8 @@ body {
 /* Main app container grows between topbar and footer */
 .app-root {
   flex: 1 0 auto;
-  display: block;
+  /* Make app-root a flex container so ct-shell can fill height */
+  display: flex;
   flex-direction: column;
 }
 
@@ -177,6 +178,7 @@ body {
 .ct-shell {
   display: grid;
   grid-template-columns: 240px 1fr 320px;
+  column-gap: 12px; /* add breathing room between panels */
   background: #0f1115;
   color: var(--text);
   transition: grid-template-columns 0.25s ease;
@@ -253,7 +255,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0 1rem 1.5rem;
+  /* Remove extra space inside the sidebar nav */
+  padding: 0;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -456,7 +459,8 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
 .ct-main-workspace {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  /* Remove inner padding to eliminate gaps with adjacent areas */
+  padding: 0;
 }
 
 .ct-main-dynamic {
@@ -573,6 +577,60 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
   flex: 1;
   min-height: 0;
 }
+
+/* --- Sidebar emoji + collapse label behavior --- */
+.ct-shell--sidebar-collapsed .ct-sidebar .label,
+.ct-shell--sidebar-collapsed .ct-sidebar .ct-nav-link__label {
+  display: none;
+}
+.ct-sidebar[data-expanded="false"] .label,
+.ct-sidebar[data-expanded="false"] .ct-nav-link__label {
+  display: none;
+}
+.ct-sidebar .ct-nav-item,
+.ct-sidebar .ct-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 40px;
+  width: 100%;
+}
+
+/* Workspace dropdown */
+#workspaceBlock {
+  position: relative;
+  margin-top: 8px;
+}
+#workspaceBlock .menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  background: var(--bg, #151515);
+  color: var(--fg, #ddd);
+  border: 1px solid var(--border, #2a2a2a);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 50;
+}
+#workspaceBlock .menu.hidden {
+  display: none;
+}
+#workspaceBlock .menu .menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+#workspaceBlock .menu .menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ct-shell--sidebar-collapsed #workspaceBlock {
+  display: none;
+}
+.ct-sidebar[data-expanded="false"] #workspaceBlock { display: none; }
 
 .ct-inspector-chat {
   position: relative;
