@@ -1,4 +1,5 @@
 :root {
+  /* Default dark constants (works even if theme.css fails to load) */
   --bg: #0f1117;
   --card: #1f2333;
   --border: #2a3047;
@@ -30,7 +31,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--gap);
-  background-color: #181b29;
+  background-color: var(--card);
   border-bottom: 1px solid var(--border);
   padding: 10px 16px;
 }
@@ -141,7 +142,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0px;
-  background-color: #181b29;
+  background-color: var(--card);
   border-top: 1px solid var(--border);
   padding: 10px 16px;
   font-size: 12px;
@@ -177,9 +178,9 @@ body {
 
 .ct-shell {
   display: grid;
-  grid-template-columns: 240px 1fr 320px;
+  grid-template-columns: 260px 1fr 320px;
   column-gap: 12px; /* add breathing room between panels */
-  background: #0f1115;
+  background: var(--bg);
   color: var(--text);
   transition: grid-template-columns 0.25s ease;
   flex: 1;
@@ -191,7 +192,7 @@ body {
 }
 
 .ct-shell--inspector-closed {
-  grid-template-columns: 240px 1fr 0px;
+  grid-template-columns: 260px 1fr 0px;
 }
 
 .ct-shell--sidebar-collapsed.ct-shell--inspector-closed {
@@ -199,8 +200,8 @@ body {
 }
 
 .ct-sidebar {
-  background: #14171d;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--card);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -225,7 +226,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   display: inline-flex;
@@ -522,8 +523,8 @@ html.ct-no-emoji .ct-nav-link__icon-emoji {
 }
 
 .ct-inspector {
-  background: #111318;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, var(--card) 0%, rgba(0, 0, 0, 0.08) 100%);
+  border-left: 1px solid var(--border);
   position: relative;
   display: flex;
   overflow: hidden;
@@ -1115,7 +1116,7 @@ input[type="text"],
 input[type="number"],
 textarea,
 select {
-  background: #0f1117;
+  background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius);
@@ -1456,4 +1457,111 @@ body:not(.dev-mode) .output-box::after {
   .ct-shell .ct-inspector {
     display: none;
   }
+}
+
+/* --- Hybrid Dark Studio components --- */
+.ct-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  box-shadow: 0 8px 24px var(--shadow-color, rgba(0,0,0,0.5));
+}
+
+.ct-card.clickable,
+.create-card {
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ct-card.clickable:hover,
+.create-card:hover,
+.ct-card.clickable:focus-visible,
+.create-card:focus-visible {
+  outline: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px var(--shadow-color, rgba(0,0,0,0.6));
+  border-color: var(--accent);
+}
+
+.ct-tabbar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin: 0 0 var(--gap);
+  padding: 8px 0; /* add vertical breathing room around tabs */
+}
+
+.ct-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.ct-tab:hover {
+  color: var(--text);
+}
+.ct-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.ct-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.ct-button-primary:hover {
+  filter: brightness(1.05);
+}
+
+.ct-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.ct-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent);
+}
+
+/* Dark Studio theme overrides via root class */
+.dark-studio {
+  --bg: #121315;
+  --card: #191b1f;
+  --border: #2a2d32;
+  --accent: #0a84ff;
+  --text: #e6e8eb;
+  --text-dim: #9aa0a6;
+}
+
+/* Module two-column layout */
+.ct-module-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .ct-module-grid { grid-template-columns: 1fr; }
 }

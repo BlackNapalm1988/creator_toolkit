@@ -182,3 +182,47 @@ body,
 html {
   min-height: 100vh;
 }
+
+/*
+  Hybrid Dark Studio palette tokens
+  - Adds semantic variables while preserving existing names for compatibility.
+  - Apply via adding the `dark-studio` class on a root element (e.g., <html> or <body>).
+*/
+:root {
+  /* Semantic colors (default values mirror current dark styling) */
+  --background: #0f1117; /* page background */
+  --panel: #1f2333;      /* cards, sidebars, panels */
+  --panel-elevated: #24293a;
+  --border: #2a3047;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+
+  /* Accents */
+  --primary: #6b5cff; /* keep existing primary but make explicit */
+  --primary-contrast: #0b1020;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  /* Effects */
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+/* When `.dark-studio` is present on a root container, override palette */
+.dark-studio {
+  --background: #121315;
+  --panel: #191b1f;
+  --panel-elevated: #1f2328;
+  --border: #2a2d32;
+  --text: #e6e8eb;
+  --text-muted: #9aa0a6;
+  --primary: #0a84ff;
+  --primary-contrast: #0b1b2b;
+  --success: #00d084;
+  --warning: #ffc857;
+  --danger: #ff5a5f;
+  --shadow-color: rgba(0, 0, 0, 0.65);
+}

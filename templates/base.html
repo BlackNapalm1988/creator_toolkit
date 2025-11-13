@@ -1,19 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark-studio">
   <head>
     <meta charset="utf-8" />
     <title>Creator Toolkit</title>
+    {% set static_v = 'v2' %}
     <link
       rel="stylesheet"
-      href="{{ url_for('static', path='css/theme.css') }}"
+      href="{{ url_for('static', path='css/theme.css') }}?{{ static_v }}"
       type="text/css"
     />
-    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}?{{ static_v }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?{{ static_v }}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     {% block head_extra %}{% endblock %}
   </head>
-  <body>
+  <body class="dark-studio">
     <header class="topbar">
       <div class="brand">Creator Toolkit</div>
       <button
@@ -72,9 +73,10 @@
           <label>Workspace Name
             <input id="newWorkspaceName" type="text" required />
           </label>
+          <p class="help-text">Use a descriptive project title.</p>
           <div class="modal-actions inline">
-            <button type="button" class="ghost-btn" data-action="create-workspace-cancel">Cancel</button>
-            <button type="button" class="ghost-btn filled" data-action="create-workspace-submit">Create</button>
+            <button type="button" class="ghost-btn" data-action="create-workspace-cancel" autofocus>Cancel</button>
+            <button type="button" class="ghost-btn filled" data-action="create-workspace-submit">Create workspace</button>
           </div>
           <div id="createWorkspaceFeedback" class="form-feedback"></div>
         </form>
@@ -83,15 +85,15 @@
     <div id="confirmSwitchModal" class="modal-overlay hidden">
       <div class="modal-card small">
         <h2 class="modal-title">Switch Workspace</h2>
-        <p class="modal-subtitle">This will load the selected workspace and navigate to Project Settings.</p>
+        <p class="modal-subtitle">Switching will load that workspace’s prompts, assets and settings. Your current work remains saved.</p>
         <div class="modal-actions inline">
-          <button type="button" class="ghost-btn" data-action="confirm-switch-cancel">Cancel</button>
-          <button type="button" class="ghost-btn filled" data-action="confirm-switch-continue">Continue</button>
+          <button type="button" class="ghost-btn" data-action="confirm-switch-cancel" autofocus>Cancel</button>
+          <button type="button" class="ghost-btn filled" data-action="confirm-switch-continue">Switch workspace</button>
         </div>
         <div id="confirmSwitchFeedback" class="form-feedback"></div>
       </div>
     </div>
-    <script src="/static/app.js"></script>
+    <script src="{{ url_for('static', path='app.js') }}?{{ static_v }}" defer></script>
     <footer class="footerbar">
       <div class="brand">Creator Toolkit</div>
       <span>&copy; 2025 Creator Toolkit. All rights reserved.</span>

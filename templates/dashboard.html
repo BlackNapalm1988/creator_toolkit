@@ -91,14 +91,14 @@
     <div class="row">
       <label>Visual Prompt</label>
       <textarea
-        id="videoPrompt"
+        id="videoPromptLegacy"
         placeholder="Example: neon rainy alley in anime style, gentle camera drift..."
       ></textarea>
     </div>
     <div class="row two-col">
       <div>
         <label>Duration (sec)</label>
-        <select id="videoDuration">
+        <select id="videoDurationLegacy">
           <option value="4">4 seconds</option>
           <option value="8" selected>8 seconds</option>
           <option value="12">12 seconds</option>
@@ -106,7 +106,7 @@
       </div>
       <div>
         <label>Size</label>
-        <select id="videoSize">
+        <select id="videoSizeLegacy">
           <option value="1280x720">1280 x 720 (Landscape)</option>
           <option value="720x1280" selected>720 x 1280 (Portrait)</option>
         </select>
@@ -114,18 +114,18 @@
     </div>
     <div class="row">
       <label>
-        <input id="videoLoop" type="checkbox" checked /> Seamless loop
+        <input id="videoLoopLegacy" type="checkbox" checked /> Seamless loop
       </label>
     </div>
     <div class="row">
-      <button id="videoGenerateBtn">Generate Video</button>
+      <button id="videoGenerateBtnLegacy">Generate Video</button>
     </div>
     <div class="row">
       <label>Video Job / Result</label>
-      <pre id="videoResult" class="output-box"></pre>
+      <pre id="videoResultLegacy" class="output-box"></pre>
     </div>
     <div class="row">
-      <video id="videoPreview" controls class="preview-video"></video>
+      <video id="videoPreviewLegacy" controls class="preview-video"></video>
     </div>
   </div>
   <div class="card">
@@ -133,9 +133,177 @@
     <div class="row">
       <label>Music Prompt</label>
       <textarea
-        id="musicPrompt"
+        id="musicPromptLegacy"
         placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."
       ></textarea>
+    </div>
+    <div class="row two-col">
+      <div>
+        <label>Duration (sec)</label>
+        <input id="musicDurationLegacy" type="number" value="180" min="10" />
+      </div>
+      <div>
+        <label>Mood</label>
+        <input id="musicMoodLegacy" type="text" value="chill" />
+      </div>
+    </div>
+    <div class="row">
+      <label>Genre</label>
+      <input id="musicGenreLegacy" type="text" value="lofi" />
+    </div>
+    <div class="row">
+      <button id="musicGenerateBtnLegacy">Generate Music</button>
+    </div>
+    <div class="row">
+      <label>Music Job / Result</label>
+      <pre id="musicResultLegacy" class="output-box"></pre>
+    </div>
+    <div class="row">
+      <audio id="musicPreviewLegacy" controls class="preview-audio"></audio>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Master Final Video (Loop + Music)</h3>
+    <div class="row">
+      <label>Loop Video Path (from above)</label>
+      <input
+        id="masterLoopPathLegacy"
+        type="text"
+        placeholder="static/uploads/xxx.mp4"
+      />
+    </div>
+    <div class="row">
+      <label>Song Path (from above)</label>
+      <input
+        id="masterSongPathLegacy"
+        type="text"
+        placeholder="static/music/xxx.mp3"
+      />
+    </div>
+    <div class="row">
+      <label>Voiceover Path (optional)</label>
+      <input
+        id="masterVOPathLegacy"
+        type="text"
+        placeholder="static/tts/voiceover.mp3 (or leave blank)"
+      />
+    </div>
+    <div class="row">
+      <button id="masterBuildBtnLegacy">Build Final Video</button>
+    </div>
+    <div class="row">
+      <label>Master Result</label>
+      <pre id="masterResultLegacy" class="output-box"></pre>
+    </div>
+    <div class="row">
+      <video id="masterPreviewLegacy" controls class="preview-video"></video>
+    </div>
+  </div>
+</section>
+<!-- Create hub and modules -->
+<section id="create-hub-view" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
+    <button class="ct-tab" role="tab" aria-selected="true" data-view="create-hub-view">Create Hub</button>
+    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
+  </div>
+  <div class="dashboard-grid">
+    <div class="ct-card create-card" data-view="create-video-view" role="button" tabindex="0" aria-label="Open Video module">
+      <h3 class="card-title">Video Creation</h3>
+      <p class="help-text">Generate looping video clips from prompts with duration and size options.</p>
+      <div style="margin-top: 8px">
+        <button class="ct-button-primary" type="button">Open Video</button>
+      </div>
+    </div>
+    <div class="ct-card create-card" data-view="create-music-view" role="button" tabindex="0" aria-label="Open Music module">
+      <h3 class="card-title">Music Creation</h3>
+      <p class="help-text">Create background music from a short description, mood and genre.</p>
+      <div style="margin-top: 8px">
+        <button class="ct-button-primary" type="button">Open Music</button>
+      </div>
+    </div>
+    <div class="ct-card create-card" data-view="create-mastering-view" role="button" tabindex="0" aria-label="Open Mastering module">
+      <h3 class="card-title">Mastering</h3>
+      <p class="help-text">Assemble a final video from a loop, music track and optional voiceover.</p>
+      <div style="margin-top: 8px">
+        <button class="ct-button-primary" type="button">Open Mastering</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="create-video-view" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
+    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-video-view">Video</button>
+    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
+  </div>
+  <div class="ct-module-grid">
+    <aside class="ct-card">
+      <h3>Scenes</h3>
+      <p class="help-text">Recent video jobs will appear here.</p>
+      <ul id="videoScenesList" class="dashboard-list"></ul>
+    </aside>
+    <div class="ct-card">
+      <h2>Video Creation</h2>
+      <div class="row">
+        <label>Visual Prompt</label>
+        <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
+      </div>
+      <div class="row two-col">
+        <div>
+          <label>Duration (sec)</label>
+          <select id="videoDuration">
+            <option value="4">4 seconds</option>
+            <option value="8" selected>8 seconds</option>
+            <option value="12">12 seconds</option>
+          </select>
+        </div>
+        <div>
+          <label>Size</label>
+          <select id="videoSize">
+            <option value="1280x720">1280 x 720 (Landscape)</option>
+            <option value="720x1280" selected>720 x 1280 (Portrait)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <label><input id="videoLoop" type="checkbox" checked /> Seamless loop</label>
+      </div>
+      <div class="row">
+        <button id="videoGenerateBtn">Generate Video</button>
+      </div>
+      <div class="row">
+        <label>Video Job / Result</label>
+        <pre id="videoResult" class="output-box"></pre>
+      </div>
+      <div class="row">
+        <video id="videoPreview" controls class="preview-video"></video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="create-music-view" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
+    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-music-view">Music</button>
+    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
+  </div>
+  <div class="ct-module-grid">
+    <aside class="ct-card">
+      <h3>Tracks</h3>
+      <p class="help-text">Recent music jobs will appear here.</p>
+      <ul id="musicTracksList" class="dashboard-list"></ul>
+    </aside>
+    <div class="ct-card">
+    <h2>Music Creation</h2>
+    <div class="row">
+      <label>Music Prompt</label>
+      <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
     </div>
     <div class="row two-col">
       <div>
@@ -161,32 +329,36 @@
     <div class="row">
       <audio id="musicPreview" controls class="preview-audio"></audio>
     </div>
+    </div>
   </div>
-  <div class="card">
-    <h3>Master Final Video (Loop + Music)</h3>
+</section>
+
+<section id="create-mastering-view" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
+    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-mastering-view">Mastering</button>
+  </div>
+  <div class="ct-module-grid">
+    <aside class="ct-card">
+      <h3>Assembly</h3>
+      <p class="help-text">Select source assets for final assembly.</p>
+      <ul id="masterAssetsList" class="dashboard-list"></ul>
+    </aside>
+    <div class="ct-card">
+    <h2>Master Final Video (Loop + Music)</h2>
     <div class="row">
       <label>Loop Video Path (from above)</label>
-      <input
-        id="masterLoopPath"
-        type="text"
-        placeholder="static/uploads/xxx.mp4"
-      />
+      <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
     </div>
     <div class="row">
       <label>Song Path (from above)</label>
-      <input
-        id="masterSongPath"
-        type="text"
-        placeholder="static/music/xxx.mp3"
-      />
+      <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
     </div>
     <div class="row">
       <label>Voiceover Path (optional)</label>
-      <input
-        id="masterVOPath"
-        type="text"
-        placeholder="static/tts/voiceover.mp3 (or leave blank)"
-      />
+      <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
     </div>
     <div class="row">
       <button id="masterBuildBtn">Build Final Video</button>
@@ -198,8 +370,10 @@
     <div class="row">
       <video id="masterPreview" controls class="preview-video"></video>
     </div>
+    </div>
   </div>
 </section>
+
 <section id="publish-view" class="view app-view">
   <div class="card">
     <h2>PUBLISH · Upload to YouTube</h2>

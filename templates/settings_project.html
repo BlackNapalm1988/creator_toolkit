@@ -9,6 +9,11 @@
   </div>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const ws = params.get('ws');
+      if (ws && ws.trim()) {
+        try { localStorage.setItem('activeWorkspace', ws.trim()); } catch {}
+      }
       const name = localStorage.getItem('activeWorkspace') || 'Default';
       const el = document.getElementById('currentWorkspaceLabel');
       if (el) el.textContent = name;
