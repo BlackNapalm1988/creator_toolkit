@@ -579,6 +579,8 @@
     <section class="modal-section">
       <h3>Change Password</h3>
       <form id="passwordForm" class="modal-form inline active">
+        <!-- Hidden username for password manager accessibility -->
+        <input type="text" name="username" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true" />
         <div class="two-col">
           <label
             >Current Password
@@ -674,6 +676,7 @@
           <input
             id="smtpPassword"
             type="password"
+            autocomplete="current-password"
             placeholder="Leave blank to keep existing"
           />
         </label>

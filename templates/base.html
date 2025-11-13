@@ -29,7 +29,7 @@
       </button>
       <div class="spacer"></div>
       <div class="auth-actions" id="authActions">
-        <button id="openLoginButton" class="ghost-btn filled">Log In</button>
+        <button id="openLoginButton" class="ghost-btn filled" data-action="open-auth">Log In</button>
       </div>
       <div class="user-actions hidden" id="userActions">
         <span id="userGreeting" class="user-greeting"></span>
@@ -45,16 +45,22 @@
         <button id="logoutButton" class="ghost-btn">Log Out</button>
       </div>
     </header>
-    <div id="verificationBanner" class="verification-banner hidden">
+    <div id="notificationStack" class="notification-stack">
+      <div id="verificationBanner" class="notice notice-info hidden" role="status">
+        <div class="notice-accent"></div>
+        <div class="notice-body">
       <span>Email verification required to unlock all creator features.</span>
-      <button id="openVerificationButton" class="ghost-btn">Verify Now</button>
+      <div class="notice-actions">
+            <button id="openVerificationButton" class="ghost-btn small">Verify Now</button>
+          </div>
     </div>
-    <div id="passwordResetBanner" class="verification-banner warning hidden">
+    <div id="passwordResetBanner" class="notice notice-warning hidden" role="status">
       <span
         >Password update required. Update it from your profile to
         continue.</span
       >
-      <button id="openPasswordResetButton" class="ghost-btn">
+      <div class="notice-actions">
+            <button id="openPasswordResetButton" class="ghost-btn small">
         Update Password
       </button>
     </div>
@@ -93,6 +99,8 @@
         <div id="confirmSwitchFeedback" class="form-feedback"></div>
       </div>
     </div>
+    <!-- Toast stack container -->
+    <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
     <script src="{{ url_for('static', path='app.js') }}?{{ static_v }}" defer></script>
     <footer class="footerbar">
       <div class="brand">Creator Toolkit</div>
@@ -100,3 +108,4 @@
     </footer>
   </body>
 </html>
+

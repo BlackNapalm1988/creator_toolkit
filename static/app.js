@@ -3,6 +3,27 @@
   const ROOT = document.getElementById("app");
   if (!ROOT) return;
 
+    // --- FIX: Apply workspace from ?ws BEFORE anything renders ---
+  const params = new URLSearchParams(window.location.search);
+  const wsParam = params.get("ws");
+  const loginParam = params.get("login");
+
+  if (wsParam && wsParam.trim()) {
+    const normalized = wsParam.trim();
+    localStorage.setItem("activeWorkspace", normalized);
+  }
+  if (loginParam === '1' || loginParam === 'true') {
+    // Defer opening the auth overlay until DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+      const ov = document.getElementById('authOverlay');
+      if (ov) {
+        ov.classList.remove('hidden');
+        ov.style.display = 'flex';
+      }
+    });
+  }
+  // --------------------------------------------------------------
+
   const path = window.location?.pathname || "";
   const routeMap = {
     "/": "dashboard-view",
@@ -35,7 +56,7 @@
       {
         id: "nav-dashboard",
         label: "Dashboard",
-        icon: "🏠",
+        icon: "",
         view: "dashboard-view",
         roles: ["admin", "owner", "editor", "viewer"],
         path: "/dashboard",
@@ -43,7 +64,7 @@
       {
         id: "nav-imagine",
         label: "Imagine",
-        icon: "✨",
+        icon: "",
         view: "imagine-view",
         roles: ["admin", "owner", "editor"],
         path: "/imagine",
@@ -51,7 +72,7 @@
       {
         id: "nav-create",
         label: "Create",
-        icon: "🎬",
+        icon: "",
         view: "create-hub-view",
         roles: ["admin", "owner", "editor"],
         path: "/create",
@@ -59,7 +80,7 @@
       {
         id: "nav-publish",
         label: "Publish",
-        icon: "📣",
+        icon: "",
         view: "publish-view",
         roles: ["admin", "owner"],
         path: "/publish",
@@ -67,7 +88,7 @@
       {
         id: "nav-system",
         label: "System",
-        icon: "🛠️",
+        icon: "",
         view: "system-view",
         roles: ["admin"],
         path: "/system",
@@ -129,7 +150,7 @@
             <div class="ct-sidebar__header">
               <button id="workspaceDropdownBtn" class="ct-workspace__title ghost-btn" aria-expanded="false" aria-haspopup="menu">&#x1F5C2;&#xFE0F; <span id="workspaceTitleLabel" class="label"></span></button>
               <div id="workspaceMenu" class="menu hidden" role="menu"></div>
-              <button id="collapseSidebar" class="ct-sidebar__toggle" type="button" title="Toggle sidebar" aria-label="Toggle sidebar">↔</button>
+              <button id="collapseSidebar" class="ct-sidebar__toggle" type="button" title="Toggle sidebar" aria-label="Toggle sidebar">&#x2194;</button>
             </div>
             <nav id="ct-nav" class="ct-sidebar__nav">${renderNavItems()}</nav>
             <div class="ct-sidebar-bottom" style="padding: 0.75rem 0.85rem 1rem;">
@@ -230,8 +251,8 @@
       top: 0,
       behavior: "instant",
     });
-    // Populate lists if switching into Create modules
-    try { hydrateCreateModuleLists(); } catch {}
+    // Populate lists if switching into Create modules and authenticated
+    try { if (state.user) hydrateCreateModuleLists(); } catch {}
   }
 
   function attachHandlers() {
@@ -294,6 +315,18 @@
       profileModal?.classList.remove("hidden");
     });
 
+    // Notification banner actions
+    const openVerBtn = document.getElementById('openVerificationButton');
+    openVerBtn?.addEventListener('click', () => {
+      document.getElementById('verificationOverlay')?.classList.remove('hidden');
+    });
+    const openPwBtn = document.getElementById('openPasswordResetButton');
+    openPwBtn?.addEventListener('click', () => {
+      profileModal?.classList.remove('hidden');
+      // focus password form if present
+      setTimeout(() => document.getElementById('currentPassword')?.focus(), 0);
+    });
+
     // Create sub-module tabs
     document.querySelectorAll('.ct-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -347,12 +380,14 @@
           throw new Error(txt || "Login failed");
         }
         overlay?.classList.add("hidden");
+        toast('Logged in', { type: 'success' });
         if (loginEmail) loginEmail.value = "";
         if (loginPassword) loginPassword.value = "";
         await fetchMeAndUpdateUI();
       } catch (err) {
         if (authFeedback)
           authFeedback.textContent = err.message || "Login failed";
+        toast(err.message || 'Login failed', { type: 'error' });
       }
     });
 
@@ -370,6 +405,7 @@
         state.user = null;
         renderShell();
         attachHandlers();
+        toast('Logged out', { type: 'info' });
       });
 
     // Workspace dropdown behaviors
@@ -395,6 +431,14 @@
       const t = e.target.closest("[data-action]");
       if (!t) return;
       const action = t.getAttribute("data-action");
+      if (action === "open-auth") {
+        const ov = document.getElementById("authOverlay");
+        if (ov) {
+          ov.classList.remove("hidden");
+          ov.style.display = 'flex';
+        }
+        return;
+      }
       if (action === "open-workspace-create") {
         document.getElementById("createWorkspaceModal")?.classList.remove("hidden");
         // focus cancel to avoid accidental accepts
@@ -484,8 +528,10 @@
     // Re-render shell to apply role filters on nav while preserving views
     renderShell();
     attachHandlers();
-    // Populate recent lists if present
-    try { await hydrateCreateModuleLists(); } catch {}
+    // Populate recent lists only when authenticated
+    if (me) {
+      try { await hydrateCreateModuleLists(); } catch {}
+    }
   }
 
   // Workspace helpers
@@ -646,10 +692,12 @@
         throw new Error(j.detail || "Failed to create workspace");
       }
       document.getElementById("createWorkspaceModal")?.classList.add("hidden");
+      toast(`Workspace "${name}" created`, { type: 'success' });
       openConfirmSwitch(name);
       loadWorkspaces();
     } catch (err) {
       if (feedback) feedback.textContent = err.message;
+      toast(err.message || 'Failed to create workspace', { type: 'error' });
     }
   }
 
@@ -658,3 +706,19 @@
   attachHandlers();
   fetchMeAndUpdateUI();
 })();
+
+// Toast helper
+function toast(message, opts = {}) {
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  const type = opts.type || 'info';
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  stack.appendChild(el);
+  const remove = () => {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  };
+  const ttl = typeof opts.ttl === 'number' ? opts.ttl : 3500;
+  setTimeout(remove, ttl);
+}
