@@ -55,4 +55,3 @@ mapped_urls/
 
 # coverage files
 .coverage
-.coveragerc
