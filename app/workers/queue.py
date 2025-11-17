@@ -8,7 +8,11 @@ import os
 from fastapi import FastAPI
 
 from modules import jobs as jobs_store
-from modules.job_handlers import job_handle_package, job_handle_qa_batch
+from modules.job_handlers import (
+    job_handle_package,
+    job_handle_qa_batch,
+    job_handle_sora_video,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,7 @@ def run_worker(poll_interval: float = 0.5) -> None:
         handlers={
             "package": job_handle_package,
             "qa_batch": job_handle_qa_batch,
+            "sora_video": job_handle_sora_video,
         },
         poll_interval=poll_interval,
     )
@@ -70,6 +75,7 @@ def start_worker(app: FastAPI, settings) -> None:
         handlers={
             "package": job_handle_package,
             "qa_batch": job_handle_qa_batch,
+            "sora_video": job_handle_sora_video,
         },
         poll_interval=0.5,
     )

@@ -26,6 +26,7 @@ from modules.users import (
     get_user_by_email,
     get_user_by_id,
     list_user_keys,
+    record_last_login,
     set_must_change_password,
     update_password_hash,
     upsert_user_key,
@@ -119,8 +120,11 @@ def auth_login(req: LoginReq, resp: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account disabled")
 
     token = create_access_token(user["id"], user["email"])
+    record_last_login(user["id"])
     # Set a cookie for ease of use by the UI; not HttpOnly so JS can clear it on logout
     resp.set_cookie(
         key="token",

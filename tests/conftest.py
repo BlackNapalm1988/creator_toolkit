@@ -30,6 +30,7 @@ def clean_runtime_dirs():
         PROJECT_ROOT / "static" / "uploads",
         PROJECT_ROOT / "static" / "reports",
         PROJECT_ROOT / "static" / "masters",
+        PROJECT_ROOT / "data" / "assets.json",
     ]
     for path in runtime_dirs:
         if path.exists():

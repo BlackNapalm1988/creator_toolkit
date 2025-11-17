@@ -7,6 +7,9 @@ import os
 import time
 from typing import Any, Callable, Dict, Iterable, Optional
 
+import secrets
+import string
+
 from cryptography.fernet import Fernet
 from fastapi import Depends, HTTPException
 from jose import JWTError, jwt
@@ -111,3 +114,15 @@ def require_role(
         return current_user
 
     return _checker
+
+
+def generate_password(length: int = 16) -> str:
+    """Return a cryptographically secure random password."""
+
+    try:
+        length = int(length)
+    except Exception:
+        length = 16
+    length = max(8, min(length, 128))
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+    return "".join(secrets.choice(alphabet) for _ in range(length))

@@ -1,0 +1,23 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ef_icon_stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFEEC0" />
+      <stop offset="50%" stop-color="#F5B15C" />
+      <stop offset="100%" stop-color="#FF7B3A" />
+    </linearGradient>
+  </defs>
+  <g
+    fill="none"
+    stroke="url(#ef_icon_stroke)"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <!-- door -->
+    <rect x="4" y="5" width="8" height="14" rx="1.5" />
+    <circle cx="9" cy="12" r="0.7" />
+    <!-- arrow -->
+    <path d="M14 12h6" />
+    <path d="M17 9l3 3-3 3" />
+  </g>
+</svg>

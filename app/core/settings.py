@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
     # User-generated content root; never touched by pruning
     USER_CONTENT_DIR: str = "user_content"
+    # Feature flag: enable Hybrid Dark Studio UI (theme + create hub/modules)
+    USE_DARK_STUDIO_UI: bool = Field(default=True, alias="USE_DARK_STUDIO_UI")
 
     def validate_for_runtime(self) -> None:
         """Ensure unsafe defaults are not used outside of development."""

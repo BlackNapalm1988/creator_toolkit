@@ -21,21 +21,44 @@ from app.models.create import (
     VideoGenReq,
 )
 from app.services.keys import get_eleven_key_for_user, get_openai_key_for_user
+from app.services.assets import add_asset
+from modules import jobs as jobs_module
 
 router = APIRouter(tags=["Generate"])
+
+STYLE_PRESETS = {
+    "none": "",
+    "lofi": "in Japanese urban lo-fi anime style, soft neon lighting, grainy film texture",
+    "cinematic": "cinematic film look, shallow depth of field, anamorphic bokeh",
+    "anime": "stylized anime look, clean lines, saturated palettes, expressive lighting",
+    "painterly": "painterly illustration with visible brush strokes and soft edges",
+    "hyperreal": "hyperrealistic, photoreal textures, precise lighting and reflections",
+}
+
+CAMERA_PRESETS = {
+    "auto": "",
+    "static": "with a static camera shot, no movement",
+    "dolly_in": "with a slow dolly-in camera move",
+    "dolly_out": "with a slow dolly-out camera move",
+    "pan_left": "panning slowly to the left",
+    "pan_right": "panning slowly to the right",
+    "orbit": "orbiting slowly around the subject",
+    "handheld": "handheld, natural micro jitters, grounded feel",
+}
 
 
 def parse_eleven_generate_form(
     text: Annotated[str, Form(...)],
     voice_id: Annotated[Optional[str], Form()] = None,
-    model_identifier: Annotated[Optional[str], Form(alias="model_id")] = None,
+    # Avoid pydantic protected namespace warning ("model_" prefix)
+    video_model_id: Annotated[Optional[str], Form(alias="model_id")] = None,
 ) -> ElevenGenerateForm:
     """Return a validated payload for ElevenLabs TTS generation form data."""
 
     return ElevenGenerateForm(
         text=text,
         voice_id=voice_id,
-        model_id=model_identifier,
+        model_id=video_model_id,
     )
 
 
@@ -277,10 +300,22 @@ def generate_music(
             with open(out_disk_path, "wb") as f:
                 f.write(audio_bytes)
 
+            song_path = f"content/music/{out_name}".replace("\\", "/")
+            try:
+                add_asset(
+                    user_id=user_id,
+                    asset_type="audio",
+                    path=song_path,
+                    title=req.prompt[:80] if req.prompt else "",
+                    metadata={"mood": req.mood, "genre": req.genre},
+                )
+            except Exception:
+                pass
+
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"content/music/{out_name}".replace("\\", "/"),
+                "song_path": song_path,
                 "note": "Generated via ElevenLabs (JSON->base64 path)",
             }
 
@@ -300,10 +335,22 @@ def generate_music(
             with open(out_disk_path, "wb") as f:
                 f.write(audio_bytes)
 
+            song_path = f"content/music/{out_name}".replace("\\", "/")
+            try:
+                add_asset(
+                    user_id=user_id,
+                    asset_type="audio",
+                    path=song_path,
+                    title=req.prompt[:80] if req.prompt else "",
+                    metadata={"mood": req.mood, "genre": req.genre},
+                )
+            except Exception:
+                pass
+
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"content/music/{out_name}".replace("\\", "/"),
+                "song_path": song_path,
                 "note": "Generated via ElevenLabs (JSON->url path)",
             }
 
@@ -328,10 +375,22 @@ def generate_music(
     with open(out_disk_path, "wb") as f:
         f.write(audio_bytes)
 
+    song_path = f"content/music/{out_name}".replace("\\", "/")
+    try:
+        add_asset(
+            user_id=user_id,
+            asset_type="audio",
+            path=song_path,
+            title=req.prompt[:80] if req.prompt else "",
+            metadata={"mood": req.mood, "genre": req.genre},
+        )
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "status": "ready",
-        "song_path": f"content/music/{out_name}".replace("\\", "/"),
+        "song_path": song_path,
         "note": "Generated via ElevenLabs (direct binary path)",
     }
 
@@ -421,10 +480,21 @@ def get_music_status(
             with open(out_disk_path, "wb") as f:
                 f.write(audio_bytes)
 
+            song_path = f"content/music/{out_name}".replace("\\", "/")
+            try:
+                add_asset(
+                    user_id=user_id,
+                    asset_type="audio",
+                    path=song_path,
+                    title=req.prompt[:80] if req.prompt else "",
+                    metadata={"mood": req.mood, "genre": req.genre},
+                )
+            except Exception:
+                pass
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"content/music/{out_name}".replace("\\", "/"),
+                "song_path": song_path,
             }
 
         if audio_url:
@@ -443,10 +513,21 @@ def get_music_status(
             with open(out_disk_path, "wb") as f:
                 f.write(audio_bytes)
 
+            song_path = f"content/music/{out_name}".replace("\\", "/")
+            try:
+                add_asset(
+                    user_id=user_id,
+                    asset_type="audio",
+                    path=song_path,
+                    title=req.prompt[:80] if req.prompt else "",
+                    metadata={"mood": req.mood, "genre": req.genre},
+                )
+            except Exception:
+                pass
             return {
                 "ok": True,
                 "status": "ready",
-                "song_path": f"content/music/{out_name}".replace("\\", "/"),
+                "song_path": song_path,
             }
 
         return {
@@ -515,11 +596,36 @@ def generate_video(
             "Make this a seamless looping clip with no visible jump between the end frame and the first frame."
         )
 
+    if req.video_type and req.video_type.lower() == "short":
+        prompt_bits.append("Format as a vertical short-form video, ideal for TikTok/Reels/Shorts, under 60 seconds.")
+
+    style_text = STYLE_PRESETS.get((req.style_preset or "none").lower(), "")
+    if style_text:
+        prompt_bits.append(style_text)
+
+    camera_text = CAMERA_PRESETS.get((req.camera_motion or "auto").lower(), "")
+    if camera_text:
+        prompt_bits.append(camera_text)
+
     prompt_bits.append(
         f"Cinematic motion, stable composition. Aspect ratio {aspect_for_prompt}. Soft camera movement, no hard cuts."
     )
 
     final_prompt = " ".join(prompt_bits)
+
+    # Enqueue a background job record so video generation appears in the Jobs API.
+    job_payload = {
+        "user_id": user_id,
+        "prompt": final_prompt,
+        "duration_seconds": req.duration_seconds,
+        "size": normalized_size,
+        "loop_hint": bool(req.loop_hint),
+        "video_type": req.video_type or "standard",
+        "style_preset": req.style_preset,
+        "camera_motion": req.camera_motion,
+        "seed": req.seed,
+    }
+    job_id = jobs_module.enqueue("sora_video", job_payload)
 
     multipart_fields = {
         "model": (None, "sora-2"),
@@ -540,12 +646,18 @@ def generate_video(
             timeout=120,
         )
     except Exception as exc:
+        jobs_module.set_error(job_id, f"Network error contacting OpenAI videos endpoint: {exc}")
         raise HTTPException(
             status_code=500,
             detail=f"Network error contacting OpenAI videos endpoint: {exc}",
         ) from exc
 
     if sora_resp.status_code >= 400:
+        jobs_module.set_error(
+            job_id,
+            f"Sora error {sora_resp.status_code}: {sora_resp.text}",
+            progress=None,
+        )
         raise HTTPException(status_code=sora_resp.status_code, detail=sora_resp.text)
 
     ctype = sora_resp.headers.get("Content-Type", "").lower()
@@ -561,27 +673,43 @@ def generate_video(
         try:
             payload = sora_resp.json()
         except Exception as exc:
+            jobs_module.set_error(job_id, "Sora 2 returned JSON but we couldn't parse it")
             raise HTTPException(
                 status_code=500,
                 detail="Sora 2 returned JSON but we couldn't parse it",
             ) from exc
 
         status = payload.get("status") or payload.get("state") or "unknown"
+        provider_job_id = payload.get("id") or payload.get("job_id")
 
         if status in ("queued", "processing", "running"):
+            jobs_module.update_job_status(
+                job_id,
+                stage=status,
+                status="running",
+                progress=payload.get("progress"),
+            )
             return {
                 "ok": True,
                 "status": status,
-                "provider_job_id": payload.get("id") or payload.get("job_id"),
+                "job_id": job_id,
+                "provider_job_id": provider_job_id,
                 "message": "Sora is rendering. Call /generate/video/status with job_id.",
                 "raw": payload,
             }
 
         if status == "completed" or payload.get("status") == "completed":
+            jobs_module.update_job_status(
+                job_id,
+                stage="completed_metadata",
+                status="running",
+                progress=payload.get("progress") or 90,
+            )
             return {
                 "ok": True,
                 "status": "completed",
-                "provider_job_id": payload.get("id") or payload.get("job_id"),
+                "job_id": job_id,
+                "provider_job_id": provider_job_id,
                 "seconds": payload.get("seconds"),
                 "size": payload.get("size"),
                 "note": "Video metadata says completed, fetch actual bytes via /generate/video/status",
@@ -620,18 +748,52 @@ def generate_video(
             with open(out_disk_path, "wb") as f:
                 f.write(video_bytes)
         else:
+            jobs_module.update_job_status(
+                job_id,
+                stage=payload.get("status", "unknown"),
+                status="running",
+                progress=payload.get("progress"),
+            )
             return {
                 "ok": True,
                 "status": payload.get("status", "unknown"),
-                "provider_job_id": payload.get("id") or payload.get("job_id"),
+                "job_id": job_id,
+                "provider_job_id": provider_job_id,
                 "note": "No direct bytes yet. Poll /generate/video/status.",
                 "raw": payload,
             }
 
         loop_path = f"content/uploads/{out_name}".replace("\\", "/")
+        try:
+            add_asset(
+                user_id=user_id,
+                asset_type="video",
+                path=loop_path,
+                title=req.prompt[:80] if req.prompt else "",
+                metadata={
+                    "size": normalized_size,
+                    "loop": bool(req.loop_hint),
+                    "video_type": req.video_type or "standard",
+                    "style_preset": req.style_preset,
+                    "camera_motion": req.camera_motion,
+                    "seed": req.seed,
+                },
+            )
+        except Exception:
+            pass
+        jobs_module.set_result(
+            job_id,
+            {
+                "out_path": loop_path,
+                "provider": "sora-2",
+                "seconds": payload.get("seconds"),
+                "size": payload.get("size"),
+            },
+        )
         return {
             "ok": True,
             "status": "ready",
+            "job_id": job_id,
             "loop_path": loop_path,
             "note": "Generated via Sora 2 (JSON->bytes path)",
         }
@@ -647,9 +809,36 @@ def generate_video(
         f.write(video_bytes)
 
     loop_path = f"content/uploads/{out_name}".replace("\\", "/")
+    try:
+        add_asset(
+            user_id=user_id,
+            asset_type="video",
+            path=loop_path,
+            title=req.prompt[:80] if req.prompt else "",
+            metadata={
+                "size": normalized_size,
+                "loop": bool(req.loop_hint),
+                "video_type": req.video_type or "standard",
+                "style_preset": req.style_preset,
+                "camera_motion": req.camera_motion,
+                "seed": req.seed,
+            },
+        )
+    except Exception:
+        pass
+    jobs_module.set_result(
+        job_id,
+        {
+            "out_path": loop_path,
+            "provider": "sora-2",
+            "seconds": req.duration_seconds,
+            "size": normalized_size,
+        },
+    )
     return {
         "ok": True,
         "status": "ready",
+        "job_id": job_id,
         "loop_path": loop_path,
         "note": "Generated via Sora 2 (direct binary path)",
     }
@@ -659,6 +848,7 @@ def generate_video(
 def get_video_status(
     job_id: str,
     user: Annotated[dict, Depends(require_role(CREATOR_ROLES, require_verified=True))],
+    backend_job_id: Optional[str] = None,
 ):
     """
     Check status of a Sora 2 video job by its ID returned from /generate/video.
@@ -677,6 +867,12 @@ def get_video_status(
     )
 
     if meta_resp.status_code >= 400:
+        if backend_job_id:
+            jobs_module.set_error(
+                backend_job_id,
+                f"Failed to get Sora status: {meta_resp.text}",
+                progress=None,
+            )
         raise HTTPException(
             status_code=meta_resp.status_code,
             detail=f"Failed to get status: {meta_resp.text}",
@@ -685,6 +881,8 @@ def get_video_status(
     try:
         meta = meta_resp.json()
     except Exception as exc:
+        if backend_job_id:
+            jobs_module.set_error(backend_job_id, "Status response was not JSON")
         raise HTTPException(
             status_code=500, detail="Status response was not JSON"
         ) from exc
@@ -692,16 +890,30 @@ def get_video_status(
     status = meta.get("status", "unknown")
 
     if status in ("queued", "processing", "running"):
+        if backend_job_id:
+            jobs_module.update_job_status(
+                backend_job_id,
+                stage=status,
+                status="running",
+                progress=meta.get("progress"),
+            )
         return {
             "ok": True,
             "status": status,
             "job_id": job_id,
+            "backend_job_id": backend_job_id,
             "progress": meta.get("progress"),
             "seconds": meta.get("seconds"),
             "size": meta.get("size"),
         }
 
     if status == "failed":
+        if backend_job_id:
+            jobs_module.set_error(
+                backend_job_id,
+                str(meta.get("error", "Generation failed")),
+                progress=None,
+            )
         raise HTTPException(
             status_code=500, detail=meta.get("error", "Generation failed")
         )
@@ -719,6 +931,12 @@ def get_video_status(
         if video_url:
             dl = requests.get(video_url, headers=headers, timeout=120)
             if dl.status_code >= 400:
+                if backend_job_id:
+                    jobs_module.set_error(
+                        backend_job_id,
+                        f"Download via video_url failed: {dl.text}",
+                        progress=None,
+                    )
                 raise HTTPException(
                     status_code=500, detail=f"Download via video_url failed: {dl.text}"
                 )
@@ -732,6 +950,12 @@ def get_video_status(
             )
 
             if bin_resp.status_code >= 400:
+                if backend_job_id:
+                    jobs_module.set_error(
+                        backend_job_id,
+                        f"Download via /content failed: {bin_resp.text}",
+                        progress=None,
+                    )
                 raise HTTPException(
                     status_code=500,
                     detail=f"Download via /content failed: {bin_resp.text}",
@@ -739,10 +963,18 @@ def get_video_status(
 
             ctype = bin_resp.headers.get("Content-Type", "").lower()
             if "application/json" in ctype:
+                if backend_job_id:
+                    jobs_module.update_job_status(
+                        backend_job_id,
+                        stage="completed_metadata",
+                        status="running",
+                        progress=meta.get("progress"),
+                    )
                 return {
                     "ok": False,
                     "status": "completed",
                     "job_id": job_id,
+                    "backend_job_id": backend_job_id,
                     "note": "Video metadata ready but binary not returned. Inspect meta.",
                     "meta": meta,
                     "raw": bin_resp.text,
@@ -751,18 +983,35 @@ def get_video_status(
             with open(out_disk_path, "wb") as f:
                 f.write(bin_resp.content)
 
+        loop_path = f"content/uploads/{out_name}".replace("\\", "/")
+        if backend_job_id:
+            jobs_module.set_result(
+                backend_job_id,
+                {
+                    "out_path": loop_path,
+                    "provider": "sora-2",
+                    "seconds": meta.get("seconds"),
+                    "size": meta.get("size"),
+                },
+            )
         return {
             "ok": True,
             "status": "ready",
-            "loop_path": f"content/uploads/{out_name}".replace("\\", "/"),
+            "loop_path": loop_path,
             "seconds": meta.get("seconds"),
             "size": meta.get("size"),
+            "backend_job_id": backend_job_id,
         }
 
+    if backend_job_id:
+        jobs_module.update_job_status(
+            backend_job_id, stage=status, status="running", progress=None
+        )
     return {
         "ok": False,
         "status": status,
         "meta": meta,
+        "backend_job_id": backend_job_id,
     }
 
 

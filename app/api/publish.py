@@ -68,6 +68,7 @@ from modules.storage import (
     project_path as _project_path_impl,
 )
 from modules.users import get_user_by_id, upsert_user_key
+from app.services.assets import add_asset, list_assets_for_user
 
 router = APIRouter(tags=["Publish"])
 
@@ -136,6 +137,37 @@ def _normalize_publish_at(publish_at_raw: Optional[str]) -> Optional[str]:
     return iso
 
 
+def _coerce_bool(val: Optional[object]) -> Optional[bool]:
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() in {"true", "1", "yes", "on", "kids"}
+
+
+def _upload_youtube_thumbnail(access_token: str, video_id: str, thumbnail_path: Path) -> None:
+    if not video_id or not thumbnail_path or not thumbnail_path.is_file():
+        return
+    mime = "image/png" if thumbnail_path.suffix.lower() == ".png" else "image/jpeg"
+    endpoint = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
+    with open(thumbnail_path, "rb") as fh:
+        resp = requests.post(
+            endpoint,
+            params={"videoId": video_id, "uploadType": "multipart"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": mime,
+            },
+            data=fh.read(),
+            timeout=30,
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"YouTube thumbnail upload failed: {resp.text}",
+        )
+
+
 def _youtube_upload_from_disk(
     user_id: int,
     file_path: str,
@@ -144,6 +176,12 @@ def _youtube_upload_from_disk(
     tags: List[str],
     privacy_status: str,
     publish_at: Optional[str],
+    *,
+    video_type: Optional[str] = None,
+    category_id: Optional[str] = None,
+    made_for_kids: Optional[bool] = None,
+    playlist_id: Optional[str] = None,
+    thumbnail_path: Optional[str] = None,
 ) -> Dict[str, object]:
     refresh_token = get_youtube_refresh_token(user_id)
     access_token = exchange_youtube_refresh(refresh_token)
@@ -161,6 +199,10 @@ def _youtube_upload_from_disk(
 
     if publish_at:
         metadata["status"]["publishAt"] = publish_at
+    if category_id:
+        metadata["snippet"]["categoryId"] = category_id
+    if made_for_kids is not None:
+        metadata["status"]["madeForKids"] = bool(made_for_kids)
 
     upload_url = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status"
 
@@ -204,11 +246,27 @@ def _youtube_upload_from_disk(
             detail=f"YouTube upload failed: {upload_resp.text}",
         )
 
+    video_id = upload_resp.json().get("id")
+
+    thumb = Path(thumbnail_path) if thumbnail_path else None
+    thumb_status = None
+    if thumb:
+        try:
+            _upload_youtube_thumbnail(access_token, video_id, thumb)
+            thumb_status = "uploaded"
+        except HTTPException:
+            thumb_status = "failed"
+
     return {
-        "video_id": upload_resp.json().get("id"),
+        "video_id": video_id,
         "requested_visibility": privacy_status,
         "scheduled_publish_at": publish_at,
         "youtube_response": upload_resp.json(),
+        "video_type": video_type,
+        "category_id": category_id,
+        "playlist_id": playlist_id,
+        "made_for_kids": made_for_kids,
+        "thumbnail_status": thumb_status,
     }
 
 
@@ -351,6 +409,41 @@ def youtube_channels_me(
     return resp.json()
 
 
+@router.get("/youtube/library", tags=["YouTube"])
+def youtube_stub_library(
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
+    ],
+):
+    """Return recent video/master assets for the user (used by Publish)."""
+    assets = list_assets_for_user(user["id"], asset_type=None, limit=50)
+    filtered = [a for a in assets if a.get("type") in ("video", "master")]
+    return {
+        "items": [
+            {
+                "id": asset.get("id"),
+                "label": asset.get("title") or asset.get("path"),
+                "path": asset.get("path"),
+                "type": asset.get("type"),
+            }
+            for asset in filtered
+        ]
+    }
+
+
+@router.get("/library", tags=["Library"])
+def list_library_assets(
+    user: Annotated[
+        dict, Depends(require_role(PUBLISHER_ROLES + ["editor"], require_verified=True))
+    ],
+    asset_type: Optional[str] = None,
+    limit: int = 50,
+):
+    limit = max(1, min(limit, 200))
+    assets = list_assets_for_user(user["id"], asset_type=asset_type, limit=limit)
+    return {"items": assets}
+
+
 @router.post(
     "/youtube/upload",
     tags=["YouTube"],
@@ -379,17 +472,31 @@ def youtube_upload_video(
 ):
     video_path_raw = (req.video_path or "").strip()
     title_raw = (req.title or "").strip()
+    library_path_raw = (req.library_path or "").strip()
 
-    if not video_path_raw or not title_raw:
-        raise HTTPException(status_code=400, detail="video_path and title are required")
+    if not (video_path_raw or library_path_raw) or not title_raw:
+        raise HTTPException(
+            status_code=400, detail="video_path or library_path and title are required"
+        )
 
-    file_path = _resolve_video_file(video_path_raw)
+    file_path = _resolve_video_file(video_path_raw or library_path_raw)
 
     description = (req.description or "").strip()
     tags = req.tags or []
     privacy_status_raw = (req.privacy_status or "unlisted").strip()
     privacy_status = privacy_status_raw or "unlisted"
     publish_at = _normalize_publish_at((req.publish_at or "").strip() or None)
+    category_id = (req.category_id or "").strip() or None
+    playlist_id = (req.playlist_id or "").strip() or None
+    video_type = (req.video_type or "").strip() or None
+    made_for_kids = req.made_for_kids
+
+    resolved_thumb: Optional[str] = None
+    if req.thumbnail_path:
+        try:
+            resolved_thumb = str(_resolve_video_file(req.thumbnail_path))
+        except Exception:
+            resolved_thumb = None
 
     # Allow tests to monkeypatch main._youtube_upload_from_disk
     try:
@@ -409,7 +516,30 @@ def youtube_upload_video(
         tags=tags,
         privacy_status=privacy_status,
         publish_at=publish_at,
+        video_type=video_type,
+        category_id=category_id,
+        made_for_kids=made_for_kids,
+        playlist_id=playlist_id,
+        thumbnail_path=resolved_thumb,
     )
+
+    try:
+        path_str = str(file_path).replace("\\", "/")
+        if "/user_content/" in path_str:
+            path_str = "/content/" + path_str.split("/user_content/", 1)[1]
+        add_asset(
+            user_id=user["id"],
+            asset_type="video" if video_type != "short" else "short",
+            path=path_str,
+            title=title_raw,
+            metadata={
+                "category_id": category_id,
+                "playlist_id": playlist_id,
+                "made_for_kids": made_for_kids,
+            },
+        )
+    except Exception:
+        pass
 
     return {
         "ok": True,
@@ -417,6 +547,10 @@ def youtube_upload_video(
         "requested_visibility": yt_info.get("requested_visibility"),
         "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
         "youtube_response": yt_info.get("youtube_response"),
+        "video_type": yt_info.get("video_type"),
+        "category_id": yt_info.get("category_id"),
+        "playlist_id": yt_info.get("playlist_id"),
+        "made_for_kids": yt_info.get("made_for_kids"),
     }
 
 
@@ -640,6 +774,16 @@ def package_master(
         raise HTTPException(status_code=500, detail=f"packager failed: {exc}") from exc
 
     public_url = f"/content/masters/{out_file}"
+    try:
+        add_asset(
+            user_id=user["id"],
+            asset_type="master",
+            path=public_url,
+            title=req.out_name,
+            metadata={"duration_ms": req.duration_ms},
+        )
+    except Exception:
+        pass
 
     return {
         "ok": True,
@@ -770,6 +914,17 @@ def pipeline_publish_lofi(
         publish_at=_normalize_publish_at(req.publish_at),
     )
 
+    try:
+        add_asset(
+            user_id=user_id,
+            asset_type="master",
+            path=public_url,
+            title=req.title.strip(),
+            metadata={"duration_ms": result.get("approx_duration_ms")},
+        )
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "master_public_url": public_url,
@@ -787,20 +942,45 @@ def youtube_upload_form(
     user: Annotated[
         dict, Depends(require_role(PUBLISHER_ROLES, require_verified=True))
     ],
-    file: Annotated[UploadFile, File(...)],
     title: Annotated[str, Form(...)],
+    video_file: UploadFile | None = File(None),
+    file: UploadFile | None = File(None),
+    thumbnail_file: UploadFile | None = File(None),
     description: str = Form(""),
     tags: str = Form(""),
     privacy_status: str = Form("unlisted"),
     publish_at: Optional[str] = Form(None),
+    source_mode: str = Form("upload"),
+    library_path: Optional[str] = Form(None),
+    video_type: Optional[str] = Form(None),
+    category_id: Optional[str] = Form(None),
+    made_for_kids: Optional[bool] = Form(None),
+    playlist_id: Optional[str] = Form(None),
 ):
     uploads_dir = os.path.join("static", "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
 
-    suffix = Path(file.filename or "upload.mp4").suffix
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(file.file.read())
-        temp_path = Path(tmp.name)
+    chosen_file = video_file or file
+    thumb_path: Optional[Path] = None
+    temp_path: Optional[Path] = None
+
+    if source_mode == "library":
+        if not library_path:
+            raise HTTPException(status_code=400, detail="library_path is required when source_mode=library")
+        temp_path = _resolve_video_file(library_path)
+    else:
+        if not chosen_file:
+            raise HTTPException(status_code=400, detail="upload file is required")
+        suffix = Path(chosen_file.filename or "upload.mp4").suffix
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(chosen_file.file.read())
+            temp_path = Path(tmp.name)
+
+    if thumbnail_file and thumbnail_file.filename:
+        thumb_suffix = Path(thumbnail_file.filename).suffix or ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=thumb_suffix) as tmp:
+            tmp.write(thumbnail_file.file.read())
+            thumb_path = Path(tmp.name)
 
     try:
         try:
@@ -820,9 +1000,19 @@ def youtube_upload_form(
             tags=_parse_tags(tags),
             privacy_status=(privacy_status or "unlisted").strip() or "unlisted",
             publish_at=_normalize_publish_at(publish_at),
+            video_type=(video_type or "").strip() or None,
+            category_id=(category_id or "").strip() or None,
+            made_for_kids=_coerce_bool(made_for_kids),
+            playlist_id=(playlist_id or "").strip() or None,
+            thumbnail_path=str(thumb_path) if thumb_path else None,
         )
     finally:
-        if temp_path:
+        if thumb_path:
+            try:
+                thumb_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        if temp_path and source_mode != "library":
             try:
                 temp_path.unlink(missing_ok=True)
             except Exception:
@@ -834,4 +1024,8 @@ def youtube_upload_form(
         "requested_visibility": yt_info.get("requested_visibility"),
         "scheduled_publish_at": yt_info.get("scheduled_publish_at"),
         "youtube_response": yt_info.get("youtube_response"),
+        "video_type": yt_info.get("video_type"),
+        "category_id": yt_info.get("category_id"),
+        "playlist_id": yt_info.get("playlist_id"),
+        "made_for_kids": yt_info.get("made_for_kids"),
     }

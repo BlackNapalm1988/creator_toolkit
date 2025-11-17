@@ -9,12 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-from modules.jobs import (
-    append_log,
-    set_error,
-    set_result,
-    update_job_status,
-)
+from modules.jobs import append_log, set_error, set_result, update_job_status
 from modules.packager import build_master_from_loop, probe_audio_duration
 from modules.storage import project_path
 
@@ -170,3 +165,15 @@ def job_handle_qa_batch(job_id: str, payload: Dict[str, object]) -> None:
 
     append_log(job_id, "QA batch complete")
     set_result(job_id, {"results": results})
+
+
+def job_handle_sora_video(job_id: str, payload: Dict[str, object]) -> None:
+    """Stub handler for Sora video jobs managed via API routes.
+
+    The /generate/video and /generate/video/status endpoints are responsible
+    for updating stage/progress/result; the worker just marks the job as
+    running and records a log entry.
+    """
+
+    update_job_status(job_id, stage="remote", progress=None)
+    append_log(job_id, "Sora video job managed via /generate/video status polling")

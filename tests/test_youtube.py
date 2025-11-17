@@ -50,6 +50,7 @@ def test_youtube_upload_json_success(client, tmp_path, monkeypatch):
         tags,
         privacy_status,
         publish_at,
+        **kwargs,
     ):
         assert user_id == user["id"]
         assert Path(file_path) == video_path
@@ -98,7 +99,7 @@ def test_youtube_upload_json_missing_fields(client):
     assert response.status_code == 400
     body = response.json()
     assert body["error"]["code"] == "bad_request"
-    assert body["error"]["message"] == "video_path and title are required"
+    assert "video_path or library_path" in body["error"]["message"]
 
 
 def test_youtube_upload_json_missing_file(client):
@@ -152,6 +153,7 @@ def test_youtube_upload_json_leading_slash_path(client, tmp_path, monkeypatch):
         tags,
         privacy_status,
         publish_at,
+        **kwargs,
     ):
         assert user_id == user["id"]
         assert Path(file_path) == actual_file
@@ -178,3 +180,69 @@ def test_youtube_upload_json_leading_slash_path(client, tmp_path, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["video_id"] == expected_payload["video_id"]
+
+
+def test_youtube_upload_json_with_new_fields(client, tmp_path, monkeypatch):
+    user = _create_user("yt-rich@example.com")
+
+    video_path = tmp_path / "demo.mp4"
+    video_path.write_bytes(b"bytes")
+
+    expected_payload = {"video_id": "rich123", "requested_visibility": "unlisted", "scheduled_publish_at": None}
+
+    def fake_upload_from_disk(
+        *,
+        user_id,
+        file_path,
+        title,
+        description,
+        tags,
+        privacy_status,
+        publish_at,
+        video_type=None,
+        category_id=None,
+        made_for_kids=None,
+        playlist_id=None,
+        thumbnail_path=None,
+        **kwargs,
+    ):
+        assert user_id == user["id"]
+        assert Path(file_path) == video_path
+        assert video_type == "short"
+        assert category_id == "10"
+        assert made_for_kids is True
+        assert playlist_id == "playlist-1"
+        assert thumbnail_path is None  # JSON path not provided
+        return expected_payload
+
+    monkeypatch.setattr(main, "_youtube_upload_from_disk", fake_upload_from_disk)
+
+    payload = {
+        "video_path": str(video_path),
+        "title": "Demo",
+        "description": "desc",
+        "tags": ["tag"],
+        "privacy_status": "unlisted",
+        "video_type": "short",
+        "category_id": "10",
+        "made_for_kids": True,
+        "playlist_id": "playlist-1",
+    }
+
+    resp = client.post("/youtube/upload", headers=_auth_headers(user), json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["video_id"] == expected_payload["video_id"]
+
+
+def test_youtube_library_stub(client):
+    user = _create_user("yt-lib@example.com")
+    resp = client.get("/youtube/library", headers=_auth_headers(user))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert isinstance(data["items"], list)
+
+
+def test_publish_template_has_no_upload_result_textarea():
+    tpl = Path("templates/dashboard.html").read_text()
+    assert "YouTube Upload Result" not in tpl

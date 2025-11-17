@@ -1,22 +1,176 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
-  <h2>Project Settings</h2>
-  <p class="help-text">Workspace: <span id="currentWorkspaceLabel"></span></p>
-  <p class="help-text">Adjust project-level options here.</p>
-  <div class="row">
-    <a href="/dashboard" class="ghost-btn">Back to Dashboard</a>
+<section class="ct-workspace-section">
+  <div class="ct-workspace-header">
+    <h2>Workspace Settings</h2>
+    <p class="help-text">Workspace: <span id="currentWorkspaceLabel"></span></p>
+    <p class="help-text">Adjust project-level options here.</p>
   </div>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const params = new URLSearchParams(window.location.search);
-      const ws = params.get('ws');
-      if (ws && ws.trim()) {
-        try { localStorage.setItem('activeWorkspace', ws.trim()); } catch {}
-      }
-      const name = localStorage.getItem('activeWorkspace') || 'Default';
-      const el = document.getElementById('currentWorkspaceLabel');
-      if (el) el.textContent = name;
-    });
-  </script>
+  <div class="ct-workspace-body ct-stack">
+    <div class="row">
+      <a href="/dashboard" class="ghost-btn">Back to Dashboard</a>
+    </div>
+  </div>
+</section>
+
+<section class="ct-workspace-section">
+  <div class="ct-workspace-header">
+    <h3>Agent Directives</h3>
+    <p class="help-text">Provide default guidance the Imagine copilot should follow for this workspace.</p>
+  </div>
+  <div class="ct-workspace-body ct-stack">
+    <label class="ct-settings-field" for="agentDirectiveInput">
+      <span class="label">Baseline directive</span>
+      <textarea id="agentDirectiveInput" rows="4" placeholder="Example: Always suggest moody cinematic loops with gentle camera drift."></textarea>
+    </label>
+    <div class="ct-settings-actions">
+      <button id="saveAgentDirective" class="ghost-btn small" type="button">Save Draft</button>
+      <p id="agentDirectiveFeedback" class="help-text"></p>
+    </div>
+  </div>
+</section>
+
+<section class="ct-workspace-section">
+  <div class="ct-workspace-header">
+    <h3>Allowed Models</h3>
+    <p class="help-text">Choose which Imagine chat models are available to this workspace.</p>
+  </div>
+  <div class="ct-workspace-body ct-stack">
+    <form id="allowedModelsForm" class="ct-settings-checklist">
+      <label>
+        <input type="checkbox" value="gpt-4o-mini" />
+        <span>GPT-4o Mini</span>
+      </label>
+      <label>
+        <input type="checkbox" value="gpt-4o" />
+        <span>GPT-4o (full)</span>
+      </label>
+      <label>
+        <input type="checkbox" value="o4-mini" />
+        <span>o4 Mini (OpenAI Optimized)</span>
+      </label>
+    </form>
+    <p class="ct-settings-note">Selections sync with the Imagine inspector dropdown.</p>
+    <p id="allowedModelsFeedback" class="help-text"></p>
+  </div>
+</section>
+
+<section class="ct-workspace-section">
+  <div class="ct-workspace-header">
+    <h3>Scene Directives</h3>
+    <p class="help-text">Capture reusable scene-level instructions (tone, framing, pacing) for downstream tools.</p>
+  </div>
+  <div class="ct-workspace-body ct-stack">
+    <label class="ct-settings-field" for="sceneDirectiveInput">
+      <span class="label">Scene directive notes</span>
+      <textarea id="sceneDirectiveInput" rows="4" placeholder="Example: Always recommend 9:16 vertical framing with soft diffusion."></textarea>
+    </label>
+    <div class="ct-settings-actions">
+      <button id="saveSceneDirective" class="ghost-btn small" type="button">Save Draft</button>
+      <p id="sceneDirectiveFeedback" class="help-text"></p>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const ws = params.get('ws');
+    if (ws && ws.trim()) {
+      try { localStorage.setItem('activeWorkspace', ws.trim()); } catch {}
+    }
+    const name = localStorage.getItem('activeWorkspace') || 'Default';
+    const workspaceLabel = document.getElementById('currentWorkspaceLabel');
+    if (workspaceLabel) workspaceLabel.textContent = name;
+
+    const STORAGE_KEYS = {
+      agent: 'ctAgentDirective',
+      models: 'ctAllowedImagineModels',
+      scene: 'ctSceneDirectives',
+      user: 'ctUserKey',
+    };
+    const DEFAULT_MODELS = ['gpt-4o-mini', 'gpt-4o', 'o4-mini'];
+
+    const sanitize = (value, fallback = 'default') => {
+      const safe = (value || '').toString().trim() || fallback;
+      return safe.replace(/[^\w\-]/g, '_');
+    };
+
+    const getCurrentUserKey = () => {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEYS.user);
+        if (cached) return sanitize(cached, 'guest');
+      } catch {}
+      return 'guest';
+    };
+
+    const getWorkspaceScopedModelKey = () => {
+      const ws = sanitize(name, 'Default');
+      const user = getCurrentUserKey();
+      return `${STORAGE_KEYS.models}:${ws}:${user}`;
+    };
+
+    function getStoredList(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback.slice();
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed.filter((item) => typeof item === 'string' && item.trim().length);
+        }
+      } catch {}
+      return fallback.slice();
+    }
+
+    // Agent directives
+    const agentInput = document.getElementById('agentDirectiveInput');
+    const agentFeedback = document.getElementById('agentDirectiveFeedback');
+    if (agentInput) {
+      agentInput.value = localStorage.getItem(STORAGE_KEYS.agent) || '';
+      document.getElementById('saveAgentDirective')?.addEventListener('click', () => {
+        try { localStorage.setItem(STORAGE_KEYS.agent, agentInput.value.trim()); } catch {}
+        if (agentFeedback) agentFeedback.textContent = 'Saved locally.';
+      });
+    }
+
+    // Allowed models
+    const allowedForm = document.getElementById('allowedModelsForm');
+    const allowedFeedback = document.getElementById('allowedModelsFeedback');
+    if (allowedForm) {
+      const applyAllowedModelState = () => {
+        const scopedKey = getWorkspaceScopedModelKey();
+        const legacyKey = STORAGE_KEYS.models;
+        let selected = getStoredList(scopedKey, []);
+        if (!selected.length) {
+          selected = getStoredList(legacyKey, DEFAULT_MODELS);
+          try { localStorage.setItem(scopedKey, JSON.stringify(selected)); } catch {}
+        }
+        allowedForm.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+          input.checked = selected.includes(input.value);
+        });
+      };
+      const persistAllowedModels = () => {
+        const selected = Array.from(allowedForm.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value);
+        const toSave = selected.length ? selected : DEFAULT_MODELS;
+        try { localStorage.setItem(getWorkspaceScopedModelKey(), JSON.stringify(toSave)); } catch {}
+        if (allowedFeedback) {
+          allowedFeedback.textContent = `Saved ${toSave.length} model${toSave.length === 1 ? '' : 's'}.`;
+        }
+      };
+      applyAllowedModelState();
+      allowedForm.addEventListener('change', persistAllowedModels);
+    }
+
+    // Scene directives
+    const sceneInput = document.getElementById('sceneDirectiveInput');
+    const sceneFeedback = document.getElementById('sceneDirectiveFeedback');
+    if (sceneInput) {
+      sceneInput.value = localStorage.getItem(STORAGE_KEYS.scene) || '';
+      document.getElementById('saveSceneDirective')?.addEventListener('click', () => {
+        try { localStorage.setItem(STORAGE_KEYS.scene, sceneInput.value.trim()); } catch {}
+        if (sceneFeedback) sceneFeedback.textContent = 'Saved locally.';
+      });
+    }
+  });
+</script>
 {% endblock %}

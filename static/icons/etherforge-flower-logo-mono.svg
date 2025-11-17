@@ -1,0 +1,25 @@
+<svg
+  width="64"
+  height="64"
+  viewBox="0 0 256 256"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- Simple, single-color stroke for tiny renders -->
+  <g
+    fill="none"
+    stroke="#F5B15C"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <circle cx="128" cy="128" r="92" />
+
+    <circle cx="128" cy="128" r="32" />
+    <circle cx="160" cy="128" r="32" />
+    <circle cx="96"  cy="128" r="32" />
+    <circle cx="144" cy="100.5" r="32" />
+    <circle cx="112" cy="100.5" r="32" />
+    <circle cx="144" cy="155.5" r="32" />
+    <circle cx="112" cy="155.5" r="32" />
+  </g>
+</svg>

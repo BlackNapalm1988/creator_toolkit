@@ -13,6 +13,13 @@ class VideoGenReq(BaseModel):
     size: str | None = "720x1280"
     aspect_ratio: str | None = None
     loop_hint: bool = True
+    video_type: str | None = None
+    style_preset: str | None = None
+    camera_motion: str | None = None
+    seed: int | None = None
+    remix_mode: bool | None = None
+    base_scene_id: str | None = None
+    remix_strength: float | None = None
 
 
 class VideoStatusReq(BaseModel):

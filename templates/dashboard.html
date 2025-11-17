@@ -1,87 +1,409 @@
 {% extends "base.html" %} {% block content %}
 <section id="dashboard-view" class="view app-view active">
-  <div class="view-intro">
-    <p id="dashboardInfo" class="help-text">
-      Sign in to view your account overview.
-    </p>
-    <p id="dashboardError" class="help-text error hidden">
-      Unable to load dashboard data.
-    </p>
-  </div>
-  <div class="dashboard-grid">
-    <div class="card account-card">
-      <div class="card-header">
-        <h2>Your Account</h2>
-        <span id="dashboardRoleBadge" class="role-pill">Viewer</span>
-      </div>
-      <ul id="dashboardProfileList" class="dashboard-list">
-        <li class="dashboard-placeholder">Sign in to view your profile.</li>
-      </ul>
-    </div>
-    <div class="card status-card">
-      <div class="card-header">
-        <h2>Provider Status</h2>
-      </div>
-      <div id="dashboardProviders" class="status-grid">
-        <p class="dashboard-placeholder">Sign in to view connected services.</p>
+  <div class="card dashboard-hero">
+    <div class="dashboard-hero__content">
+      <p class="eyebrow">Dashboard</p>
+      <h1 id="dashboardWelcome">Welcome back, creator</h1>
+      <p id="dashboardSubhead" class="help-text">
+        Here’s an overview of your recent activity and provider status.
+      </p>
+      <div class="dashboard-inline-feedback">
+        <p id="dashboardInfo" class="help-text">
+          Sign in to view your account overview.
+        </p>
+        <p id="dashboardError" class="help-text error hidden">
+          Unable to load dashboard data.
+        </p>
       </div>
     </div>
-  </div>
-  <div class="card active-jobs-card">
-    <div class="card-header with-action">
-      <h2>Active Jobs</h2>
-      <button id="refreshJobsButton" class="ghost-btn small">Refresh</button>
-    </div>
-    <div id="activeJobsList" class="jobs-list">
-      <p class="dashboard-placeholder">No active jobs yet.</p>
+    <div class="dashboard-hero__meta">
+      <span id="dashboardWorkspaceBadge" class="pill-subtle">Workspace: Default</span>
+      <span id="dashboardRoleBadge" class="role-pill">Viewer</span>
     </div>
   </div>
-  <div class="card recent-jobs-card">
-    <h2>Recent Jobs</h2>
-    <div class="table-wrapper">
-      <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Stage</th>
-            <th>Progress</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody id="recentJobsBody">
-          <tr>
-            <td colspan="6" class="dashboard-placeholder">
-              Sign in to view recent jobs.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+
+  <div class="dashboard-columns">
+    <div class="dashboard-main">
+      <div class="card dashboard-card account-status-card">
+        <div class="account-card__header">
+          <div class="avatar" id="dashboardAvatar" aria-hidden="true">E</div>
+          <div>
+            <p class="eyebrow">Your Account</p>
+            <h3 id="dashboardAccountName">Signed out</h3>
+            <div class="badge-row">
+              <span class="role-pill" aria-live="polite" id="dashboardRoleBadgeSecondary">Viewer</span>
+              <span class="pill-subtle" id="dashboardWorkspaceBadgeSecondary">Workspace: Default</span>
+            </div>
+          </div>
+          <a href="/settings" class="ghost-btn small account-manage">Manage</a>
+        </div>
+        <div class="account-card__body">
+          <div class="account-card__section">
+            <div class="section-label">Profile</div>
+            <ul id="dashboardProfileList" class="dashboard-list">
+              <li class="dashboard-placeholder">Sign in to view your profile.</li>
+            </ul>
+          </div>
+          <div class="account-card__divider" role="presentation"></div>
+          <div class="account-card__section">
+            <div class="section-label">Provider Status</div>
+            <div id="dashboardProviders" class="status-grid">
+              <p class="dashboard-placeholder">Sign in to view connected services.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card dashboard-card active-jobs-card">
+        <div class="card-header with-action">
+          <div class="card-title">
+            <span class="card-icon" aria-hidden="true">⚡</span>
+            <div>
+              <h2>Active Jobs</h2>
+              <p class="help-text">Live runs and queued tasks.</p>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="/create" class="ghost-btn small subtle">View all</a>
+            <button id="refreshJobsButton" class="ghost-btn filled small">Refresh</button>
+          </div>
+        </div>
+        <div id="activeJobsList" class="jobs-list">
+          <p class="dashboard-placeholder">No active jobs yet. Kick off a new Imagine run to see it tracked here.</p>
+        </div>
+      </div>
+
+      <div class="card dashboard-card recent-jobs-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon" aria-hidden="true">🕑</span>
+            <div>
+              <h2>Recent Jobs</h2>
+              <p class="help-text">Latest activity across imagine, video, and music.</p>
+            </div>
+          </div>
+          <a href="/create" class="ghost-btn small subtle">View all</a>
+        </div>
+        <div class="table-wrapper">
+          <table class="dashboard-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Stage</th>
+                <th>Progress</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="recentJobsBody">
+              <tr>
+                <td colspan="6" class="dashboard-placeholder">
+                  Sign in to view recent jobs.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="card recent-assets-card">
-    <h2>Recent Assets</h2>
-    <ul id="recentAssetsList" class="dashboard-list">
-      <li class="dashboard-placeholder">Sign in to view recent assets.</li>
-    </ul>
+
+    <aside class="dashboard-side">
+      <div class="card dashboard-card recent-assets-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon" aria-hidden="true">🗂️</span>
+            <div>
+              <h2>Recent Assets</h2>
+              <p class="help-text">Quick access to your latest outputs.</p>
+            </div>
+          </div>
+          <a href="/create" class="ghost-btn small subtle">View all</a>
+        </div>
+        <ul id="recentAssetsList" class="dashboard-list">
+          <li class="dashboard-placeholder">Sign in to view recent assets.</li>
+        </ul>
+      </div>
+    </aside>
   </div>
 </section>
-<section id="imagine-view" class="view app-view">
-  <h2>IMAGINE · Chat / Prompt R&amp;D</h2>
-  <div class="card">
-    <div class="row">
-      <textarea
-        id="imagineInput"
-        placeholder="Describe the vibe, story, visual aesthetic, etc..."
-      ></textarea>
+
+<!-- Settings workspace (Profile / Workspaces / Advanced / Users) -->
+<section id="settings-profile" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Settings">
+    <button class="ct-tab active" data-view="settings-profile">Profile</button>
+    <button class="ct-tab" data-view="settings-workspaces">Workspaces</button>
+    <button class="ct-tab" data-view="settings-advanced">Advanced</button>
+    <button class="ct-tab" data-view="settings-users">Users</button>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">👤</span>
+      <div>
+        <h2>Account Information</h2>
+        <p class="help-text">Update your name and contact details.</p>
+      </div>
     </div>
-    <div class="row">
-      <button id="imagineSendBtn">Send to Chat</button>
+    <div class="ct-workspace-body ct-stack">
+      <form id="profileForm" class="modal-form inline active">
+        <div class="two-col">
+          <label>Full Name
+            <input id="profileName" type="text" required />
+          </label>
+          <label>Email
+            <input id="profileEmail" type="email" required />
+          </label>
+        </div>
+        <button type="submit" class="ghost-btn filled">Save Profile</button>
+      </form>
+      <div id="profileFormFeedback" class="form-feedback"></div>
+      <div class="profile-meta">
+        <span id="profileVerificationStatus"></span>
+        <span id="profileRole"></span>
+      </div>
     </div>
-    <div class="row">
-      <label>Assistant Response</label>
-      <pre id="imagineOutput" class="output-box"></pre>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">🔒</span>
+      <div>
+        <h3>Change Password</h3>
+        <p class="help-text">Keep your account secure.</p>
+      </div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <form id="passwordForm" class="modal-form inline active">
+        <input type="text" name="username" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true" />
+        <div class="two-col">
+          <label>Current Password
+            <input id="currentPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <label>New Password
+            <input id="newPassword" type="password" autocomplete="new-password" required />
+          </label>
+        </div>
+        <button type="submit" class="ghost-btn filled">Update Password</button>
+      </form>
+      <div id="passwordFormFeedback" class="form-feedback"></div>
+    </div>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">🛡️</span>
+      <div>
+        <h3>Role &amp; Permissions</h3>
+      </div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <div class="profile-role-overview">
+        <p id="profileRole" class="profile-role-label"></p>
+        <ul id="rolePermissionsList" class="help-text"></ul>
+      </div>
+      <p class="help-text">Role assignments are managed by administrators.</p>
+    </div>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">🔑</span>
+      <div>
+        <h3>API Keys</h3>
+        <p class="help-text">Keys are stored securely on this device.</p>
+      </div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <div id="apiKeysList" class="api-keys-list"></div>
+      <button id="addApiKeyButton" class="ghost-btn small" type="button">Add API Key</button>
+      <div id="apiKeyFeedback" class="form-feedback"></div>
+      <form id="apiKeyForm" class="modal-form inline active">
+        <div class="two-col">
+          <label>Provider
+            <input id="apiKeyProvider" type="text" placeholder="openai" required />
+          </label>
+          <label>Secret
+            <input id="apiKeySecret" type="text" placeholder="sk-..." required />
+          </label>
+        </div>
+        <button type="submit" class="ghost-btn filled">Add / Update Key</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="settings-workspaces" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Settings">
+    <button class="ct-tab" data-view="settings-profile">Profile</button>
+    <button class="ct-tab active" data-view="settings-workspaces">Workspaces</button>
+    <button class="ct-tab" data-view="settings-advanced">Advanced</button>
+    <button class="ct-tab" data-view="settings-users">Users</button>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">🗂️</span>
+      <div><h2>Workspaces</h2></div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <a class="ghost-btn" href="/settings/project">Open Workspace Settings</a>
+    </div>
+  </div>
+</section>
+
+<section id="settings-advanced" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Settings">
+    <button class="ct-tab" data-view="settings-profile">Profile</button>
+    <button class="ct-tab" data-view="settings-workspaces">Workspaces</button>
+    <button class="ct-tab active" data-view="settings-advanced">Advanced</button>
+    <button class="ct-tab" data-view="settings-users">Users</button>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">⚙️</span>
+      <div><h2>Advanced</h2></div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <p class="help-text">System and power-user options.</p>
+    </div>
+  </div>
+</section>
+
+<section id="settings-users" class="view app-view">
+  <div class="ct-tabbar" role="tablist" aria-label="Settings">
+    <button class="ct-tab" data-view="settings-profile">Profile</button>
+    <button class="ct-tab" data-view="settings-workspaces">Workspaces</button>
+    <button class="ct-tab" data-view="settings-advanced">Advanced</button>
+    <button class="ct-tab active" data-view="settings-users">Users</button>
+  </div>
+  <div class="ct-workspace-section">
+    <div class="ct-workspace-header">
+      <span class="ct-section-icon" aria-hidden="true">👥</span>
+      <div><h2>Users</h2></div>
+    </div>
+    <div class="ct-workspace-body ct-stack">
+      <div id="adminUsersRestricted" class="notice notice-warning hidden">
+        <div class="notice-accent"></div>
+        <div class="notice-body">
+          <span>Admin access is required to manage users.</span>
+        </div>
+      </div>
+      <div id="adminUsersPanel" class="admin-users-panel hidden">
+        <div class="admin-users-grid">
+          <div class="admin-users-column">
+            <div class="admin-users-toolbar">
+              <form id="adminUsersSearchForm" class="admin-users-search">
+                <input id="adminUsersSearchInput" type="search" placeholder="Search by name or email" />
+                <button type="submit" class="ghost-btn small">Search</button>
+              </form>
+              <div class="admin-users-toolbar-actions">
+                <button id="adminUsersRefreshBtn" class="ghost-btn small" type="button">Refresh</button>
+                <button id="adminUsersCreateToggle" class="ghost-btn filled small" type="button">Create User</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="admin-users-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last Login</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersTableBody">
+                  <tr>
+                    <td colspan="6" class="dashboard-placeholder">Loading users…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="admin-users-column">
+            <div class="admin-user-detail-card">
+              <h3>User Details</h3>
+              <p id="adminUserDetailPlaceholder" class="help-text">Select a user to view details.</p>
+              <form id="adminUserDetailForm" class="modal-form inline hidden">
+                <input id="adminUserDetailId" type="hidden" />
+                <div class="two-col">
+                  <label>Full Name
+                    <input id="adminUserDetailName" type="text" required />
+                  </label>
+                  <label>Email
+                    <input id="adminUserDetailEmail" type="email" required />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Role
+                    <select id="adminUserDetailRole"></select>
+                  </label>
+                  <label>Workspace
+                    <select id="adminUserDetailWorkspace"></select>
+                  </label>
+                </div>
+                <label class="toggle-field">
+                  <input id="adminUserDetailActive" type="checkbox" />
+                  <span>Active</span>
+                </label>
+                <button type="submit" class="ghost-btn filled">Save Changes</button>
+              </form>
+              <div id="adminUserDetailFeedback" class="form-feedback"></div>
+              <div class="ct-divider"></div>
+              <h4>Change Password</h4>
+              <form id="adminUserPasswordForm" class="modal-form inline hidden">
+                <input type="text" name="username" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true" />
+                <div class="two-col">
+                  <label>New Password
+                    <input id="adminUserPassword" type="password" autocomplete="new-password" />
+                  </label>
+                  <label>Confirm Password
+                    <input id="adminUserPasswordConfirm" type="password" autocomplete="new-password" />
+                  </label>
+                </div>
+                <button type="submit" class="ghost-btn">Update Password</button>
+              </form>
+              <div id="adminUserPasswordFeedback" class="form-feedback"></div>
+            </div>
+            <div id="adminCreateUserCard" class="admin-user-create-card hidden">
+              <h3>Create User</h3>
+              <form id="adminCreateUserForm" class="modal-form inline">
+                <div class="two-col">
+                  <label>Full Name
+                    <input id="adminCreateFullName" type="text" required />
+                  </label>
+                  <label>Email
+                    <input id="adminCreateEmail" type="email" required autocomplete="username" />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Role
+                    <select id="adminCreateRole"></select>
+                  </label>
+                  <label>Workspace
+                    <select id="adminCreateWorkspace"></select>
+                  </label>
+                </div>
+                <label class="toggle-field inline">
+                  <input id="adminCreateGeneratePassword" type="checkbox" />
+                  <span>Generate random password</span>
+                </label>
+                <label id="adminCreatePasswordField">Initial Password
+                  <input id="adminCreatePassword" type="password" autocomplete="new-password" />
+                </label>
+                <div class="admin-create-actions">
+                  <button type="button" id="adminCreateCancel" class="ghost-btn">Cancel</button>
+                  <button type="submit" class="ghost-btn filled">Create User</button>
+                </div>
+              </form>
+              <div id="adminCreateUserFeedback" class="form-feedback"></div>
+              <div id="adminCreatePasswordResult" class="notice notice-info hidden">
+                <div class="notice-accent"></div>
+                <div class="notice-body">
+                  <span id="adminCreatePasswordText"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -97,7 +419,7 @@
     </div>
     <div class="row two-col">
       <div>
-        <label>Duration (sec)</label>
+        <label for="videoDurationLegacy">Duration (sec)</label>
         <select id="videoDurationLegacy">
           <option value="4">4 seconds</option>
           <option value="8" selected>8 seconds</option>
@@ -105,7 +427,7 @@
         </select>
       </div>
       <div>
-        <label>Size</label>
+        <label for="videoSizeLegacy">Size</label>
         <select id="videoSizeLegacy">
           <option value="1280x720">1280 x 720 (Landscape)</option>
           <option value="720x1280" selected>720 x 1280 (Portrait)</option>
@@ -139,16 +461,16 @@
     </div>
     <div class="row two-col">
       <div>
-        <label>Duration (sec)</label>
+        <label for="musicDurationLegacy">Duration (sec)</label>
         <input id="musicDurationLegacy" type="number" value="180" min="10" />
       </div>
       <div>
-        <label>Mood</label>
+        <label for="musicMoodLegacy">Mood</label>
         <input id="musicMoodLegacy" type="text" value="chill" />
       </div>
     </div>
     <div class="row">
-      <label>Genre</label>
+      <label for="musicGenreLegacy">Genre</label>
       <input id="musicGenreLegacy" type="text" value="lofi" />
     </div>
     <div class="row">
@@ -202,239 +524,493 @@
 </section>
 <!-- Create hub and modules -->
 <section id="create-hub-view" class="view app-view">
-  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
-    <button class="ct-tab" role="tab" aria-selected="true" data-view="create-hub-view">Create Hub</button>
-    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
-    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
-    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
-  </div>
-  <div class="dashboard-grid">
-    <div class="ct-card create-card" data-view="create-video-view" role="button" tabindex="0" aria-label="Open Video module">
-      <h3 class="card-title">Video Creation</h3>
-      <p class="help-text">Generate looping video clips from prompts with duration and size options.</p>
-      <div style="margin-top: 8px">
-        <button class="ct-button-primary" type="button">Open Video</button>
+  <div class="create-shell">
+    <div class="create-hero ct-card">
+      <div>
+        <p class="eyebrow">CREATE</p>
+        <h1>Create Hub</h1>
+        <p class="help-text">Choose a tool to generate video, music, or assemble final masters.</p>
+      </div>
+      <div class="create-hero__meta">
+        <span class="pill-subtle">Production Suite</span>
       </div>
     </div>
-    <div class="ct-card create-card" data-view="create-music-view" role="button" tabindex="0" aria-label="Open Music module">
-      <h3 class="card-title">Music Creation</h3>
-      <p class="help-text">Create background music from a short description, mood and genre.</p>
-      <div style="margin-top: 8px">
-        <button class="ct-button-primary" type="button">Open Music</button>
-      </div>
+    <div class="ct-tabbar create-tabbar" role="tablist" aria-label="Create modules">
+      <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-hub-view">Create Hub</button>
+      <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+      <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+      <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
     </div>
-    <div class="ct-card create-card" data-view="create-mastering-view" role="button" tabindex="0" aria-label="Open Mastering module">
-      <h3 class="card-title">Mastering</h3>
-      <p class="help-text">Assemble a final video from a loop, music track and optional voiceover.</p>
-      <div style="margin-top: 8px">
-        <button class="ct-button-primary" type="button">Open Mastering</button>
+    <div class="create-grid">
+      <div class="ct-card create-card" data-view="create-video-view" role="button" tabindex="0" aria-label="Open Video module">
+        <div class="create-card__badge" aria-hidden="true">🎬</div>
+        <div class="create-card__body">
+          <h3 class="card-title">Video Creation</h3>
+          <p class="help-text">Generate looping video clips from prompts with duration and size options.</p>
+          <div class="create-card__actions">
+            <button class="ct-button-primary" type="button">Open Video</button>
+          </div>
+        </div>
+      </div>
+      <div class="ct-card create-card" data-view="create-music-view" role="button" tabindex="0" aria-label="Open Music module">
+        <div class="create-card__badge" aria-hidden="true">🎵</div>
+        <div class="create-card__body">
+          <h3 class="card-title">Music Creation</h3>
+          <p class="help-text">Create background music from a short description, mood and genre.</p>
+          <div class="create-card__actions">
+            <button class="ct-button-primary" type="button">Open Music</button>
+          </div>
+        </div>
+      </div>
+      <div class="ct-card create-card" data-view="create-mastering-view" role="button" tabindex="0" aria-label="Open Mastering module">
+        <div class="create-card__badge" aria-hidden="true">✨</div>
+        <div class="create-card__body">
+          <h3 class="card-title">Mastering</h3>
+          <p class="help-text">Assemble a final video from a loop, music track and optional voiceover.</p>
+          <div class="create-card__actions">
+            <button class="ct-button-primary" type="button">Open Mastering</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
 <section id="create-video-view" class="view app-view">
-  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
-    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
-    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-video-view">Video</button>
-    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
-    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
-  </div>
-  <div class="ct-module-grid">
-    <aside class="ct-card">
-      <h3>Scenes</h3>
-      <p class="help-text">Recent video jobs will appear here.</p>
-      <ul id="videoScenesList" class="dashboard-list"></ul>
-    </aside>
-    <div class="ct-card">
-      <h2>Video Creation</h2>
-      <div class="row">
-        <label>Visual Prompt</label>
-        <textarea id="videoPrompt" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
-      </div>
-      <div class="row two-col">
-        <div>
-          <label>Duration (sec)</label>
-          <select id="videoDuration">
-            <option value="4">4 seconds</option>
-            <option value="8" selected>8 seconds</option>
-            <option value="12">12 seconds</option>
-          </select>
+  <div class="create-shell">
+    <div class="ct-tabbar create-tabbar" role="tablist" aria-label="Create modules">
+      <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+      <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-video-view">Video</button>
+      <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+      <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
+    </div>
+    <div class="ct-module-grid create-module-grid">
+      <aside class="ct-card">
+        <h3>Scenes</h3>
+        <p class="help-text">Recent video jobs will appear here.</p>
+        <ul id="videoScenesList" class="dashboard-list"></ul>
+      </aside>
+      <div class="ct-card">
+        <header class="video-card-header">
+          <h2>Sora 2 Video Generation</h2>
+          <p class="help-text">Generate AI-powered video clips from visual prompts.</p>
+        </header>
+        <div class="video-card-body">
+          <div class="video-section">
+            <div class="video-section__title">Visual Prompt</div>
+            <label class="video-field">
+              <textarea id="videoPrompt" class="video-input" placeholder="Example: neon rainy alley in anime style, gentle camera drift..."></textarea>
+              <span class="help-text">Tip: include subject, environment, lighting, and camera mood for best results.</span>
+            </label>
+          </div>
+
+          <div class="video-section">
+            <div class="video-section__title">Output Settings</div>
+            <div class="video-grid">
+              <label class="video-field">Duration (sec)
+                <select id="videoDuration" class="video-input">
+                  <option value="4">4 seconds</option>
+                  <option value="8" selected>8 seconds</option>
+                  <option value="12">12 seconds</option>
+                  <option value="60">60 seconds</option>
+                </select>
+              </label>
+              <label class="video-field">Size
+                <select id="videoSize" class="video-input">
+                  <option value="1280x720">1280 x 720 (Landscape)</option>
+                  <option value="720x1280" selected>720 x 1280 (Portrait)</option>
+                  <option value="1080x1920">1080 x 1920 (Vertical)</option>
+                </select>
+              </label>
+              <div class="video-field">
+                <span class="video-field__label">Seamless loop</span>
+                <label class="inline-toggle"><input id="videoLoop" type="checkbox" checked /> Loop playback</label>
+              </div>
+              <div class="video-field">
+                <span class="video-field__label">Video Type</span>
+                <div class="pill-toggle">
+                  <label><input type="radio" name="videoType" value="standard" checked /> Standard</label>
+                  <label><input type="radio" name="videoType" value="short" /> Short (≤ 60s, vertical)</label>
+                </div>
+                <p class="help-text">Best for TikTok / Reels / Shorts when vertical and ≤ 60s.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="video-section">
+            <div class="video-section__title">Creative Controls</div>
+            <div class="video-grid">
+              <label class="video-field">Style
+                <select id="videoStyle" class="video-input">
+                  <option value="none">None (custom)</option>
+                  <option value="lofi">Japanese urban lo-fi</option>
+                  <option value="cinematic">Cinematic film</option>
+                  <option value="anime">Anime</option>
+                  <option value="painterly">Painterly</option>
+                  <option value="hyperreal">Hyperrealistic</option>
+                </select>
+              </label>
+              <label class="video-field">Camera Motion
+                <select id="videoMotion" class="video-input">
+                  <option value="auto">Auto</option>
+                  <option value="static">Static shot</option>
+                  <option value="dolly_in">Slow dolly in</option>
+                  <option value="dolly_out">Slow dolly out</option>
+                  <option value="pan_left">Pan left</option>
+                  <option value="pan_right">Pan right</option>
+                  <option value="orbit">Orbit around subject</option>
+                  <option value="handheld">Handheld</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="video-section">
+            <div class="video-section__title">Advanced</div>
+            <div class="video-grid">
+              <div class="video-field">
+                <span class="video-field__label">Seed</span>
+                <div class="seed-row">
+                  <input id="videoSeed" class="video-input" type="number" placeholder="Random" />
+                  <button type="button" class="ghost-btn small" id="videoSeedRandom">🎲</button>
+                  <button type="button" class="ghost-btn small" id="videoSeedLock" aria-pressed="false">🔓</button>
+                </div>
+              </div>
+              <div class="video-field">
+                <span class="video-field__label">Mode</span>
+                <div class="pill-toggle">
+                  <label><input type="radio" name="videoRemixMode" value="new" checked /> New video</label>
+                  <label><input type="radio" name="videoRemixMode" value="remix" /> Remix existing scene</label>
+                </div>
+                <div id="remixControls" class="remix-controls hidden">
+                  <label class="video-field">Base scene
+                    <select id="videoBaseScene" class="video-input">
+                      <option value="">Select a scene</option>
+                    </select>
+                  </label>
+                  <label class="video-field">Remix strength (stub)
+                    <input id="videoRemixStrength" class="video-input" type="range" min="0" max="1" step="0.1" value="0.5" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="video-section actions-row">
+            <button id="videoGenerateBtn" class="ct-button-primary" type="button">Generate Video</button>
+          </div>
+
+          <div class="video-section">
+            <div class="video-field__label">Generation Status</div>
+            <div id="videoStatus" class="video-status">
+              <span class="video-status-pill video-status-pill--idle">Idle</span>
+              <span class="video-status-meta">Start a generation to track progress here.</span>
+            </div>
+          </div>
+
+          <div class="video-section">
+            <div class="video-field__label">Latest Preview</div>
+            <video id="videoPreview" controls class="preview-video"></video>
+          </div>
         </div>
-        <div>
-          <label>Size</label>
-          <select id="videoSize">
-            <option value="1280x720">1280 x 720 (Landscape)</option>
-            <option value="720x1280" selected>720 x 1280 (Portrait)</option>
-          </select>
-        </div>
-      </div>
-      <div class="row">
-        <label><input id="videoLoop" type="checkbox" checked /> Seamless loop</label>
-      </div>
-      <div class="row">
-        <button id="videoGenerateBtn">Generate Video</button>
-      </div>
-      <div class="row">
-        <label>Video Job / Result</label>
-        <pre id="videoResult" class="output-box"></pre>
-      </div>
-      <div class="row">
-        <video id="videoPreview" controls class="preview-video"></video>
       </div>
     </div>
   </div>
 </section>
 
 <section id="create-music-view" class="view app-view">
-  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
-    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
-    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
-    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-music-view">Music</button>
-    <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
-  </div>
-  <div class="ct-module-grid">
-    <aside class="ct-card">
-      <h3>Tracks</h3>
-      <p class="help-text">Recent music jobs will appear here.</p>
-      <ul id="musicTracksList" class="dashboard-list"></ul>
-    </aside>
-    <div class="ct-card">
-    <h2>Music Creation</h2>
-    <div class="row">
-      <label>Music Prompt</label>
-      <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
+  <div class="create-shell">
+    <div class="ct-tabbar create-tabbar" role="tablist" aria-label="Create modules">
+      <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+      <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+      <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-music-view">Music</button>
+      <button class="ct-tab" role="tab" data-view="create-mastering-view">Mastering</button>
     </div>
-    <div class="row two-col">
-      <div>
-        <label>Duration (sec)</label>
-        <input id="musicDuration" type="number" value="180" min="10" />
+    <div class="ct-module-grid create-module-grid">
+      <aside class="ct-card">
+        <h3>Tracks</h3>
+        <p class="help-text">Recent music jobs will appear here.</p>
+        <ul id="musicTracksList" class="dashboard-list"></ul>
+      </aside>
+      <div class="ct-card">
+      <h2>Music Creation</h2>
+      <div class="row">
+        <label>Music Prompt</label>
+        <textarea id="musicPrompt" placeholder="lofi hip hop beat, warm, cozy, no vocals, vinyl crackle..."></textarea>
       </div>
-      <div>
-        <label>Mood</label>
-        <input id="musicMood" type="text" value="chill" />
+      <div class="row two-col">
+        <div>
+          <label for="musicDuration">Duration (sec)</label>
+          <input id="musicDuration" type="number" value="180" min="10" />
+        </div>
+        <div>
+          <label for="musicMood">Mood</label>
+          <input id="musicMood" type="text" value="chill" />
+        </div>
       </div>
-    </div>
-    <div class="row">
-      <label>Genre</label>
-      <input id="musicGenre" type="text" value="lofi" />
-    </div>
-    <div class="row">
-      <button id="musicGenerateBtn">Generate Music</button>
-    </div>
-    <div class="row">
-      <label>Music Job / Result</label>
-      <pre id="musicResult" class="output-box"></pre>
-    </div>
-    <div class="row">
-      <audio id="musicPreview" controls class="preview-audio"></audio>
-    </div>
+      <div class="row">
+        <label for="musicGenre">Genre</label>
+        <input id="musicGenre" type="text" value="lofi" />
+      </div>
+      <div class="row">
+        <button id="musicGenerateBtn">Generate Music</button>
+      </div>
+      <div class="row">
+        <label>Music Job / Result</label>
+        <pre id="musicResult" class="output-box"></pre>
+      </div>
+      <div class="row">
+        <audio id="musicPreview" controls class="preview-audio"></audio>
+      </div>
+      </div>
     </div>
   </div>
 </section>
 
 <section id="create-mastering-view" class="view app-view">
-  <div class="ct-tabbar" role="tablist" aria-label="Create modules">
-    <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
-    <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
-    <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
-    <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-mastering-view">Mastering</button>
-  </div>
-  <div class="ct-module-grid">
-    <aside class="ct-card">
-      <h3>Assembly</h3>
-      <p class="help-text">Select source assets for final assembly.</p>
-      <ul id="masterAssetsList" class="dashboard-list"></ul>
-    </aside>
-    <div class="ct-card">
-    <h2>Master Final Video (Loop + Music)</h2>
-    <div class="row">
-      <label>Loop Video Path (from above)</label>
-      <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
+  <div class="create-shell">
+    <div class="ct-tabbar create-tabbar" role="tablist" aria-label="Create modules">
+      <button class="ct-tab" role="tab" data-view="create-hub-view">Create Hub</button>
+      <button class="ct-tab" role="tab" data-view="create-video-view">Video</button>
+      <button class="ct-tab" role="tab" data-view="create-music-view">Music</button>
+      <button class="ct-tab active" role="tab" aria-selected="true" data-view="create-mastering-view">Mastering</button>
     </div>
-    <div class="row">
-      <label>Song Path (from above)</label>
-      <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
-    </div>
-    <div class="row">
-      <label>Voiceover Path (optional)</label>
-      <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
-    </div>
-    <div class="row">
-      <button id="masterBuildBtn">Build Final Video</button>
-    </div>
-    <div class="row">
-      <label>Master Result</label>
-      <pre id="masterResult" class="output-box"></pre>
-    </div>
-    <div class="row">
-      <video id="masterPreview" controls class="preview-video"></video>
-    </div>
+    <div class="ct-module-grid create-module-grid">
+      <aside class="ct-card">
+        <h3>Assembly</h3>
+        <p class="help-text">Select source assets for final assembly.</p>
+        <ul id="masterAssetsList" class="dashboard-list"></ul>
+      </aside>
+      <div class="ct-card">
+      <h2>Master Final Video (Loop + Music)</h2>
+      <div class="row">
+        <label>Loop Video Path (from above)</label>
+        <input id="masterLoopPath" type="text" placeholder="static/uploads/xxx.mp4" />
+      </div>
+      <div class="row">
+        <label>Song Path (from above)</label>
+        <input id="masterSongPath" type="text" placeholder="static/music/xxx.mp3" />
+      </div>
+      <div class="row">
+        <label>Voiceover Path (optional)</label>
+        <input id="masterVOPath" type="text" placeholder="static/tts/voiceover.mp3 (or leave blank)" />
+      </div>
+      <div class="row">
+        <button id="masterBuildBtn">Build Final Video</button>
+      </div>
+      <div class="row">
+        <label>Master Result</label>
+        <pre id="masterResult" class="output-box"></pre>
+      </div>
+      <div class="row">
+        <video id="masterPreview" controls class="preview-video"></video>
+      </div>
+      </div>
     </div>
   </div>
 </section>
 
 <section id="publish-view" class="view app-view">
-  <div class="card">
-    <h2>PUBLISH · Upload to YouTube</h2>
-    <div class="row">
-      <label>Final MP4 Path (from Master)</label>
-      <input
-        id="ytVideoPath"
-        type="text"
-        placeholder="static/final/finished.mp4"
-      />
-    </div>
-    <div class="row">
-      <label>Title</label>
-      <input id="ytTitle" type="text" placeholder="lofi beats to study to 🌧️" />
-    </div>
-    <div class="row">
-      <label>Description</label>
-      <textarea
-        id="ytDesc"
-        placeholder="relaxing rainy-late-night study beat with looping neon visuals..."
-      ></textarea>
-    </div>
-    <div class="row">
-      <label>Tags (comma separated)</label>
-      <input id="ytTags" type="text" value="lofi, chill, study music" />
-    </div>
-    <div class="row two-col">
+  <div class="publish-shell create-shell">
+    <div class="create-hero ct-card publish-hero">
       <div>
-        <label>Visibility</label>
-        <select id="ytVisibility">
-          <option value="public">Public</option>
-          <option value="unlisted" selected>Unlisted</option>
-          <option value="private">Private</option>
-        </select>
+        <p class="eyebrow">PUBLISH</p>
+        <h1>Publish Hub</h1>
+        <p class="help-text">Finalize your exports and publish to your channels.</p>
       </div>
-      <div>
-        <label
-          >Schedule Date (optional)
-          <input id="ytPublishDate" type="date" />
-        </label>
-        <label
-          >Schedule Time
-          <input id="ytPublishTime" type="time" step="60" />
-        </label>
+      <div class="create-hero__meta">
+        <span class="pill-subtle">Destinations</span>
       </div>
     </div>
-    <p class="help-text" id="ytScheduleHint">
-      Scheduling is available only when visibility is Public.
-    </p>
-    <div class="row">
-      <button id="ytUploadBtn">Upload to YouTube</button>
+
+    <div class="ct-tabbar create-tabbar publish-tabbar" role="tablist" aria-label="Publish destinations">
+      <button class="publish-tab active" id="publish-tab-youtube" role="tab" type="button" data-publish-target="publish-youtube" aria-selected="true">YouTube</button>
+      <button class="publish-tab" id="publish-tab-tiktok" role="tab" type="button" data-publish-target="publish-tiktok" aria-selected="false">TikTok</button>
+      <button class="publish-tab" id="publish-tab-instagram" role="tab" type="button" data-publish-target="publish-instagram" aria-selected="false">Instagram</button>
+      <button class="publish-tab" id="publish-tab-facebook" role="tab" type="button" data-publish-target="publish-facebook" aria-selected="false">Facebook</button>
     </div>
-    <div class="row">
-      <label>YouTube Upload Result</label>
-      <pre id="ytResult" class="output-box"></pre>
+
+    <div class="publish-module-grid">
+      <div id="publish-youtube" class="ct-card publish-panel active" role="tabpanel" aria-labelledby="publish-tab-youtube">
+        <div class="card-header with-action">
+          <div class="card-title">
+            <span class="card-icon" aria-hidden="true">▶️</span>
+            <div>
+              <h2>Upload to YouTube</h2>
+              <p class="help-text">Share the mastered video directly to your channel.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="publish-form-grid">
+          <div class="publish-column">
+            <div class="publish-field">
+              <div class="publish-field__label">Source file</div>
+              <div class="pill-toggle">
+                <label><input type="radio" name="ytSourceMode" value="upload" checked /> Upload file</label>
+                <label><input type="radio" name="ytSourceMode" value="library" /> Choose from Library</label>
+              </div>
+              <div id="ytUploadGroup" class="publish-subgroup">
+                <input id="ytUploadFile" type="file" accept="video/mp4,video/*" class="publish-input" />
+              </div>
+              <div id="ytLibraryGroup" class="publish-subgroup hidden">
+                <select id="ytLibrarySelect" class="publish-input">
+                  <option value="">Select from Library</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="publish-field">Title
+              <input id="ytTitle" class="publish-input" type="text" placeholder="lofi beats to study to 🌧️" />
+            </label>
+
+            <label class="publish-field">Description
+              <textarea
+                id="ytDesc"
+                class="publish-input"
+                placeholder="relaxing rainy-late-night study beat with looping neon visuals..."
+              ></textarea>
+            </label>
+
+            <label class="publish-field">Tags (comma separated)
+              <input id="ytTags" class="publish-input" type="text" value="lofi, chill, study music" />
+            </label>
+          </div>
+
+          <div class="publish-column">
+            <div class="publish-field">
+              <div class="publish-field__label">Video Type</div>
+              <div class="pill-toggle">
+                <label><input type="radio" name="ytVideoType" value="standard" checked /> Standard Video</label>
+                <label><input type="radio" name="ytVideoType" value="short" /> YouTube Short</label>
+              </div>
+              <p class="help-text">Shorts should be under 60s and vertical. Consider adding #shorts.</p>
+            </div>
+
+            <label class="publish-field">Category
+              <select id="ytCategory" class="publish-input">
+                <option value="">Select a category</option>
+                <option value="10">Music</option>
+                <option value="24">Entertainment</option>
+                <option value="22">People &amp; Blogs</option>
+                <option value="26">Howto &amp; Style</option>
+                <option value="27">Education</option>
+                <option value="28">Science &amp; Technology</option>
+              </select>
+            </label>
+
+            <div class="publish-field">
+              <div class="publish-field__label">Audience</div>
+              <div class="pill-toggle">
+                <label><input type="radio" name="ytAudience" value="not_kids" checked /> Not made for kids</label>
+                <label><input type="radio" name="ytAudience" value="kids" /> Made for kids</label>
+              </div>
+            </div>
+
+            <label class="publish-field">Thumbnail (optional)
+              <input id="ytThumbnailFile" class="publish-input" type="file" accept="image/jpeg,image/png" />
+            </label>
+
+            <label class="publish-field">Add to Playlist
+              <select id="ytPlaylist" class="publish-input">
+                <option value="">No playlist</option>
+                <option value="lofi-drafts">Lofi Drafts (stub)</option>
+                <option value="releases-2025">Releases 2025 (stub)</option>
+              </select>
+            </label>
+
+            <label class="publish-field">Visibility
+              <select id="ytVisibility" class="publish-input">
+                <option value="public">Public</option>
+                <option value="unlisted" selected>Unlisted</option>
+                <option value="private">Private</option>
+              </select>
+            </label>
+
+            <div class="publish-field two-col">
+              <label>Schedule Date (optional)
+                <input id="ytPublishDate" class="publish-input" type="date" />
+              </label>
+              <label>Schedule Time
+                <input id="ytPublishTime" class="publish-input" type="time" step="60" />
+              </label>
+            </div>
+
+            <p class="help-text" id="ytScheduleHint">
+              Scheduling is available only when visibility is Public.
+            </p>
+
+            <div class="publish-actions">
+              <button id="ytUploadBtn" class="ct-button-primary" type="button">Upload to YouTube</button>
+              <div id="publishAuthWarning" class="publish-warning hidden">
+                <span class="publish-warning__icon" aria-hidden="true">🔒</span>
+                <span>You must be logged in to publish.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="publish-tiktok" class="ct-card publish-panel" role="tabpanel" aria-labelledby="publish-tab-tiktok">
+        <div class="publish-panel__empty">
+          <h2>TikTok</h2>
+          <p class="help-text">Short-form vertical publishing will be available here soon.</p>
+          <span class="pill-subtle">Coming Soon</span>
+        </div>
+      </div>
+
+      <div id="publish-instagram" class="ct-card publish-panel" role="tabpanel" aria-labelledby="publish-tab-instagram">
+        <div class="publish-panel__empty">
+          <h2>Instagram</h2>
+          <p class="help-text">Publish Reels and feed videos from your mastered exports.</p>
+          <span class="pill-subtle">Coming Soon</span>
+        </div>
+      </div>
+
+      <div id="publish-facebook" class="ct-card publish-panel" role="tabpanel" aria-labelledby="publish-tab-facebook">
+        <div class="publish-panel__empty">
+          <h2>Facebook</h2>
+          <p class="help-text">Push long-form or clips directly to Facebook when available.</p>
+          <span class="pill-subtle">Coming Soon</span>
+        </div>
+      </div>
     </div>
-    <div id="publishAuthHint" class="help-text">
-      You must be logged in to publish.
-      <button type="button" id="openAuthFromPublish" class="ghost-btn small">
-        Log in
-      </button>
+  </div>
+</section>
+
+<section id="library-view" class="view app-view">
+  <div class="create-shell">
+    <div class="create-hero ct-card publish-hero">
+      <div>
+        <p class="eyebrow">Library</p>
+        <h1>Your Assets</h1>
+        <p class="help-text">Videos, images, audio, and other files saved to your account.</p>
+      </div>
+      <div class="create-hero__meta">
+        <span class="pill-subtle">Per user</span>
+      </div>
+    </div>
+
+    <div class="ct-tabbar create-tabbar library-tabbar" role="tablist" aria-label="Library filters">
+      <button class="library-tab active" role="tab" data-asset-type="video" aria-selected="true">Video</button>
+      <button class="library-tab" role="tab" data-asset-type="image" aria-selected="false">Images</button>
+      <button class="library-tab" role="tab" data-asset-type="audio" aria-selected="false">Audio</button>
+      <button class="library-tab" role="tab" data-asset-type="other" aria-selected="false">Other</button>
+    </div>
+
+    <div class="ct-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="card-icon" aria-hidden="true">🗂️</span>
+          <div>
+            <h2>Library Items</h2>
+            <p class="help-text">Latest assets in the selected category.</p>
+          </div>
+        </div>
+      </div>
+      <div id="libraryGrid" class="library-grid">
+        <div class="dashboard-placeholder">Sign in to load your library.</div>
+      </div>
     </div>
   </div>
 </section>
@@ -472,14 +1048,14 @@
       <button class="modal-tab" data-mode="register">Register</button>
     </div>
     <form id="overlayLoginForm" class="modal-form active">
-      <label>Email</label>
+      <label for="overlayLoginEmail">Email</label>
       <input
         id="overlayLoginEmail"
         type="email"
         autocomplete="email"
         required
       />
-      <label>Password</label>
+      <label for="overlayLoginPassword">Password</label>
       <input
         id="overlayLoginPassword"
         type="password"
@@ -489,21 +1065,21 @@
       <button type="submit">Log In</button>
     </form>
     <form id="overlayRegisterForm" class="modal-form">
-      <label>Full Name</label>
+      <label for="overlayRegisterName">Full Name</label>
       <input
         id="overlayRegisterName"
         type="text"
         autocomplete="name"
         required
       />
-      <label>Email</label>
+      <label for="overlayRegisterEmail">Email</label>
       <input
         id="overlayRegisterEmail"
         type="email"
         autocomplete="email"
         required
       />
-      <label>Password</label>
+      <label for="overlayRegisterPassword">Password</label>
       <input
         id="overlayRegisterPassword"
         type="password"
@@ -522,7 +1098,7 @@
       Enter the 6-digit code sent to your email to unlock API integrations.
     </p>
     <form id="verifyForm" class="modal-form active">
-      <label>Verification Code</label>
+      <label for="verifyCode">Verification Code</label>
       <input
         id="verifyCode"
         type="text"
@@ -542,161 +1118,6 @@
       </button>
     </div>
     <div id="verifyFeedback" class="form-feedback"></div>
-  </div>
-</div>
-<div id="profileModal" class="modal-overlay hidden">
-  <div class="modal-card wide">
-    <button
-      class="close-modal"
-      id="closeProfileModal"
-      aria-label="Close profile"
-    >
-      &times;
-    </button>
-    <h2 class="modal-title">Your Profile</h2>
-    <p class="modal-subtitle">Manage account details, roles, and API keys.</p>
-    <section class="modal-section">
-      <h3>Account Information</h3>
-      <form id="profileForm" class="modal-form inline active">
-        <div class="two-col">
-          <label
-            >Full Name
-            <input id="profileName" type="text" required />
-          </label>
-          <label
-            >Email
-            <input id="profileEmail" type="email" required />
-          </label>
-        </div>
-        <button type="submit">Save Profile</button>
-      </form>
-      <div id="profileFormFeedback" class="form-feedback"></div>
-      <div class="profile-meta">
-        <span id="profileVerificationStatus"></span>
-        <span id="profileRole"></span>
-      </div>
-    </section>
-    <section class="modal-section">
-      <h3>Change Password</h3>
-      <form id="passwordForm" class="modal-form inline active">
-        <!-- Hidden username for password manager accessibility -->
-        <input type="text" name="username" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true" />
-        <div class="two-col">
-          <label
-            >Current Password
-            <input
-              id="currentPassword"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-          </label>
-          <label
-            >New Password
-            <input
-              id="newPassword"
-              type="password"
-              autocomplete="new-password"
-              required
-            />
-          </label>
-        </div>
-        <button type="submit">Update Password</button>
-      </form>
-      <div id="passwordFormFeedback" class="form-feedback"></div>
-    </section>
-    <section class="modal-section">
-      <h3>Role &amp; Permissions</h3>
-      <div class="profile-role-overview">
-        <p id="profileRole" class="profile-role-label"></p>
-        <ul id="rolePermissionsList" class="help-text"></ul>
-      </div>
-      <p class="help-text">Role assignments are managed by administrators.</p>
-    </section>
-    <section class="modal-section">
-      <h3>API Keys</h3>
-      <div id="apiKeysList" class="api-keys-list"></div>
-      <div id="apiKeysFeedback" class="form-feedback"></div>
-      <form id="apiKeyForm" class="modal-form inline active">
-        <div class="two-col">
-          <label
-            >Provider
-            <input
-              id="apiKeyProvider"
-              type="text"
-              placeholder="openai"
-              required
-            />
-          </label>
-          <label
-            >Secret
-            <input
-              id="apiKeySecret"
-              type="text"
-              placeholder="sk-..."
-              required
-            />
-          </label>
-        </div>
-        <button type="submit">Add / Update Key</button>
-      </form>
-    </section>
-    <section class="modal-section hidden" id="smtpConfigSection">
-      <h3>SMTP Settings</h3>
-      <form id="smtpConfigForm" class="modal-form inline active">
-        <div class="two-col">
-          <label
-            >SMTP Host
-            <input id="smtpHost" type="text" placeholder="smtp.example.com" />
-          </label>
-          <label
-            >Port
-            <input id="smtpPort" type="number" min="0" placeholder="587" />
-          </label>
-        </div>
-        <div class="two-col">
-          <label
-            >Username
-            <input id="smtpUsername" type="text" />
-          </label>
-          <label
-            >From Address
-            <input
-              id="smtpFromAddress"
-              type="email"
-              placeholder="no-reply@example.com"
-            />
-          </label>
-        </div>
-        <label>
-          <input id="smtpUseTls" type="checkbox" checked /> Use TLS
-        </label>
-        <label
-          >SMTP Password (leave blank to keep existing)
-          <input
-            id="smtpPassword"
-            type="password"
-            autocomplete="current-password"
-            placeholder="Leave blank to keep existing"
-          />
-        </label>
-        <button type="submit">Save SMTP Settings</button>
-      </form>
-      <div id="smtpConfigFeedback" class="form-feedback"></div>
-      <form id="smtpTestForm" class="modal-form inline">
-        <label
-          >Test Email Recipient
-          <input
-            id="smtpTestRecipient"
-            type="email"
-            placeholder="admin@example.com"
-            required
-          />
-        </label>
-        <button type="submit">Send Test Email</button>
-      </form>
-      <div id="smtpTestFeedback" class="form-feedback"></div>
-    </section>
   </div>
 </div>
 {% endblock %}

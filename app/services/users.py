@@ -15,6 +15,8 @@ def user_payload(user: dict) -> dict:
         "is_verified": bool(user.get("is_verified")),
         "role": role,
         "must_change_password": bool(user.get("must_change_password")),
+        "workspace": user.get("workspace"),
+        "is_active": bool(user.get("is_active", True)),
     }
 
 

@@ -5,10 +5,27 @@ from __future__ import annotations
 import os
 import sqlite3
 import time
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 VALID_ROLES = {"admin", "owner", "editor", "viewer"}
 DEFAULT_ROLE = "owner"
+DEFAULT_WORKSPACE = "Default"
+USER_COLUMNS = """
+                id,
+                email,
+                full_name,
+                password_hash,
+                created_at,
+                access_group,
+                is_verified,
+                verification_code,
+                verified_at,
+                role,
+                must_change_password,
+                workspace,
+                last_login_at,
+                is_active
+            """
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "auth.db")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -36,7 +53,10 @@ def init_db() -> None:
                 verification_code TEXT,
                 verified_at INTEGER,
                 role TEXT NOT NULL DEFAULT 'owner',
-                must_change_password INTEGER NOT NULL DEFAULT 0
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                workspace TEXT NOT NULL DEFAULT 'Default',
+                last_login_at INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1
             )"""
         )
         conn.execute(
@@ -59,6 +79,9 @@ def init_db() -> None:
                 ("verified_at", "INTEGER"),
                 ("role", "TEXT NOT NULL DEFAULT 'owner'"),
                 ("must_change_password", "INTEGER NOT NULL DEFAULT 0"),
+                ("workspace", "TEXT NOT NULL DEFAULT 'Default'"),
+                ("last_login_at", "INTEGER"),
+                ("is_active", "INTEGER NOT NULL DEFAULT 1"),
             ],
         )
 
@@ -99,6 +122,9 @@ def _row_to_user(row: sqlite3.Row | Tuple[Any, ...]) -> Dict[str, Any]:
         "verified_at": row[8] if len(row) > 8 else None,
         "role": role,
         "must_change_password": bool(row[10]) if len(row) > 10 else False,
+        "workspace": row[11] if len(row) > 11 and row[11] else DEFAULT_WORKSPACE,
+        "last_login_at": row[12] if len(row) > 12 else None,
+        "is_active": bool(row[13]) if len(row) > 13 else True,
     }
 
 
@@ -112,12 +138,17 @@ def create_user(
     verification_code: Optional[str] = None,
     role: str = DEFAULT_ROLE,
     must_change_password: bool = False,
+    workspace: str = DEFAULT_WORKSPACE,
+    is_active: bool = True,
 ) -> int:
     """Insert a new user and return its generated ID."""
 
     normalized_role = role.lower()
     if normalized_role not in VALID_ROLES:
         normalized_role = DEFAULT_ROLE
+    normalized_group = (access_group or "User")
+    if normalized_role == "admin":
+        normalized_group = "Dev"
 
     with _conn() as conn:
         cur = conn.execute(
@@ -131,19 +162,25 @@ def create_user(
                 verification_code,
                 verified_at,
                 role,
-                must_change_password
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                must_change_password,
+                workspace,
+                last_login_at,
+                is_active
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 email.lower().strip(),
                 full_name.strip(),
                 password_hash,
                 int(time.time()),
-                access_group,
+                normalized_group,
                 1 if is_verified else 0,
                 verification_code,
                 int(time.time()) if is_verified else None,
                 normalized_role,
                 1 if must_change_password else 0,
+                (workspace or DEFAULT_WORKSPACE).strip() or DEFAULT_WORKSPACE,
+                None,
+                1 if is_active else 0,
             ),
         )
         return cur.lastrowid
@@ -154,18 +191,8 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
 
     with _conn() as conn:
         row = conn.execute(
-            """SELECT
-                id,
-                email,
-                full_name,
-                password_hash,
-                created_at,
-                access_group,
-                is_verified,
-                verification_code,
-                verified_at,
-                role,
-                must_change_password
+            f"""SELECT
+                {USER_COLUMNS}
             FROM users WHERE email=?""",
             (email.lower().strip(),),
         ).fetchone()
@@ -177,18 +204,8 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
 
     with _conn() as conn:
         row = conn.execute(
-            """SELECT
-                id,
-                email,
-                full_name,
-                password_hash,
-                created_at,
-                access_group,
-                is_verified,
-                verification_code,
-                verified_at,
-                role,
-                must_change_password
+            f"""SELECT
+                {USER_COLUMNS}
             FROM users WHERE id=?""",
             (user_id,),
         ).fetchone()
@@ -316,6 +333,76 @@ def set_must_change_password(user_id: int, flag: bool) -> None:
         conn.execute(
             "UPDATE users SET must_change_password=? WHERE id=?",
             (1 if flag else 0, user_id),
+        )
+
+
+def list_users(
+    *,
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Return user dictionaries optionally filtered by name/email."""
+
+    query = f"SELECT {USER_COLUMNS} FROM users"
+    params: List[Any] = []
+    if search:
+        needle = f"%{search.lower().strip()}%"
+        query += " WHERE lower(email) LIKE ? OR lower(full_name) LIKE ?"
+        params.extend([needle, needle])
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    with _conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [_row_to_user(row) for row in rows]
+
+
+def update_user_admin(
+    user_id: int,
+    *,
+    full_name: Optional[str] = None,
+    email: Optional[str] = None,
+    workspace: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    role: Optional[str] = None,
+) -> None:
+    """Update administrative fields for a user (profile, workspace, status)."""
+
+    updates = []
+    params: List[Any] = []
+
+    if full_name is not None:
+        updates.append("full_name=?")
+        params.append(full_name.strip())
+    if email is not None:
+        updates.append("email=?")
+        params.append(email.lower().strip())
+    if workspace is not None:
+        updates.append("workspace=?")
+        params.append(workspace or DEFAULT_WORKSPACE)
+    if is_active is not None:
+        updates.append("is_active=?")
+        params.append(1 if is_active else 0)
+
+    with _conn() as conn:
+        if updates:
+            conn.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE id=?",
+                (*params, user_id),
+            )
+
+    if role is not None:
+        update_role(user_id, role)
+
+
+def record_last_login(user_id: int) -> None:
+    """Persist a timestamp marking when the user last authenticated."""
+
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE users SET last_login_at=? WHERE id=?",
+            (int(time.time()), user_id),
         )
 
 

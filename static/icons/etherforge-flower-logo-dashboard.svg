@@ -1,0 +1,69 @@
+<svg
+  width="48"
+  height="48"
+  viewBox="0 0 256 256"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <!-- Soft radial glow behind the symbol -->
+    <radialGradient id="ef_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFEEC0" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#F5B15C" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Ember / gold stroke gradient -->
+    <linearGradient id="ef_stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFEEC0" />
+      <stop offset="50%" stop-color="#F5B15C" />
+      <stop offset="100%" stop-color="#FF7B3A" />
+    </linearGradient>
+
+    <!-- Slight outer shadow for depth -->
+    <filter id="ef_softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6"
+                    flood-color="#000000" flood-opacity="0.7" />
+    </filter>
+  </defs>
+
+  <!-- Glow halo -->
+  <circle cx="128" cy="128" r="96" fill="url(#ef_glow)" />
+
+  <!-- Outer ring -->
+  <circle
+    cx="128"
+    cy="128"
+    r="92"
+    fill="none"
+    stroke="url(#ef_stroke)"
+    stroke-width="5"
+    filter="url(#ef_softShadow)"
+  />
+
+  <!-- Flower of Life core (7 circles) -->
+  <g
+    fill="none"
+    stroke="url(#ef_stroke)"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <!-- central circle -->
+    <circle cx="128" cy="128" r="32" />
+
+    <!-- right -->
+    <circle cx="160" cy="128" r="32" />
+    <!-- left -->
+    <circle cx="96" cy="128" r="32" />
+
+    <!-- up-right -->
+    <circle cx="144" cy="100.5" r="32" />
+    <!-- up-left -->
+    <circle cx="112" cy="100.5" r="32" />
+
+    <!-- down-right -->
+    <circle cx="144" cy="155.5" r="32" />
+    <!-- down-left -->
+    <circle cx="112" cy="155.5" r="32" />
+  </g>
+</svg>

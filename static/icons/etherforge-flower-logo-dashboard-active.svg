@@ -1,0 +1,71 @@
+<svg
+  width="48"
+  height="48"
+  viewBox="0 0 256 256"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <!-- Strong glow -->
+    <radialGradient id="ef_glow_active" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#FFF4D4" stop-opacity="1" />
+      <stop offset="35%" stop-color="#FFC880" stop-opacity="0.65" />
+      <stop offset="75%" stop-color="#FF9B3F" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Ember stroke (brighter, hotter) -->
+    <linearGradient id="ef_stroke_active" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#FFF4D4" />
+      <stop offset="45%"  stop-color="#FFC880" />
+      <stop offset="100%" stop-color="#FF6A1B" />
+    </linearGradient>
+
+    <!-- Outer aura ring gradient -->
+    <radialGradient id="ef_aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="rgba(255,206,137,0.45)" />
+      <stop offset="40%"  stop-color="rgba(255,140,60,0.25)" />
+      <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+    </radialGradient>
+
+    <filter id="ef_softShadow_active" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8"
+        flood-color="#FF9B3F" flood-opacity="0.25" />
+      <feDropShadow dx="0" dy="2" stdDeviation="10"
+        flood-color="#000000" flood-opacity="0.7" />
+    </filter>
+  </defs>
+
+  <!-- Aura ring -->
+  <circle cx="128" cy="128" r="110" fill="url(#ef_aura)" />
+
+  <!-- Glow halo -->
+  <circle cx="128" cy="128" r="96" fill="url(#ef_glow_active)"/>
+
+  <!-- Outer ring -->
+  <circle
+    cx="128"
+    cy="128"
+    r="92"
+    fill="none"
+    stroke="url(#ef_stroke_active)"
+    stroke-width="6"
+    filter="url(#ef_softShadow_active)"
+  />
+
+  <!-- Flower of Life (7 circles) -->
+  <g
+    fill="none"
+    stroke="url(#ef_stroke_active)"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <circle cx="128" cy="128" r="32" />
+    <circle cx="160" cy="128" r="32" />
+    <circle cx="96"  cy="128" r="32" />
+    <circle cx="144" cy="100.5" r="32" />
+    <circle cx="112" cy="100.5" r="32" />
+    <circle cx="144" cy="155.5" r="32" />
+    <circle cx="112" cy="155.5" r="32" />
+  </g>
+</svg>

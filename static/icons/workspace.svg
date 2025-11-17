@@ -1,0 +1,19 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ef_icon_stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFEEC0" />
+      <stop offset="50%" stop-color="#F5B15C" />
+      <stop offset="100%" stop-color="#FF7B3A" />
+    </linearGradient>
+  </defs>
+  <g
+    fill="none"
+    stroke="url(#ef_icon_stroke)"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M5 10l7-4 7 4-7 4-7-4z" />
+    <path d="M6.5 14.5L12 17l5.5-2.5" />
+  </g>
+</svg>

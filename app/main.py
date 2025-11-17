@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -6,9 +7,11 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import ValidationError
 
 from app.api.admin import router as admin_router
+from app.api.admin_users import router as admin_users_router
 from app.api.create import router as create_router
 
 # Routers
@@ -51,6 +54,55 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    class ContentTypeCharsetMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):  # type: ignore[override]
+            response = await call_next(request)
+
+            # Drop legacy, unnecessary headers (case-insensitive)
+            drop_headers_ci = {"x-xss-protection", "expires", "x-frame-options"}
+            for key in list(response.headers.keys()):
+                if key.lower() in drop_headers_ci:
+                    try:
+                        del response.headers[key]
+                    except Exception:
+                        pass
+
+            ct = response.headers.get("content-type")
+            base = ct.split(";", 1)[0].strip().lower() if ct else ""
+            is_html = base == "text/html"
+
+            # Prefer Cache-Control for HTML; if missing, set a conservative default
+            if is_html and not response.headers.get("cache-control"):
+                response.headers["cache-control"] = "no-cache"
+
+            # Ensure CSP has a frame-ancestors directive for HTML only
+            if is_html:
+                csp = response.headers.get("content-security-policy")
+                if csp:
+                    if "frame-ancestors" not in csp.lower():
+                        response.headers["content-security-policy"] = csp.rstrip("; ") + "; frame-ancestors 'self'"
+                else:
+                    response.headers["content-security-policy"] = "frame-ancestors 'self'"
+
+            # Normalize/ensure charset for textual content types
+            if ct:
+                needs_charset = base.startswith("text/") or base in (
+                    "application/json",
+                    "application/javascript",
+                    "application/xml",
+                )
+                if "charset=" in ct:
+                    ct_norm = re.sub(r"charset=([^;]+)", "charset=utf-8", ct, flags=re.I)
+                    if ct_norm != ct:
+                        response.headers["content-type"] = ct_norm
+                elif needs_charset:
+                    response.headers["content-type"] = f"{ct}; charset=utf-8"
+
+            return response
+
+    # Normalize/ensure charset in Content-Type for common textual responses
+    app.add_middleware(ContentTypeCharsetMiddleware)
+
     # Exception handlers (unified error envelope)
     app.add_exception_handler(HTTPException, error_handlers.http_exception_handler)
     app.add_exception_handler(
@@ -82,6 +134,7 @@ def create_app() -> FastAPI:
     app.include_router(publish_router)
     app.include_router(system_router)
     app.include_router(admin_router)
+    app.include_router(admin_users_router)
     app.include_router(workspaces_router)
 
     # settings already attached above
@@ -110,37 +163,89 @@ def create_app() -> FastAPI:
     @app.get("/dashboard")
     def ui_dashboard(request: Request):
         return templates.TemplateResponse(
-            request, "dashboard.html", {"active_view": "dashboard-view"}
+            request,
+            "dashboard.html",
+            {
+                "active_view": "dashboard-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     @app.get("/imagine")
     def ui_imagine(request: Request):
         return templates.TemplateResponse(
-            request, "dashboard.html", {"active_view": "imagine-view"}
+            request,
+            "dashboard.html",
+            {
+                "active_view": "dashboard-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     @app.get("/create")
     def ui_create(request: Request):
         return templates.TemplateResponse(
-            request, "dashboard.html", {"active_view": "create-view"}
+            request,
+            "dashboard.html",
+            {
+                "active_view": "create-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     @app.get("/publish")
     def ui_publish(request: Request):
         return templates.TemplateResponse(
-            request, "dashboard.html", {"active_view": "publish-view"}
+            request,
+            "dashboard.html",
+            {
+                "active_view": "publish-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
+        )
+
+    @app.get("/library")
+    def ui_library(request: Request):
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "active_view": "library-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     @app.get("/system")
     def ui_system(request: Request):
         return templates.TemplateResponse(
-            request, "dashboard.html", {"active_view": "system-view"}
+            request,
+            "dashboard.html",
+            {
+                "active_view": "system-view",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
+        )
+
+    @app.get("/settings")
+    def ui_settings(request: Request):
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "active_view": "settings-profile",
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     @app.get("/settings/project")
     def project_settings(request: Request):
         return templates.TemplateResponse(
-            request, "settings_project.html", {"request": request}
+            request,
+            "settings_project.html",
+            {
+                "request": request,
+                "use_dark_studio_ui": app.state.settings.USE_DARK_STUDIO_UI,
+            },
         )
 
     return app

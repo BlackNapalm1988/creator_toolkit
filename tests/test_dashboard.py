@@ -39,7 +39,7 @@ def test_dashboard_shell_routes_expose_active_view(client):
 
     routes = {
         "/dashboard": "dashboard-view",
-        "/imagine": "imagine-view",
+        "/imagine": "dashboard-view",
         "/create": "create-view",
         "/publish": "publish-view",
         "/system": "system-view",
@@ -132,6 +132,8 @@ def test_user_payload_exposes_expected_fields():
         "password_hash": "secret",
         "role": "admin",
         "must_change_password": True,
+        "workspace": "Default",
+        "is_active": False,
         "extra_column": "should be ignored",
     }
 
@@ -144,4 +146,6 @@ def test_user_payload_exposes_expected_fields():
         "is_verified": True,
         "role": "admin",
         "must_change_password": True,
+        "workspace": "Default",
+        "is_active": False,
     }

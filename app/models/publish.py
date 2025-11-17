@@ -20,6 +20,12 @@ class YouTubeUploadRequest(BaseModel):
         "unlisted", examples=["Public, Unlisted, Private"]
     )
     publish_at: Optional[str] = Field(None, examples=["2025-11-02T18:00:00Z"])
+    video_type: Optional[str] = Field(None, examples=["standard", "short"])
+    category_id: Optional[str] = Field(None, examples=["10"])
+    made_for_kids: Optional[bool] = Field(None, examples=[True, False])
+    playlist_id: Optional[str] = Field(None, examples=["my-playlist-id"])
+    thumbnail_path: Optional[str] = Field(None, examples=["static/thumbs/example.jpg"])
+    library_path: Optional[str] = Field(None, examples=["static/final/clip.mp4"])
 
 
 class EnqueuePackageReq(BaseModel):

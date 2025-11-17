@@ -52,6 +52,9 @@ def current_user(
     if "email" not in user and payload.get("email"):
         user["email"] = payload["email"]
 
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account disabled")
+
     return user
 
 
