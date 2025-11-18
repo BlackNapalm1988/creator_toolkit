@@ -1,7 +1,27 @@
 // Creator Toolkit front-end shell
+// Existing sections before modular split:
+// 1) Shell + navigation + workspace/theme bootstrap
+// 2) Imagine inspector (chat thread + attachments)
+// 3) Dashboard cards and job feeds
+// 4) Create / Sora video generation + library helpers
+// 5) Publish (YouTube upload + source selection)
+// 6) Settings/admin (profile, workspaces, users)
+// Tasks for Phase 2: move sections 3–6 into lazy-loaded modules under static/features/
+// and keep this file focused on the shell, navigation, and shared UI glue.
+import {
+  hideLoadingState,
+  formatRelativeTime,
+  readErrorMessage,
+  showLoadingState,
+  showModuleError,
+  toast,
+} from "./features/common.js";
+
+// Creator Toolkit front-end shell
 (function () {
   const ROOT = document.getElementById("app");
   if (!ROOT) return;
+  window.toast = toast;
 
     // --- FIX: Apply workspace from ?ws BEFORE anything renders ---
   const params = new URLSearchParams(window.location.search);
@@ -301,20 +321,72 @@
     meta[name] = { ...(meta[name] || {}), ...(patch || {}) };
     try { localStorage.setItem(WS_META_KEY, JSON.stringify(meta)); } catch {}
   }
-  function formatRelativeTime(isoOrMs) {
-    if (!isoOrMs) return '';
-    const ms = typeof isoOrMs === 'number' ? isoOrMs : Date.parse(isoOrMs);
-    if (!ms) return '';
-    const diff = Date.now() - ms;
-    if (diff < 30000) return 'just now';
-    const s = Math.floor(diff / 1000);
-    const m = Math.floor(s / 60);
-    const h = Math.floor(m / 60);
-    const d = Math.floor(h / 24);
-    if (d > 0) return `${d}d ago`;
-    if (h > 0) return `${h}h ago`;
-    if (m > 0) return `${m}m ago`;
-    return `${s}s ago`;
+
+  const featureModules = {
+    "dashboard-view": {
+      cacheKey: "dashboard",
+      loader: () => import("./features/dashboard.js"),
+      init: "initDashboard",
+    },
+    "create-video-view": {
+      cacheKey: "sora",
+      loader: () => import("./features/sora_video.js"),
+      init: "initSoraPanel",
+    },
+    "library-view": {
+      cacheKey: "sora",
+      loader: () => import("./features/sora_video.js"),
+      init: "initLibraryView",
+    },
+    "publish-view": {
+      cacheKey: "publish",
+      loader: () => import("./features/youtube_publish.js"),
+      init: "initYoutubePanel",
+    },
+    "settings-profile": {
+      cacheKey: "settings",
+      loader: () => import("./features/settings.js"),
+      init: "initSettingsPanels",
+    },
+    "settings-workspaces": {
+      cacheKey: "settings",
+      loader: () => import("./features/settings.js"),
+      init: "initSettingsPanels",
+    },
+    "settings-advanced": {
+      cacheKey: "settings",
+      loader: () => import("./features/settings.js"),
+      init: "initSettingsPanels",
+    },
+    "settings-users": {
+      cacheKey: "settings",
+      loader: () => import("./features/settings.js"),
+      init: "initSettingsPanels",
+    },
+  };
+  const moduleCache = {};
+
+  async function loadFeatureForView(viewId) {
+    const def = featureModules[viewId];
+    const containerEl = document.getElementById("ct-workspace");
+    if (!def || !containerEl) return;
+    const cacheKey = def.cacheKey || viewId;
+    const errBox = containerEl.querySelector('[data-feature-error]');
+    if (errBox) errBox.classList.add('hidden');
+    showLoadingState(containerEl);
+    try {
+      const mod = moduleCache[cacheKey] || await def.loader();
+      moduleCache[cacheKey] = mod;
+      const initFn = mod[def.init];
+      if (typeof initFn !== "function") {
+        throw new Error(`Missing init function: ${def.init}`);
+      }
+      await initFn(containerEl, { state });
+      hideLoadingState(containerEl);
+    } catch (err) {
+      console.error(err);
+      showModuleError(containerEl, "Failed to load this tool. Please try again.");
+    }
   }
 
   function renderNavItems() {
@@ -546,8 +618,7 @@
       top: 0,
       behavior: "instant",
     });
-    // Populate lists if switching into Create modules and authenticated
-    try { if (state.user) hydrateCreateModuleLists(); } catch {}
+    loadFeatureForView(viewId);
   }
 
   function attachHandlers() {
@@ -566,10 +637,19 @@
     const isInspectorOpen = () => state.inspectorOpen;
     setInspectorVisibility(state.inspectorOpen);
 
-    // Side nav buttons
+    // Side nav buttons + lazy-load prefetch on hover
     ROOT.querySelectorAll("#ct-nav .ct-nav-link").forEach((btn) => {
+      const view = btn.getAttribute("data-view");
+      const route = view ? featureModules[view] : null;
+      if (route) {
+        btn.addEventListener("mouseover", () => {
+          const cacheKey = route.cacheKey || view;
+          if (!moduleCache[cacheKey]) {
+            route.loader().then((mod) => (moduleCache[cacheKey] = mod)).catch(() => {});
+          }
+        });
+      }
       btn.addEventListener("click", () => {
-        const view = btn.getAttribute("data-view");
         if (btn.id === "nav-imagine") {
           setInspectorVisibility(!isInspectorOpen());
           return;
@@ -605,27 +685,7 @@
       btn.addEventListener("click", () => setInspectorVisibility(!isInspectorOpen()));
     });
 
-    // Login modal using the existing overlay in templates/dashboard.html
-    const openBtn = document.getElementById("openLoginButton");
-    const overlay = document.getElementById("authOverlay");
-    const loginForm = document.getElementById("overlayLoginForm");
-    const loginEmail = document.getElementById("overlayLoginEmail");
-    const loginPassword = document.getElementById("overlayLoginPassword");
-    const authFeedback = document.getElementById("authFeedback");
-
-    // Bind auth-related handlers only once because the legacy content
-    // (including the login form and logout button) is preserved across
-    // shell re-renders.
-    if (!window.__ctAuthHandlersBound) {
-      // Ensure the auth modal becomes visible when clicking the Login button.
-      openBtn?.addEventListener("click", () => {
-        if (!overlay) return;
-        overlay.classList.remove("hidden");
-        overlay.style.display = "flex"; // override display:none from CSS
-      });
-
-
-    // Settings shortcuts
+    // Notification and settings shortcuts
     const verificationOverlay = document.getElementById("verificationOverlay");
     const verifyOpenProfile = document.getElementById("verifyOpenProfile");
     const goToSettings = () => {
@@ -633,537 +693,64 @@
       window.location.href = "/settings";
     };
     verifyOpenProfile?.addEventListener("click", goToSettings);
-
-    // Notification banner actions
-    const openVerBtn = document.getElementById('openVerificationButton');
-    openVerBtn?.addEventListener('click', () => {
-      document.getElementById('verificationOverlay')?.classList.remove('hidden');
+    const openVerBtn = document.getElementById("openVerificationButton");
+    openVerBtn?.addEventListener("click", () => {
+      document.getElementById("verificationOverlay")?.classList.remove("hidden");
     });
-    const openPwBtn = document.getElementById('openPasswordResetButton');
-    openPwBtn?.addEventListener('click', goToSettings);
+    const openPwBtn = document.getElementById("openPasswordResetButton");
+    openPwBtn?.addEventListener("click", goToSettings);
 
     // Create sub-module tabs
-    document.querySelectorAll('.ct-tab').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const view = btn.getAttribute('data-view');
+    document.querySelectorAll(".ct-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const view = btn.getAttribute("data-view");
         if (!view) return;
         applyActiveView(view, { updateHistory: false });
-        document.querySelectorAll('.ct-tab').forEach((t) => {
-          t.classList.toggle('active', t.getAttribute('data-view') === view);
+        document.querySelectorAll(".ct-tab").forEach((t) => {
+          t.classList.toggle("active", t.getAttribute("data-view") === view);
         });
       });
     });
 
     // Create hub cards (clickable entire card)
-    document.querySelectorAll('.create-card[data-view]').forEach((card) => {
+    document.querySelectorAll(".create-card[data-view]").forEach((card) => {
       const activate = () => {
-        const view = card.getAttribute('data-view');
+        const view = card.getAttribute("data-view");
         if (!view) return;
         applyActiveView(view, { updateHistory: false });
-        document.querySelectorAll('.ct-tab').forEach((t) => {
-          t.classList.toggle('active', t.getAttribute('data-view') === view);
+        document.querySelectorAll(".ct-tab").forEach((t) => {
+          t.classList.toggle("active", t.getAttribute("data-view") === view);
         });
       };
-      card.addEventListener('click', activate);
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+      card.addEventListener("click", activate);
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           activate();
         }
       });
     });
 
-    // Publish destination tabs
-    const publishTabs = Array.from(document.querySelectorAll('.publish-tab'));
-    if (publishTabs.length) {
-      const setPublishTarget = (targetId) => {
-        publishTabs.forEach((btn) => {
-          const isActive = btn.getAttribute('data-publish-target') === targetId;
-          btn.classList.toggle('active', isActive);
-          btn.setAttribute('aria-selected', String(isActive));
-        });
-        document.querySelectorAll('.publish-panel').forEach((panel) => {
-          panel.classList.toggle('active', panel.id === targetId);
-        });
-      };
-
-      publishTabs.forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const next = btn.getAttribute('data-publish-target');
-          if (!next) return;
-          setPublishTarget(next);
-        });
+    // Login modal using the existing overlay in templates/dashboard.html
+    const openBtn = document.getElementById("openLoginButton");
+    const overlay = document.getElementById("authOverlay");
+    const loginForm = document.getElementById("overlayLoginForm");
+    const loginEmail = document.getElementById("overlayLoginEmail");
+    const loginPassword = document.getElementById("overlayLoginPassword");
+    const authFeedback = document.getElementById("authFeedback");
+    if (!window.__ctAuthHandlersBound) {
+      openBtn?.addEventListener("click", () => {
+        if (!overlay) return;
+        overlay.classList.remove("hidden");
+        overlay.style.display = "flex";
       });
-
-      const initialTarget =
-        publishTabs.find((b) => b.classList.contains('active') && b.getAttribute('data-publish-target'))
-          ?.getAttribute('data-publish-target') ||
-        publishTabs[0]?.getAttribute('data-publish-target');
-      if (initialTarget) setPublishTarget(initialTarget);
-    }
-
-    // Publish: source mode toggle + upload
-    const sourceRadios = Array.from(document.querySelectorAll('input[name="ytSourceMode"]'));
-    const uploadGroup = document.getElementById('ytUploadGroup');
-    const libraryGroup = document.getElementById('ytLibraryGroup');
-    const warn = document.getElementById('publishAuthWarning');
-    if (warn) warn.classList.toggle('hidden', Boolean(state.user));
-    const toggleSource = () => {
-      const mode = sourceRadios.find((r) => r.checked)?.value || 'upload';
-      if (uploadGroup) uploadGroup.classList.toggle('hidden', mode !== 'upload');
-      if (libraryGroup) libraryGroup.classList.toggle('hidden', mode !== 'library');
-    };
-    sourceRadios.forEach((r) => r.addEventListener('change', toggleSource));
-    toggleSource();
-
-    const librarySelect = document.getElementById('ytLibrarySelect');
-    if (librarySelect && !librarySelect.dataset.loaded) {
-      librarySelect.dataset.loaded = 'true';
-      fetch('/youtube/library', { credentials: 'include' })
-        .then((resp) => (resp.ok ? resp.json() : null))
-        .then((data) => {
-          if (!data?.items) return;
-          data.items.forEach((item) => {
-            const opt = document.createElement('option');
-            opt.value = item.path || item.id;
-            opt.textContent = item.label || item.path;
-            librarySelect.appendChild(opt);
-          });
-        })
-        .catch(() => {});
-    }
-
-    const ytUploadBtn = document.getElementById('ytUploadBtn');
-    if (ytUploadBtn) {
-      ytUploadBtn.addEventListener('click', async () => {
-        const formData = new FormData();
-        const sourceMode = sourceRadios.find((r) => r.checked)?.value || 'upload';
-        if (sourceMode === 'library') {
-          const libVal = librarySelect?.value || '';
-          if (!libVal) {
-            toast('Select a library item', { type: 'error' });
-            return;
-          }
-          formData.append('source_mode', 'library');
-          formData.append('library_path', libVal);
-        } else {
-          const fileInput = document.getElementById('ytUploadFile');
-          const file = fileInput?.files?.[0];
-          if (!file) {
-            toast('Choose a video file to upload', { type: 'error' });
-            return;
-          }
-          formData.append('video_file', file);
-        }
-
-        const title = document.getElementById('ytTitle')?.value || '';
-        if (!title.trim()) {
-          toast('Title is required', { type: 'error' });
-          return;
-        }
-        formData.append('title', title.trim());
-        formData.append('description', document.getElementById('ytDesc')?.value || '');
-        formData.append('tags', document.getElementById('ytTags')?.value || '');
-        formData.append('privacy_status', document.getElementById('ytVisibility')?.value || 'unlisted');
-
-        const dateVal = document.getElementById('ytPublishDate')?.value || '';
-        const timeVal = document.getElementById('ytPublishTime')?.value || '';
-        if (dateVal) {
-          const combined = `${dateVal}${timeVal ? `T${timeVal}` : ''}`;
-          formData.append('publish_at', combined);
-        }
-
-        const videoType = document.querySelector('input[name="ytVideoType"]:checked')?.value || 'standard';
-        formData.append('video_type', videoType);
-        const audience = document.querySelector('input[name="ytAudience"]:checked')?.value || 'not_kids';
-        formData.append('made_for_kids', audience === 'kids' ? 'true' : 'false');
-        formData.append('category_id', document.getElementById('ytCategory')?.value || '');
-        formData.append('playlist_id', document.getElementById('ytPlaylist')?.value || '');
-        const thumbFile = document.getElementById('ytThumbnailFile')?.files?.[0];
-        if (thumbFile) formData.append('thumbnail_file', thumbFile);
-
-        ytUploadBtn.disabled = true;
-        ytUploadBtn.textContent = 'Uploading...';
-        try {
-          const resp = await fetch('/youtube/upload-form', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include',
-          });
-          if (!resp.ok) {
-            const txt = await resp.text();
-            throw new Error(txt || 'Upload failed');
-          }
-          toast('YouTube upload started', { type: 'success' });
-        } catch (err) {
-          toast(err.message || 'Upload failed', { type: 'error' });
-        } finally {
-          ytUploadBtn.disabled = false;
-          ytUploadBtn.textContent = 'Upload to YouTube';
-        }
-      });
-    }
-
-    // Create video: seed / remix controls
-    const seedInput = document.getElementById('videoSeed');
-    const seedRandom = document.getElementById('videoSeedRandom');
-    const seedLock = document.getElementById('videoSeedLock');
-    if (seedRandom && seedInput) {
-      seedRandom.addEventListener('click', () => {
-        const rand = Math.floor(Math.random() * 1_000_000_000);
-        seedInput.value = String(rand);
-      });
-    }
-    if (seedLock) {
-      seedLock.addEventListener('click', () => {
-        const locked = seedLock.getAttribute('aria-pressed') === 'true';
-        seedLock.setAttribute('aria-pressed', String(!locked));
-        seedLock.textContent = locked ? '🔓' : '🔒';
-      });
-    }
-
-    const remixControls = document.getElementById('remixControls');
-    const remixRadios = Array.from(document.querySelectorAll('input[name="videoRemixMode"]'));
-    remixRadios.forEach((r) =>
-      r.addEventListener('change', () => {
-        const mode = remixRadios.find((btn) => btn.checked)?.value || 'new';
-        remixControls?.classList.toggle('hidden', mode !== 'remix');
-      })
-    );
-
-    // Scenes -> base scene select link
-    const videoScenesList = document.getElementById('videoScenesList');
-    const baseSceneSelect = document.getElementById('videoBaseScene');
-    if (videoScenesList && baseSceneSelect) {
-      videoScenesList.addEventListener('click', (e) => {
-        const li = e.target.closest('li');
-        if (!li) return;
-        const id = li.getAttribute('data-scene-id') || li.textContent || '';
-        if (id && remixControls && !remixControls.classList.contains('hidden')) {
-          baseSceneSelect.value = id;
-        }
-      });
-    }
-
-    function updateVideoStatus(info = {}) {
-      const container = document.getElementById('videoStatus');
-      if (!container) return;
-      const pill = container.querySelector('.video-status-pill');
-      const meta = container.querySelector('.video-status-meta');
-      if (!pill || !meta) return;
-
-      const status = (info.state || '').toString() || 'idle';
-      const jobId = info.jobId || info.id || null;
-      const progress = typeof info.progress === 'number' ? info.progress : null;
-
-      let label = 'Idle';
-      let metaText = 'Start a generation to track progress here.';
-      let cls = 'video-status-pill video-status-pill--idle';
-
-      if (status === 'starting') {
-        label = 'Submitting…';
-        metaText = 'Sending your prompt to Sora.';
-        cls = 'video-status-pill video-status-pill--active';
-      } else if (status === 'queued' || status === 'processing' || status === 'running') {
-        label = status === 'queued' ? 'Queued' : 'Rendering…';
-        const parts = [];
-        if (jobId) parts.push(`Job ${jobId}`);
-        if (progress != null) parts.push(`${progress}%`);
-        metaText = parts.length ? parts.join(' • ') : 'Your clip is being rendered by Sora.';
-        cls = 'video-status-pill video-status-pill--active';
-      } else if (status === 'ready') {
-        label = 'Ready';
-        metaText = jobId
-          ? `Clip is ready. Job ${jobId}. Preview and library are updated.`
-          : 'Clip is ready. Preview and library are updated.';
-        cls = 'video-status-pill video-status-pill--success';
-      } else if (status === 'failed' || status === 'error') {
-        label = 'Failed';
-        metaText = info.message || 'Generation failed. Check your settings and try again.';
-        cls = 'video-status-pill video-status-pill--error';
-      } else if (status && status !== 'idle') {
-        label = status.charAt(0).toUpperCase() + status.slice(1);
-        metaText = jobId
-          ? `Status: ${status}. Job ${jobId}.`
-          : `Status: ${status}.`;
-        cls = 'video-status-pill video-status-pill--active';
-      }
-
-      pill.textContent = label;
-      pill.className = cls;
-      meta.textContent = metaText;
-
-      state.videoJob.id = jobId;
-      state.videoJob.status = status;
-    }
-
-    async function pollVideoJob(ids) {
-      const backendId = ids && ids.backendId ? ids.backendId : null;
-      const providerId = ids && ids.providerId ? ids.providerId : null;
-      if (!providerId) return;
-      let attempts = 0;
-      const maxAttempts = 60;
-      const delayMs = 5000;
-      while (attempts < maxAttempts) {
-        attempts += 1;
-        let resp;
-        try {
-          const qp = backendId
-            ? `job_id=${encodeURIComponent(providerId)}&backend_job_id=${encodeURIComponent(
-                backendId
-              )}`
-            : `job_id=${encodeURIComponent(providerId)}`;
-          resp = await fetch(`/generate/video/status?${qp}`, {
-            credentials: 'include',
-          });
-        } catch {
-          updateVideoStatus({
-            state: 'error',
-            jobId: backendId,
-            message: 'Unable to reach status endpoint.',
-          });
-          return;
-        }
-        if (!resp.ok) {
-          const msg = await readErrorMessage(resp, 'Unable to check video status');
-          updateVideoStatus({ state: 'error', jobId: backendId, message: msg });
-          toast(msg, { type: 'error' });
-          return;
-        }
-        let data = {};
-        try {
-          data = await resp.json();
-        } catch {
-          data = {};
-        }
-        const status = (data.status || '').toString() || 'unknown';
-        if (status === 'queued' || status === 'processing' || status === 'running') {
-          updateVideoStatus({ state: status, jobId: backendId, progress: data.progress });
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          continue;
-        }
-        if (status === 'ready') {
-          const loopPath = data.loop_path || '';
-          updateVideoStatus({ state: 'ready', jobId: backendId, progress: 100 });
-          if (loopPath) {
-            const previewEl = document.getElementById('videoPreview');
-            const cleanPath = String(loopPath).replace(/^\/+/, '');
-            if (previewEl) previewEl.setAttribute('src', `/${cleanPath}`);
-          }
-          try {
-            fetchLibrary('video');
-          } catch {}
-          try {
-            hydrateCreateModuleLists();
-          } catch {}
-          toast('Video ready', { type: 'success' });
-          return;
-        }
-        if (status === 'failed') {
-          updateVideoStatus({
-            state: 'failed',
-            jobId: backendId,
-            message: data.error || data.detail,
-          });
-          toast('Video generation failed', { type: 'error' });
-          return;
-        }
-        updateVideoStatus({ state: status, jobId: backendId });
-        return;
-      }
-      updateVideoStatus({
-        state: 'error',
-        jobId: backendId,
-        message: 'Timed out waiting for Sora.',
-      });
-      toast('Timed out waiting for video to finish.', { type: 'error' });
-    }
-
-    // Video generate
-    const videoGenerateBtn = document.getElementById('videoGenerateBtn');
-    if (videoGenerateBtn) {
-      videoGenerateBtn.addEventListener('click', async () => {
-        const prompt = document.getElementById('videoPrompt')?.value || '';
-        if (!prompt.trim()) {
-          toast('Prompt is required', { type: 'error' });
-          return;
-        }
-        const duration = parseInt(document.getElementById('videoDuration')?.value || '8', 10);
-        const size = document.getElementById('videoSize')?.value || '720x1280';
-        const loop = document.getElementById('videoLoop')?.checked || false;
-        const videoType =
-          document.querySelector('input[name="videoType"]:checked')?.value || 'standard';
-        const style = document.getElementById('videoStyle')?.value || 'none';
-        const motion = document.getElementById('videoMotion')?.value || 'auto';
-        const seedVal = seedInput?.value ? parseInt(seedInput.value, 10) : null;
-        const remixMode = (remixRadios.find((r) => r.checked)?.value || 'new') === 'remix';
-        const baseScene = document.getElementById('videoBaseScene')?.value || '';
-        const remixStrength = document.getElementById('videoRemixStrength')?.value || '';
-
-        if (videoType === 'short' && duration > 60) {
-          toast('Shorts should be 60s or less; consider lowering duration.', { type: 'info' });
-        }
-        if (videoType === 'short' && size) {
-          const [w, h] = size.split('x').map((n) => parseInt(n, 10));
-          if (w && h && w > h) toast('Shorts work best in vertical aspect ratios.', { type: 'info' });
-        }
-
-        const payload = {
-          prompt: prompt.trim(),
-          duration_seconds: duration,
-          size,
-          loop_hint: loop,
-          video_type: videoType,
-          style_preset: style,
-          camera_motion: motion,
-          seed: seedLock?.getAttribute('aria-pressed') === 'true' ? seedVal || null : seedVal || null,
-          remix_mode: remixMode,
-          base_scene_id: remixMode ? baseScene : null,
-          remix_strength: remixMode && remixStrength ? Number(remixStrength) : null,
-        };
-
-        videoGenerateBtn.disabled = true;
-        videoGenerateBtn.textContent = 'Generating...';
-        updateVideoStatus({ state: 'starting' });
-        try {
-          const resp = await fetch('/generate/video', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(payload),
-          });
-          if (!resp.ok) {
-            const message = await readErrorMessage(resp, 'Generation failed');
-            updateVideoStatus({ state: 'failed', message });
-            throw new Error(message);
-          }
-          const ctype = (resp.headers.get('Content-Type') || '').toLowerCase();
-          let data = {};
-          if (ctype.includes('application/json')) {
-            data = await resp.json().catch(() => ({}));
-          } else {
-            const text = await resp.text().catch(() => '');
-            try {
-              data = text ? JSON.parse(text) : {};
-            } catch {
-              data = {};
-            }
-          }
-          if (data && data.ok === false) {
-            const message = data?.detail || data?.error || 'Generation failed';
-            updateVideoStatus({ state: 'failed', message });
-            throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
-          }
-          const status = (data.status || '').toString() || 'unknown';
-          const backendJobId = data.job_id || null;
-          const providerJobId = data.provider_job_id || null;
-          const loopPath = data.loop_path || null;
-          if (loopPath) {
-            const previewEl = document.getElementById('videoPreview');
-            const cleanPath = String(loopPath).replace(/^\/+/, '');
-            if (previewEl) previewEl.setAttribute('src', `/${cleanPath}`);
-          }
-          if (
-            backendJobId &&
-            (status === 'queued' ||
-              status === 'processing' ||
-              status === 'running' ||
-              status === 'completed')
-          ) {
-            updateVideoStatus({
-              state: status,
-              jobId: backendJobId,
-              progress: data.progress,
-            });
-            pollVideoJob({ backendId: backendJobId, providerId: providerJobId || null });
-          } else if (status === 'ready' || loopPath) {
-            updateVideoStatus({
-              state: 'ready',
-              jobId: backendJobId,
-              progress: 100,
-            });
-          } else {
-            updateVideoStatus({ state: status, jobId: backendJobId });
-          }
-          toast('Video generation started', { type: 'success' });
-          const previewEl = document.getElementById('videoPreview');
-          if (!loopPath && data.loop_path && previewEl) {
-            const cleanPath = String(data.loop_path).replace(/^\/+/, '');
-            previewEl.setAttribute('src', `/${cleanPath}`);
-          }
-        } catch (err) {
-          toast(err.message || 'Generation failed', { type: 'error' });
-        } finally {
-          videoGenerateBtn.disabled = false;
-          videoGenerateBtn.textContent = 'Generate Video';
-        }
-      });
-    }
-    // Library view: fetch assets
-    const libraryGrid = document.getElementById('libraryGrid');
-    const libraryTabs = Array.from(document.querySelectorAll('.library-tab'));
-    const renderLibraryPlaceholder = (text) => {
-      if (libraryGrid) libraryGrid.innerHTML = `<div class="dashboard-placeholder">${text}</div>`;
-    };
-
-    const fetchLibrary = (type) => {
-      if (!libraryGrid) return;
-      if (!state.user) {
-        renderLibraryPlaceholder('Sign in to load your library.');
-        return;
-      }
-      renderLibraryPlaceholder('Loading your library...');
-      const qp = type ? `?asset_type=${encodeURIComponent(type)}` : '';
-      fetch(`/library${qp}`, { credentials: 'include' })
-        .then((resp) => (resp.ok ? resp.json() : null))
-        .then((data) => {
-          if (!data?.items || data.items.length === 0) {
-            renderLibraryPlaceholder('No assets yet. Generate video or music to see them here.');
-            return;
-          }
-          libraryGrid.innerHTML = data.items
-            .map(
-              (item) => `
-                <div class="library-card">
-                  <div class="library-card__meta">
-                    <span class="library-badge">${item.type || 'asset'}</span>
-                  </div>
-                  <h3 class="library-card__title">${item.label || item.path}</h3>
-                  <span class="help-text">${item.path}</span>
-                </div>
-              `
-            )
-            .join('');
-        })
-        .catch(() => renderLibraryPlaceholder('Unable to load library.'));
-    };
-
-    if (libraryGrid) {
-      libraryGrid.dataset.loaded = 'true';
-      const activeTab = libraryTabs.find((btn) => btn.classList.contains('active'));
-      fetchLibrary(activeTab?.getAttribute('data-asset-type') || 'video');
-    }
-
-    libraryTabs.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const type = btn.getAttribute('data-asset-type');
-        libraryTabs.forEach((b) => {
-          const isActive = b === btn;
-          b.classList.toggle('active', isActive);
-          b.setAttribute('aria-selected', String(isActive));
-        });
-        fetchLibrary(type);
-      });
-    });
-
       loginForm?.addEventListener("submit", async (e) => {
         e.preventDefault();
         if (authFeedback) authFeedback.textContent = "";
         const email = (loginEmail?.value || "").trim();
         const password = loginPassword?.value || "";
         if (!email || !password) {
-          if (authFeedback)
-            authFeedback.textContent = "Email and password are required";
+          if (authFeedback) authFeedback.textContent = "Email and password are required";
           return;
         }
         try {
@@ -1178,36 +765,32 @@
             throw new Error(txt || "Login failed");
           }
           overlay?.classList.add("hidden");
-          toast('Logged in', { type: 'success' });
+          toast("Logged in", { type: "success" });
           if (loginEmail) loginEmail.value = "";
           if (loginPassword) loginPassword.value = "";
           await fetchMeAndUpdateUI();
         } catch (err) {
-          if (authFeedback)
-            authFeedback.textContent = err.message || "Login failed";
-          toast(err.message || 'Login failed', { type: 'error' });
+          if (authFeedback) authFeedback.textContent = err.message || "Login failed";
+          toast(err.message || "Login failed", { type: "error" });
         }
       });
-
-      // Logout
-      document
-        .getElementById("logoutButton")
-        ?.addEventListener("click", async () => {
-          try {
-            await fetch("/auth/logout", {
-              method: "POST",
-              credentials: "include",
-            });
-          } catch {}
-          document.cookie = "token=; Max-Age=0; path=/";
-          state.user = null;
-          clearImagineSession();
-          renderShell();
-          attachHandlers();
-          try { await fetchMeAndUpdateUI(); } catch {}
-          toast('Logged out', { type: 'info' });
-        });
-
+      document.getElementById("logoutButton")?.addEventListener("click", async () => {
+        try {
+          await fetch("/auth/logout", {
+            method: "POST",
+            credentials: "include",
+          });
+        } catch {}
+        document.cookie = "token=; Max-Age=0; path=/";
+        state.user = null;
+        clearImagineSession();
+        renderShell();
+        attachHandlers();
+        try {
+          await fetchMeAndUpdateUI();
+        } catch {}
+        toast("Logged out", { type: "info" });
+      });
       window.__ctAuthHandlersBound = true;
     }
 
@@ -1244,13 +827,19 @@
           const ov = document.getElementById("authOverlay");
           if (ov) {
             ov.classList.remove("hidden");
-            ov.style.display = 'flex';
+            ov.style.display = "flex";
           }
           return;
         }
         if (action === "open-workspace-create") {
           document.getElementById("createWorkspaceModal")?.classList.remove("hidden");
-          setTimeout(() => document.querySelector('#createWorkspaceModal [data-action="create-workspace-cancel"]')?.focus(), 0);
+          setTimeout(
+            () =>
+              document
+                .querySelector('#createWorkspaceModal [data-action="create-workspace-cancel"]')
+                ?.focus(),
+            0,
+          );
         }
         if (action === "create-workspace-cancel") {
           document.getElementById("createWorkspaceModal")?.classList.add("hidden");
@@ -1262,11 +851,11 @@
           const name = (input?.value || "").trim();
           const fb = document.getElementById("createWorkspaceFeedback");
           if (!name) {
-            if (fb) fb.textContent = 'Name is required';
+            if (fb) fb.textContent = "Name is required";
             return;
           }
-          if (!/^[A-Za-z0-9_\-\s]+$/.test(name) || name.toLowerCase() === 'con') {
-            if (fb) fb.textContent = 'Use letters, numbers, dash, underscore, or space';
+          if (!/^[A-Za-z0-9_\\-\\s]+$/.test(name) || name.toLowerCase() === "con") {
+            if (fb) fb.textContent = "Use letters, numbers, dash, underscore, or space";
             return;
           }
           createWorkspace(name);
@@ -1281,7 +870,9 @@
         }
         if (action === "confirm-switch-continue") {
           const name = state.pending || "Default";
-          try { localStorage.setItem('activeWorkspace', name); } catch {}
+          try {
+            localStorage.setItem("activeWorkspace", name);
+          } catch {}
           state.workspace = name;
           try {
             resetImagineState();
@@ -1289,16 +880,18 @@
           } catch {}
           state.pending = "";
           setWorkspaceTitle(name);
-          try { setWorkspaceMeta(name, { lastOpened: Date.now() }); } catch {}
+          try {
+            setWorkspaceMeta(name, { lastOpened: Date.now() });
+          } catch {}
           document.getElementById("confirmSwitchModal")?.classList.add("hidden");
-          const qs = `?ws=${encodeURIComponent(name)}`;
+          const qs = `?ws=${name}`;
           window.location.href = "/settings/project" + qs;
         }
       });
       window.__ctActionHandlerBound = true;
     }
+
     mountImagineInspector();
-    // Load workspaces
     loadWorkspaces();
   }
 
@@ -1402,11 +995,8 @@
     // Re-render shell to apply role filters on nav while preserving views
     renderShell();
     attachHandlers();
-    hydrateSettingsPanels();
-    // Populate recent lists only when authenticated
     if (me) {
-      try { await hydrateCreateModuleLists(); } catch {}
-      try { await hydrateDashboard(); } catch {}
+      try { await loadFeatureForView(state.activeView); } catch {}
     }
   }
 
@@ -1979,658 +1569,6 @@
     window.location.reload();
   }
 
-  // --- Recent lists wiring for Create modules ---
-  async function fetchRecentJobs() {
-    try {
-      const r = await fetch('/dashboard/data', { credentials: 'include' });
-      if (r.ok) {
-        const j = await r.json();
-        return Array.isArray(j.recent_jobs) ? j.recent_jobs : [];
-      }
-    } catch {}
-    try {
-      const r2 = await fetch('/jobs', { credentials: 'include' });
-      if (r2.ok) {
-        const j2 = await r2.json();
-        return Array.isArray(j2.jobs) ? j2.jobs : [];
-      }
-    } catch {}
-    return [];
-  }
-
-  function renderList(container, items, { kind }) {
-    if (!container) return;
-    container.innerHTML = '';
-    if (!items.length) {
-      const p = document.createElement('p');
-      p.className = 'dashboard-placeholder';
-      p.textContent = 'No recent items.';
-      container.appendChild(p);
-      return;
-    }
-    items.forEach((job) => {
-      const btn = document.createElement('button');
-      btn.className = 'ct-nav-child__button';
-      const label = job.out_path ? String(job.out_path).split('/').slice(-1)[0] : (job.id || 'job');
-      btn.textContent = label;
-      btn.setAttribute('data-path', job.out_path || '');
-      btn.setAttribute('data-kind', kind);
-      btn.title = `${job.type || 'job'} • ${job.status || ''}`.trim();
-      container.appendChild(btn);
-    });
-  }
-
-  async function hydrateCreateModuleLists() {
-    const jobs = await fetchRecentJobs();
-    // Buckets
-    const mp4Jobs = jobs.filter((j) => (j.out_path || '').toLowerCase().endsWith('.mp4'));
-    const mp3Jobs = jobs.filter((j) => (j.out_path || '').toLowerCase().endsWith('.mp3'));
-
-    renderList(document.getElementById('videoScenesList'), mp4Jobs, { kind: 'video' });
-    renderList(document.getElementById('musicTracksList'), mp3Jobs, { kind: 'audio' });
-    renderList(document.getElementById('masterAssetsList'), mp4Jobs, { kind: 'master' });
-
-    // Click to apply selection
-    document.querySelectorAll('.ct-nav-child__button[data-path]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const path = el.getAttribute('data-path') || '';
-        const kind = el.getAttribute('data-kind') || '';
-        if (!path) return;
-        const resolved = path.startsWith('/') ? path : `/${path}`;
-        if (kind === 'video') {
-          const vid = document.getElementById('videoPreview');
-          if (vid) vid.src = resolved;
-        } else if (kind === 'audio') {
-          const aud = document.getElementById('musicPreview');
-          if (aud) aud.src = resolved;
-        } else if (kind === 'master') {
-          const inp = document.getElementById('masterLoopPath');
-          if (inp) inp.value = path;
-        }
-      });
-      window.__ctActionHandlerBound = true;
-    });
-  }
-
-  // --- Dashboard panel hydration (role + providers + profile summary) ---
-  async function hydrateDashboard() {
-    const r = await fetch('/dashboard/data', { credentials: 'include' });
-    if (!r.ok) return;
-    const data = await r.json();
-    const roleRaw = (data.user?.role || '').toString();
-    const role = roleRaw ? (roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1)) : 'Viewer';
-    applyDashboardIdentity({
-      name: data.user?.display_name || data.user?.email || "Creator",
-      role,
-      workspace: state.workspace,
-      isSignedIn: true,
-    });
-    // Providers grid
-    const grid = document.getElementById('dashboardProviders');
-    const providers = data.providers || {};
-    if (grid) {
-      grid.innerHTML = '';
-      ['openai','elevenlabs','youtube'].forEach((key) => {
-        const status = (providers[key] || 'missing').toString();
-        const row = document.createElement('div');
-        row.className = 'status-row';
-        const label = document.createElement('span');
-        let friendly = key;
-        if (key === "openai") friendly = "OpenAI";
-        else if (key === "elevenlabs") friendly = "ElevenLabs";
-        else if (key === "youtube") friendly = "YouTube";
-        label.textContent = friendly;
-        const pill = document.createElement('span');
-        pill.className = `status-pill ${status === 'connected' ? 'connected' : 'missing'}`;
-        pill.textContent = status === 'connected' ? 'Connected' : 'Missing';
-        row.appendChild(label);
-        row.appendChild(pill);
-        grid.appendChild(row);
-      });
-    }
-    // Profile summary
-    const list = document.getElementById('dashboardProfileList');
-    if (list) {
-      list.innerHTML = '';
-      const pairs = [
-        ['Name', data.user?.display_name || '—'],
-        ['Email', data.user?.email || '—'],
-        ['Access', data.user?.access_group || '—'],
-      ];
-      pairs.forEach(([k,v]) => {
-        const li = document.createElement('li');
-        const a = document.createElement('span');
-        a.className = 'label';
-        a.textContent = k;
-        const b = document.createElement('span');
-        b.textContent = v;
-        li.appendChild(a);
-        li.appendChild(b);
-        list.appendChild(li);
-      });
-    }
-
-    // Active jobs list
-    const activeJobsList = document.getElementById('activeJobsList');
-    if (activeJobsList) {
-      const activeJobs = Array.isArray(data.active_jobs) ? data.active_jobs : [];
-      activeJobsList.innerHTML = '';
-      if (!activeJobs.length) {
-        const p = document.createElement('p');
-        p.className = 'dashboard-placeholder';
-        p.textContent = 'No active jobs.';
-        activeJobsList.appendChild(p);
-      } else {
-        activeJobs.forEach((job) => {
-          const row = document.createElement('div');
-          row.className = 'jobs-list-row';
-          const title = document.createElement('div');
-          title.className = 'jobs-list-title';
-          title.textContent = job.type || 'job';
-          const meta = document.createElement('div');
-          meta.className = 'jobs-list-meta';
-          const status = job.status || '';
-          const stage = job.stage || '';
-          const progress =
-            typeof job.progress === 'number' ? `${job.progress}%` : '';
-          const updated =
-            formatRelativeTime(job.updated_at) || job.updated_at || '';
-          meta.textContent = [status, stage, progress, updated]
-            .filter(Boolean)
-            .join(' • ');
-          row.appendChild(title);
-          row.appendChild(meta);
-          activeJobsList.appendChild(row);
-        });
-      }
-    }
-
-    // Recent jobs table
-    const recentJobsBody = document.getElementById('recentJobsBody');
-    if (recentJobsBody) {
-      const jobs = Array.isArray(data.recent_jobs) ? data.recent_jobs : [];
-      if (!jobs.length) {
-        recentJobsBody.innerHTML =
-          '<tr><td colspan="6" class="dashboard-placeholder">No recent jobs yet.</td></tr>';
-      } else {
-        recentJobsBody.innerHTML = jobs
-          .map((job) => {
-            const id = job.id || '';
-            const type = job.type || 'job';
-            const status = job.status || '—';
-            const stage = job.stage || '—';
-            const progress =
-              typeof job.progress === 'number' ? `${job.progress}%` : '—';
-            const updated =
-              formatRelativeTime(job.updated_at) || job.updated_at || '—';
-            return `
-              <tr>
-                <td>${id}</td>
-                <td>${type}</td>
-                <td>${status}</td>
-                <td>${stage}</td>
-                <td>${progress}</td>
-                <td>${updated}</td>
-              </tr>
-            `;
-          })
-          .join('');
-      }
-    }
-
-    // Recent assets list
-    const recentAssetsList = document.getElementById('recentAssetsList');
-    if (recentAssetsList) {
-      let assets = Array.isArray(data.recent_assets) ? data.recent_assets : [];
-      if (!assets.length) {
-        try {
-          const resp = await fetch('/library?limit=8', { credentials: 'include' });
-          if (resp.ok) {
-            const lib = await resp.json();
-            if (Array.isArray(lib.items)) assets = lib.items;
-          }
-        } catch {
-          // ignore and fall through to placeholder
-        }
-      }
-      recentAssetsList.innerHTML = '';
-      if (!assets.length) {
-        const li = document.createElement('li');
-        li.className = 'dashboard-placeholder';
-        li.textContent = 'No recent assets yet.';
-        recentAssetsList.appendChild(li);
-      } else {
-        assets.forEach((asset) => {
-          const li = document.createElement('li');
-          li.className = 'dashboard-list-item';
-          const primary = document.createElement('div');
-          primary.className = 'dashboard-list-primary';
-          primary.textContent =
-            asset.label ||
-            asset.title ||
-            asset.path ||
-            asset.id ||
-            'Asset';
-          const meta = document.createElement('div');
-          meta.className = 'dashboard-list-meta';
-          const type = asset.type || asset.asset_type || '';
-          const path = asset.path || '';
-          meta.textContent = [type, path].filter(Boolean).join(' • ');
-          li.appendChild(primary);
-          li.appendChild(meta);
-          recentAssetsList.appendChild(li);
-        });
-      }
-    }
-  }
-
-  function hydrateSettingsPanels() {
-    const usersSection = document.getElementById("settings-users");
-    const tabButtons = document.querySelectorAll('.ct-tab[data-view="settings-users"]');
-    const isAdmin = isCurrentUserAdmin();
-    tabButtons.forEach((btn) => {
-      if (isAdmin) btn.classList.remove("hidden");
-      else btn.classList.add("hidden");
-    });
-    if (!usersSection) return;
-    if (!isAdmin) {
-      usersSection.classList.add("hidden");
-      document.getElementById("adminUsersPanel")?.classList.add("hidden");
-      document.getElementById("adminUsersRestricted")?.classList.remove("hidden");
-      return;
-    }
-    usersSection.classList.remove("hidden");
-    document.getElementById("adminUsersRestricted")?.classList.add("hidden");
-    document.getElementById("adminUsersPanel")?.classList.remove("hidden");
-    initAdminUsersPanel().catch(() => {});
-  }
-
-  async function initAdminUsersPanel() {
-    if (!isCurrentUserAdmin()) return;
-    const panel = document.getElementById("adminUsersPanel");
-    if (!panel) return;
-    if (!adminUsersState.initialized) {
-      adminUsersState.initialized = true;
-      const tbody = document.getElementById("adminUsersTableBody");
-      tbody?.addEventListener("click", (event) => {
-        const row = event.target.closest("tr[data-user-id]");
-        if (!row) return;
-        const id = Number(row.getAttribute("data-user-id"));
-        if (id) {
-          event.preventDefault();
-          selectAdminUser(id);
-        }
-      });
-      const searchForm = document.getElementById("adminUsersSearchForm");
-      searchForm?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const term = (document.getElementById("adminUsersSearchInput")?.value || "").trim();
-        adminUsersState.search = term;
-        refreshAdminUsersList(term);
-      });
-      document.getElementById("adminUsersRefreshBtn")?.addEventListener("click", () => {
-        refreshAdminUsersList(adminUsersState.search);
-      });
-      document.getElementById("adminUsersCreateToggle")?.addEventListener("click", () =>
-        toggleCreateUserCard(true)
-      );
-      document.getElementById("adminCreateCancel")?.addEventListener("click", () =>
-        toggleCreateUserCard(false)
-      );
-      document.getElementById("adminCreateGeneratePassword")?.addEventListener("change", (event) => {
-        const checked = event.target.checked;
-        const field = document.getElementById("adminCreatePasswordField");
-        const input = document.getElementById("adminCreatePassword");
-        if (field) field.classList.toggle("hidden", checked);
-        if (input) {
-          input.disabled = checked;
-          if (checked) input.value = "";
-        }
-      });
-      document.getElementById("adminCreateUserForm")?.addEventListener("submit", handleAdminCreateUser);
-      document.getElementById("adminUserDetailForm")?.addEventListener("submit", handleAdminUserUpdate);
-      document.getElementById("adminUserPasswordForm")?.addEventListener(
-        "submit",
-        handleAdminUserPasswordChange,
-      );
-      populateAdminRoleOptions();
-      applyAdminWorkspaceOptions();
-      await refreshAdminWorkspaceOptions();
-    }
-    await refreshAdminUsersList(adminUsersState.search);
-  }
-
-  async function refreshAdminUsersList(query) {
-    if (!isCurrentUserAdmin()) return;
-    const tbody = document.getElementById("adminUsersTableBody");
-    if (!tbody) return;
-    adminUsersState.loading = true;
-    const params = query ? `?q=${encodeURIComponent(query)}` : "";
-    try {
-      const resp = await fetch(`/admin/users${params}`, { credentials: "include" });
-      if (!resp.ok) {
-        throw new Error(await readErrorMessage(resp, "Unable to load users"));
-      }
-      const data = await resp.json();
-      adminUsersState.list = Array.isArray(data.users) ? data.users : [];
-      const roles = Array.isArray(data.roles) && data.roles.length
-        ? data.roles
-        : DEFAULT_ADMIN_ROLES.slice();
-      adminUsersState.roles = roles;
-      renderAdminUsersTable();
-      populateAdminRoleOptions();
-      const currentId = adminUsersState.selected?.id;
-      if (currentId) {
-        const match = adminUsersState.list.find((u) => u.id === currentId);
-        if (match) {
-          selectAdminUser(match.id, { skipFetch: true, user: match });
-        } else if (adminUsersState.list.length) {
-          selectAdminUser(adminUsersState.list[0].id);
-        }
-      } else if (adminUsersState.list.length) {
-        selectAdminUser(adminUsersState.list[0].id);
-      } else {
-        adminUsersState.selected = null;
-        document.getElementById("adminUserDetailForm")?.classList.add("hidden");
-        document.getElementById("adminUserPasswordForm")?.classList.add("hidden");
-        document.getElementById("adminUserDetailPlaceholder")?.classList.remove("hidden");
-      }
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="dashboard-placeholder">${err.message || "Unable to load users"}</td></tr>`;
-      toast(err.message || "Unable to load users", { type: "error" });
-    } finally {
-      adminUsersState.loading = false;
-    }
-  }
-
-  function renderAdminUsersTable() {
-    const tbody = document.getElementById("adminUsersTableBody");
-    if (!tbody) return;
-    const users = adminUsersState.list || [];
-    if (!users.length) {
-      const message = adminUsersState.loading ? "Loading users…" : "No users found.";
-      tbody.innerHTML = `<tr><td colspan="6" class="dashboard-placeholder">${message}</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = users
-      .map((user) => {
-        const isSelected = adminUsersState.selected?.id === user.id;
-        const status = user.is_active ? "Active" : "Inactive";
-        const statusClass = user.is_active ? "" : "inactive";
-        return `
-          <tr data-user-id="${user.id}" class="${isSelected ? "active" : ""}">
-            <td>${user.full_name || "—"}</td>
-            <td>${user.email || "—"}</td>
-            <td>${formatRoleLabel(user.role)}</td>
-            <td><span class="status-pill ${statusClass}">${status}</span></td>
-            <td>${formatRelativeTime(user.created_at) || "—"}</td>
-            <td>${formatRelativeTime(user.last_login_at) || "—"}</td>
-          </tr>`;
-      })
-      .join("");
-  }
-
-  function formatRoleLabel(role) {
-    if (!role) return "Viewer";
-    return role.charAt(0).toUpperCase() + role.slice(1);
-  }
-
-  async function selectAdminUser(userId, opts = {}) {
-    if (!userId || !isCurrentUserAdmin()) return;
-    const tbody = document.getElementById("adminUsersTableBody");
-    if (tbody) {
-      tbody.querySelectorAll("tr.active").forEach((row) => row.classList.remove("active"));
-      const activeRow = tbody.querySelector(`tr[data-user-id="${userId}"]`);
-      activeRow?.classList.add("active");
-    }
-    try {
-      let user = opts.user;
-      if (!opts.skipFetch) {
-        const resp = await fetch(`/admin/users/${userId}`, { credentials: "include" });
-        if (!resp.ok) {
-          throw new Error(await readErrorMessage(resp, "Unable to load user"));
-        }
-        const data = await resp.json();
-        user = data.user;
-      }
-      if (!user) return;
-      adminUsersState.selected = user;
-      populateAdminUserDetail(user);
-    } catch (err) {
-      const feedback = document.getElementById("adminUserDetailFeedback");
-      if (feedback) feedback.textContent = err.message || "Unable to load user";
-      toast(err.message || "Unable to load user", { type: "error" });
-    }
-  }
-
-  function populateAdminUserDetail(user) {
-    const placeholder = document.getElementById("adminUserDetailPlaceholder");
-    const form = document.getElementById("adminUserDetailForm");
-    const passForm = document.getElementById("adminUserPasswordForm");
-    if (!form) return;
-    placeholder?.classList.add("hidden");
-    form.classList.remove("hidden");
-    passForm?.classList.remove("hidden");
-    document.getElementById("adminUserDetailId").value = user.id;
-    document.getElementById("adminUserDetailName").value = user.full_name || "";
-    document.getElementById("adminUserDetailEmail").value = user.email || "";
-    populateAdminRoleOptions();
-    applyAdminWorkspaceOptions();
-    const roleSelect = document.getElementById("adminUserDetailRole");
-    if (roleSelect && user.role) roleSelect.value = user.role;
-    const workspaceSelect = document.getElementById("adminUserDetailWorkspace");
-    if (workspaceSelect && user.workspace) workspaceSelect.value = user.workspace;
-    const activeToggle = document.getElementById("adminUserDetailActive");
-    if (activeToggle) activeToggle.checked = Boolean(user.is_active);
-    document.getElementById("adminUserDetailFeedback").textContent = "";
-    document.getElementById("adminUserPasswordFeedback").textContent = "";
-  }
-
-  function populateAdminRoleOptions() {
-    const roles = adminUsersState.roles;
-    if (!roles || !roles.length) return;
-    const selects = [
-      document.getElementById("adminUserDetailRole"),
-      document.getElementById("adminCreateRole"),
-    ];
-    selects.forEach((select) => {
-      if (!select) return;
-      const current = select.value;
-      select.innerHTML = roles
-        .map((role) => `<option value="${role}">${formatRoleLabel(role)}</option>`)
-        .join("");
-      if (current && roles.includes(current)) {
-        select.value = current;
-      }
-    });
-  }
-
-  async function refreshAdminWorkspaceOptions() {
-    if (!isCurrentUserAdmin()) return;
-    try {
-      const resp = await fetch("/api/workspaces");
-      if (resp.ok) {
-        const data = await resp.json();
-        adminUsersState.workspaces = Array.isArray(data.items) && data.items.length
-          ? data.items
-          : DEFAULT_WORKSPACES.slice();
-      } else {
-        adminUsersState.workspaces = DEFAULT_WORKSPACES.slice();
-      }
-    } catch {
-      adminUsersState.workspaces = DEFAULT_WORKSPACES.slice();
-    }
-    applyAdminWorkspaceOptions();
-  }
-
-  function applyAdminWorkspaceOptions() {
-    const workspaces = adminUsersState.workspaces && adminUsersState.workspaces.length
-      ? adminUsersState.workspaces
-      : DEFAULT_WORKSPACES.slice();
-    const selects = [
-      document.getElementById("adminUserDetailWorkspace"),
-      document.getElementById("adminCreateWorkspace"),
-    ];
-    selects.forEach((select) => {
-      if (!select) return;
-      const current = select.value;
-      select.innerHTML = workspaces
-        .map((name) => `<option value="${name}">${name}</option>`)
-        .join("");
-      if (current && workspaces.includes(current)) {
-        select.value = current;
-      }
-    });
-  }
-
-  async function handleAdminUserUpdate(event) {
-    event.preventDefault();
-    if (!isCurrentUserAdmin()) return;
-    const id = Number(document.getElementById("adminUserDetailId").value);
-    if (!id) return;
-    const payload = {
-      full_name: document.getElementById("adminUserDetailName").value.trim(),
-      email: document.getElementById("adminUserDetailEmail").value.trim(),
-      role: document.getElementById("adminUserDetailRole").value,
-      workspace: document.getElementById("adminUserDetailWorkspace").value,
-      is_active: document.getElementById("adminUserDetailActive").checked,
-    };
-    const feedback = document.getElementById("adminUserDetailFeedback");
-    feedback.textContent = "";
-    try {
-      const resp = await fetch(`/admin/users/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) {
-        throw new Error(await readErrorMessage(resp, "Unable to update user"));
-      }
-      const data = await resp.json();
-      adminUsersState.selected = data.user;
-      feedback.textContent = "Changes saved.";
-      toast("User updated", { type: "success" });
-      await refreshAdminUsersList(adminUsersState.search);
-    } catch (err) {
-      feedback.textContent = err.message || "Unable to update user";
-      toast(err.message || "Unable to update user", { type: "error" });
-    }
-  }
-
-  async function handleAdminUserPasswordChange(event) {
-    event.preventDefault();
-    if (!isCurrentUserAdmin()) return;
-    const id = Number(document.getElementById("adminUserDetailId").value);
-    if (!id) return;
-    const password = document.getElementById("adminUserPassword")?.value || "";
-    const confirm = document.getElementById("adminUserPasswordConfirm")?.value || "";
-    const feedback = document.getElementById("adminUserPasswordFeedback");
-    feedback.textContent = "";
-    if (!password || password.length < 8) {
-      feedback.textContent = "Password must be at least 8 characters.";
-      return;
-    }
-    if (password !== confirm) {
-      feedback.textContent = "Passwords do not match.";
-      return;
-    }
-    try {
-      const resp = await fetch(`/admin/users/${id}/password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ password, confirm_password: confirm }),
-      });
-      if (!resp.ok) {
-        throw new Error(await readErrorMessage(resp, "Unable to update password"));
-      }
-      feedback.textContent = "Password updated.";
-      const passInput = document.getElementById("adminUserPassword");
-      const confirmInput = document.getElementById("adminUserPasswordConfirm");
-      if (passInput) passInput.value = "";
-      if (confirmInput) confirmInput.value = "";
-      toast("Password updated", { type: "success" });
-    } catch (err) {
-      feedback.textContent = err.message || "Unable to update password";
-      toast(err.message || "Unable to update password", { type: "error" });
-    }
-  }
-
-  async function handleAdminCreateUser(event) {
-    event.preventDefault();
-    if (!isCurrentUserAdmin()) return;
-    const nameInput = document.getElementById("adminCreateFullName");
-    const emailInput = document.getElementById("adminCreateEmail");
-    const roleSelect = document.getElementById("adminCreateRole");
-    const workspaceSelect = document.getElementById("adminCreateWorkspace");
-    const passwordInput = document.getElementById("adminCreatePassword");
-    const autoPassword = document.getElementById("adminCreateGeneratePassword");
-    const feedback = document.getElementById("adminCreateUserFeedback");
-    const resultPanel = document.getElementById("adminCreatePasswordResult");
-    const resultText = document.getElementById("adminCreatePasswordText");
-    feedback.textContent = "";
-    resultPanel?.classList.add("hidden");
-    const payload = {
-      full_name: nameInput?.value?.trim() || "",
-      email: emailInput?.value?.trim() || "",
-      role: roleSelect?.value || "viewer",
-      workspace: workspaceSelect?.value || "Default",
-      password: autoPassword?.checked ? null : (passwordInput?.value || ""),
-      generate_password: Boolean(autoPassword?.checked),
-    };
-    if (!payload.full_name || !payload.email) {
-      feedback.textContent = "Name and email are required.";
-      return;
-    }
-    if (!payload.generate_password && (!payload.password || payload.password.length < 8)) {
-      feedback.textContent = "Password must be at least 8 characters.";
-      return;
-    }
-    try {
-      const resp = await fetch("/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) {
-        throw new Error(await readErrorMessage(resp, "Unable to create user"));
-      }
-      const data = await resp.json();
-      toast("User created", { type: "success" });
-      if (resultPanel && resultText && data.generated_password) {
-        resultText.textContent = `Generated password: ${data.generated_password}`;
-        resultPanel.classList.remove("hidden");
-      }
-      event.target.reset();
-      if (passwordInput) passwordInput.value = "";
-      autoPassword.checked = false;
-      document.getElementById("adminCreatePasswordField")?.classList.remove("hidden");
-      toggleCreateUserCard(false);
-      await refreshAdminUsersList(adminUsersState.search);
-      if (data.user?.id) {
-        selectAdminUser(data.user.id, { skipFetch: true, user: data.user });
-      }
-    } catch (err) {
-      feedback.textContent = err.message || "Unable to create user";
-      toast(err.message || "Unable to create user", { type: "error" });
-    }
-  }
-
-  function toggleCreateUserCard(show) {
-    const card = document.getElementById("adminCreateUserCard");
-    if (!card) return;
-    if (show) {
-      card.classList.remove("hidden");
-    } else {
-      card.classList.add("hidden");
-      const feedback = document.getElementById("adminCreateUserFeedback");
-      if (feedback) feedback.textContent = "";
-      document.getElementById("adminCreatePasswordResult")?.classList.add("hidden");
-    }
-  }
-
   function setWorkspaceTitle(name) {
     const el = document.getElementById("workspaceTitleLabel");
     if (el) el.textContent = name || (localStorage.getItem("activeWorkspace") || "Default");
@@ -2671,19 +1609,3 @@
   attachHandlers();
   fetchMeAndUpdateUI();
 })();
-
-// Toast helper
-function toast(message, opts = {}) {
-  const stack = document.getElementById('toastStack');
-  if (!stack) return;
-  const el = document.createElement('div');
-  const type = opts.type || 'info';
-  el.className = `toast ${type}`;
-  el.textContent = message;
-  stack.appendChild(el);
-  const remove = () => {
-    if (el && el.parentNode) el.parentNode.removeChild(el);
-  };
-  const ttl = typeof opts.ttl === 'number' ? opts.ttl : 3500;
-  setTimeout(remove, ttl);
-}

@@ -79,7 +79,7 @@
     </div>
     <!-- Toast stack container -->
     <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
-    <script src="{{ url_for('static', path='app.js') }}?v={{ static_v }}" defer></script>
+    <script type="module" src="{{ url_for('static', path='app.js') }}?v={{ static_v }}"></script>
     <footer class="footerbar">
       <div class="footer-steps" aria-label="Workflow">
         <span class="footer-step">Imagine</span>

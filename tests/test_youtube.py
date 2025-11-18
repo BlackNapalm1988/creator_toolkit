@@ -248,5 +248,5 @@ def test_youtube_library_stub(client):
 
 
 def test_publish_template_has_no_upload_result_textarea():
-    tpl = Path("templates/dashboard.html").read_text()
+    tpl = Path("templates/dashboard.html").read_text(encoding="utf-8")
     assert "YouTube Upload Result" not in tpl

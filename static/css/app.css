@@ -520,3 +520,43 @@
     }
   }
 }
+
+/* Lazy-load feedback */
+.hybrid-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  margin: 12px 0;
+}
+
+.hybrid-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent, #9b8cff);
+  animation: hybrid-spin 0.9s linear infinite;
+}
+
+.hybrid-loading-text {
+  font-size: 14px;
+  color: var(--muted, #c9c9c9);
+}
+
+.hybrid-error {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e85c5c;
+  background: rgba(232, 92, 92, 0.12);
+  color: #ffdede;
+  margin: 12px 0;
+}
+
+@keyframes hybrid-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
