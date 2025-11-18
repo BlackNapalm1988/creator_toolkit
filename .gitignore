@@ -55,3 +55,8 @@ mapped_urls/
 
 # coverage files
 .coverage
+
+# Scratch editor exports
+_create_section.txt
+tmp_head.txt
+tmp_before_app_js.txt

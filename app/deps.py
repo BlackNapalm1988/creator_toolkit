@@ -53,8 +53,18 @@ def current_user(
         user["email"] = payload["email"]
 
     if not user.get("is_active", True):
-        raise HTTPException(status_code=403, detail="Account disabled")
+        raise HTTPException(status_code=403, detail="Inactive user")
 
+    return user
+
+
+def current_active_user(
+    user: Annotated[dict, Depends(current_user)],
+):
+    """Dependency alias that ensures the resolved user is active."""
+
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Inactive user")
     return user
 
 
@@ -63,12 +73,12 @@ def require_role(allowed_roles, *, require_verified: bool = False):
 
     return base_require_role(
         allowed_roles,
-        dependency=current_user,
+        dependency=current_active_user,
         require_verified=require_verified,
     )
 
 
-def verified_user(user: Annotated[dict, Depends(current_user)]):
+def verified_user(user: Annotated[dict, Depends(current_active_user)]):
     """Dependency that requires the user to have completed email verification."""
 
     if not user.get("is_verified"):
@@ -87,6 +97,7 @@ def dev_user(user: Annotated[dict, Depends(verified_user)]):
 __all__ = [
     "auth_scheme",
     "current_user",
+    "current_active_user",
     "require_role",
     "verified_user",
     "dev_user",

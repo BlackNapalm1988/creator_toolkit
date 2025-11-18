@@ -14,8 +14,8 @@ from app.models.admin_users import (
     AdminUserCreateReq,
     AdminUserCreateResp,
     AdminUserDetailResp,
-    AdminUserUpdateReq,
     AdminUsersListResp,
+    AdminUserUpdateReq,
 )
 from app.models.api import ErrorResponse
 from modules import auth as auth_module
@@ -62,7 +62,9 @@ def _ensure_user(user_id: int) -> Dict[str, object]:
     return user
 
 
-@router.get("", response_model=AdminUsersListResp, responses={403: {"model": ErrorResponse}})
+@router.get(
+    "", response_model=AdminUsersListResp, responses={403: {"model": ErrorResponse}}
+)
 def admin_users_list(
     q: str | None = Query(None),
     user=Depends(require_role(["admin"], require_verified=True)),
@@ -78,7 +80,9 @@ def admin_users_list(
     response_model=AdminUserDetailResp,
     responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
 )
-def admin_users_detail(user_id: int, user=Depends(require_role(["admin"], require_verified=True))):
+def admin_users_detail(
+    user_id: int, user=Depends(require_role(["admin"], require_verified=True))
+):
     record = _ensure_user(user_id)
     return {"user": _serialize_user(record)}
 
@@ -123,7 +127,11 @@ def admin_users_create(
 @router.put(
     "/{user_id}",
     response_model=AdminUserDetailResp,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def admin_users_update(
     user_id: int,
@@ -152,7 +160,11 @@ def admin_users_update(
 @router.post(
     "/{user_id}/password",
     response_model=AdminUserDetailResp,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def admin_users_set_password(
     user_id: int,

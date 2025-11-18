@@ -188,7 +188,11 @@ def test_youtube_upload_json_with_new_fields(client, tmp_path, monkeypatch):
     video_path = tmp_path / "demo.mp4"
     video_path.write_bytes(b"bytes")
 
-    expected_payload = {"video_id": "rich123", "requested_visibility": "unlisted", "scheduled_publish_at": None}
+    expected_payload = {
+        "video_id": "rich123",
+        "requested_visibility": "unlisted",
+        "scheduled_publish_at": None,
+    }
 
     def fake_upload_from_disk(
         *,

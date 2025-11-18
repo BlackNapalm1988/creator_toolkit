@@ -1,9 +1,6 @@
-from pathlib import Path
-
-import main
+from app.services import assets as assets_service
 from modules import auth as auth_module
 from modules import users as users_module
-from app.services import assets as assets_service
 
 
 def _auth_headers(user):

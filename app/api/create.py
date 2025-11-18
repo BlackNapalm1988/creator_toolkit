@@ -20,8 +20,8 @@ from app.models.create import (
     MusicGenReq,
     VideoGenReq,
 )
-from app.services.keys import get_eleven_key_for_user, get_openai_key_for_user
 from app.services.assets import add_asset
+from app.services.keys import get_eleven_key_for_user, get_openai_key_for_user
 from modules import jobs as jobs_module
 
 router = APIRouter(tags=["Generate"])
@@ -481,13 +481,16 @@ def get_music_status(
                 f.write(audio_bytes)
 
             song_path = f"content/music/{out_name}".replace("\\", "/")
+            prompt_text = (payload.get("prompt") or "").strip()
+            mood = payload.get("mood")
+            genre = payload.get("genre")
             try:
                 add_asset(
                     user_id=user_id,
                     asset_type="audio",
                     path=song_path,
-                    title=req.prompt[:80] if req.prompt else "",
-                    metadata={"mood": req.mood, "genre": req.genre},
+                    title=prompt_text[:80],
+                    metadata={"mood": mood, "genre": genre},
                 )
             except Exception:
                 pass
@@ -514,13 +517,16 @@ def get_music_status(
                 f.write(audio_bytes)
 
             song_path = f"content/music/{out_name}".replace("\\", "/")
+            prompt_text = (payload.get("prompt") or "").strip()
+            mood = payload.get("mood")
+            genre = payload.get("genre")
             try:
                 add_asset(
                     user_id=user_id,
                     asset_type="audio",
                     path=song_path,
-                    title=req.prompt[:80] if req.prompt else "",
-                    metadata={"mood": req.mood, "genre": req.genre},
+                    title=prompt_text[:80],
+                    metadata={"mood": mood, "genre": genre},
                 )
             except Exception:
                 pass
@@ -597,7 +603,9 @@ def generate_video(
         )
 
     if req.video_type and req.video_type.lower() == "short":
-        prompt_bits.append("Format as a vertical short-form video, ideal for TikTok/Reels/Shorts, under 60 seconds.")
+        prompt_bits.append(
+            "Format as a vertical short-form video, ideal for TikTok/Reels/Shorts, under 60 seconds."
+        )
 
     style_text = STYLE_PRESETS.get((req.style_preset or "none").lower(), "")
     if style_text:
@@ -646,7 +654,9 @@ def generate_video(
             timeout=120,
         )
     except Exception as exc:
-        jobs_module.set_error(job_id, f"Network error contacting OpenAI videos endpoint: {exc}")
+        jobs_module.set_error(
+            job_id, f"Network error contacting OpenAI videos endpoint: {exc}"
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Network error contacting OpenAI videos endpoint: {exc}",
@@ -673,7 +683,9 @@ def generate_video(
         try:
             payload = sora_resp.json()
         except Exception as exc:
-            jobs_module.set_error(job_id, "Sora 2 returned JSON but we couldn't parse it")
+            jobs_module.set_error(
+                job_id, "Sora 2 returned JSON but we couldn't parse it"
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Sora 2 returned JSON but we couldn't parse it",

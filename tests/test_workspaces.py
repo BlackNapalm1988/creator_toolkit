@@ -3,7 +3,6 @@ from pathlib import Path
 
 
 def test_list_workspaces_includes_default(client):
-
     r = client.get("/api/workspaces")
     assert r.status_code == 200
     data = r.json()
@@ -12,7 +11,6 @@ def test_list_workspaces_includes_default(client):
 
 
 def test_create_workspace_success_and_conflict(client):
-
     name = f"ws_{uuid.uuid4().hex[:8]}"
     # Create
     r = client.post("/api/workspaces", json={"name": name})

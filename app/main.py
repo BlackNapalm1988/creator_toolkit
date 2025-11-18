@@ -7,8 +7,8 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import ValidationError
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.admin import router as admin_router
 from app.api.admin_users import router as admin_users_router
@@ -80,9 +80,13 @@ def create_app() -> FastAPI:
                 csp = response.headers.get("content-security-policy")
                 if csp:
                     if "frame-ancestors" not in csp.lower():
-                        response.headers["content-security-policy"] = csp.rstrip("; ") + "; frame-ancestors 'self'"
+                        response.headers["content-security-policy"] = (
+                            csp.rstrip("; ") + "; frame-ancestors 'self'"
+                        )
                 else:
-                    response.headers["content-security-policy"] = "frame-ancestors 'self'"
+                    response.headers["content-security-policy"] = (
+                        "frame-ancestors 'self'"
+                    )
 
             # Normalize/ensure charset for textual content types
             if ct:
@@ -92,7 +96,9 @@ def create_app() -> FastAPI:
                     "application/xml",
                 )
                 if "charset=" in ct:
-                    ct_norm = re.sub(r"charset=([^;]+)", "charset=utf-8", ct, flags=re.I)
+                    ct_norm = re.sub(
+                        r"charset=([^;]+)", "charset=utf-8", ct, flags=re.I
+                    )
                     if ct_norm != ct:
                         response.headers["content-type"] = ct_norm
                 elif needs_charset:
@@ -273,4 +279,5 @@ __all__ = [
 
 def _should_seed_defaults(env: str, allow_seeding: bool) -> bool:
     """Compatibility helper for tests: decide if default seeding should run."""
-    return env == "dev" or bool(allow_seeding)
+    env_normalized = (env or "").strip().lower()
+    return env_normalized == "dev" or bool(allow_seeding)

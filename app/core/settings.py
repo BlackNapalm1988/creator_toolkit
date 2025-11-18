@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, field_validator
 
 try:  # pragma: no cover - tested indirectly via environment setup
     from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,13 +36,35 @@ class Settings(BaseSettings):
     # Feature flag: enable Hybrid Dark Studio UI (theme + create hub/modules)
     USE_DARK_STUDIO_UI: bool = Field(default=True, alias="USE_DARK_STUDIO_UI")
 
+    @field_validator("env", mode="before")
+    @classmethod
+    def _normalize_env(cls, value: str | None) -> str:
+        """Normalize the environment value to a lowercase identifier."""
+
+        return (value or "dev").strip().lower()
+
     def validate_for_runtime(self) -> None:
         """Ensure unsafe defaults are not used outside of development."""
 
-        if self.env != "dev" and self.jwt_secret == "insecure-dev":
+        if getattr(self, "_runtime_validated", False):
+            return
+
+        allowed_envs = {"dev", "test", "prod"}
+        env_normalized = (self.env or "").strip().lower()
+        if env_normalized not in allowed_envs:
             raise ValueError(
-                "Refusing to start with insecure defaults; set a strong JWT_SECRET for non-dev environments."
+                f"Invalid ENV '{self.env}'. Expected one of: {', '.join(sorted(allowed_envs))}."
             )
+
+        if env_normalized == "prod":
+            secret = (self.jwt_secret or "").strip()
+            weak_secrets = {"insecure-dev", "changeme", "secret", "password"}
+            if secret.lower() in weak_secrets or len(secret) < 16:
+                raise ValueError(
+                    "JWT_SECRET is too weak for production; set a strong, random value."
+                )
+
+        self._runtime_validated = True
 
     def ensure_dirs(self) -> None:
         """Create required directories for user content if missing."""

@@ -25,7 +25,11 @@ def ensure_directories() -> None:
 
 
 def seed_if_needed(settings) -> None:
-    if settings.env == "dev" or settings.allow_seeding:
+    env_normalized = (getattr(settings, "env", "") or "").strip().lower()
+    should_seed = env_normalized == "dev" or bool(
+        getattr(settings, "allow_seeding", False)
+    )
+    if should_seed:
         bootstrap_default_admin()
     else:
         logger.info(
@@ -39,7 +43,8 @@ def seed_if_needed(settings) -> None:
 async def lifespan(app: FastAPI):
     """Manage startup and shutdown tasks for the FastAPI application."""
 
-    settings = get_settings()
+    settings = getattr(app.state, "settings", None) or get_settings()
+    settings.validate_for_runtime()
     app.state.settings = settings
 
     ensure_directories()

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from app.deps import current_user, require_role
+from app.deps import current_active_user, require_role
 from app.models.api import ErrorResponse, OkResp, OkUserResp, ProfileKeysListResp
 from app.models.system import (
     KeyUpsertReq,
@@ -41,7 +41,7 @@ router = APIRouter(tags=["System"])
     responses={401: {"model": ErrorResponse}, 400: {"model": ErrorResponse}},
 )
 def profile_password_change(
-    req: PasswordChangeReq, user: Annotated[dict, Depends(current_user)]
+    req: PasswordChangeReq, user: Annotated[dict, Depends(current_active_user)]
 ):
     if not verify_password(req.current_password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="Current password incorrect")
@@ -94,7 +94,7 @@ def auth_register_stub(
 
 
 @router.get("/me", response_model=OkUserResp, responses={401: {"model": ErrorResponse}})
-def api_me(user=Depends(current_user)):
+def api_me(user=Depends(current_active_user)):
     """Return the current authenticated user's public payload."""
 
     return {"ok": True, "user": user_payload(user)}
@@ -103,7 +103,7 @@ def api_me(user=Depends(current_user)):
 @router.get(
     "/api/me", response_model=OkUserResp, responses={401: {"model": ErrorResponse}}
 )
-def api_me_alias(user=Depends(current_user)):
+def api_me_alias(user=Depends(current_active_user)):
     """Alias for front-end fetch compatibility."""
 
     return {"ok": True, "user": user_payload(user)}
@@ -121,7 +121,7 @@ def auth_login(req: LoginReq, resp: Response):
     if not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.get("is_active", True):
-        raise HTTPException(status_code=403, detail="Account disabled")
+        raise HTTPException(status_code=403, detail="Inactive user")
 
     token = create_access_token(user["id"], user["email"])
     record_last_login(user["id"])

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import os
-import time
-from typing import Any, Callable, Dict, Iterable, Optional
-
 import secrets
 import string
+import time
+from typing import Any, Callable, Dict, Iterable, Optional
 
 from cryptography.fernet import Fernet
 from fastapi import Depends, HTTPException

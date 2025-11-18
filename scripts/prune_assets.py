@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import json
 import re
@@ -9,9 +11,14 @@ from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
 
-STATIC_ROOTS = [Path("static")]
-NEVER_TOUCH = {Path("user_content"), Path("releases"), Path("scenes"), Path("data")}
-QUARANTINE = Path("._quarantine/static")
+STATIC_ROOTS = [Path("static").resolve()]
+NEVER_TOUCH = {
+    Path("user_content").resolve(),
+    Path("releases").resolve(),
+    Path("scenes").resolve(),
+    Path("data").resolve(),
+}
+QUARANTINE = Path("._quarantine/static").resolve()
 
 
 def load_globs(p: Path) -> set[str]:
@@ -21,11 +28,24 @@ def load_globs(p: Path) -> set[str]:
 def list_assets_static() -> set[Path]:
     files = set()
     for root in STATIC_ROOTS:
-        if not root.exists():
+        base = root.resolve()
+        if not base.exists():
             continue
-        for p in root.rglob("*"):
-            if p.is_file():
-                files.add(p)
+        for p in base.rglob("*"):
+            if not p.is_file() or p.is_symlink():
+                continue
+            resolved = p.resolve()
+            try:
+                resolved.relative_to(base)
+            except ValueError:
+                # Skip anything that escapes the declared static root
+                continue
+            if any(
+                resolved == protected or resolved.is_relative_to(protected)
+                for protected in NEVER_TOUCH
+            ):
+                continue
+            files.add(resolved)
     return files
 
 
@@ -71,8 +91,27 @@ def older_than(p: Path, days: int) -> bool:
     return age >= days * 86400
 
 
+def _static_root_for(path: Path) -> Path | None:
+    resolved = path.resolve()
+    for root in STATIC_ROOTS:
+        if resolved.is_relative_to(root):
+            return root
+    return None
+
+
+def _is_protected(path: Path) -> bool:
+    resolved = path.resolve()
+    return any(
+        resolved == protected or resolved.is_relative_to(protected)
+        for protected in NEVER_TOUCH
+    )
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Safe prune for bundled static assets")
+    ap = argparse.ArgumentParser(
+        description="Safe prune for bundled static assets (never touches user_content)",
+        epilog="User-generated content directories are always excluded.",
+    )
     ap.add_argument("--report", action="store_true", help="Report candidates (default)")
     ap.add_argument(
         "--apply", action="store_true", help="Move candidates to quarantine"
@@ -107,11 +146,10 @@ def main():
 
     candidates = set()
     for f in static_files:
-        try:
-            rel = f.relative_to(Path("static")).as_posix()
-        except ValueError:
-            # Not under canonical static/ root; skip
+        base_root = _static_root_for(f)
+        if not base_root or _is_protected(f):
             continue
+        rel = f.relative_to(base_root).as_posix()
         is_referenced = rel in referenced or any(fnmatch(rel, g) for g in allowlist)
         prefer_remove = any(fnmatch(rel, g) for g in blocklist)
         if (not is_referenced or prefer_remove) and older_than(f, args.days):
@@ -130,7 +168,10 @@ def main():
     if args.apply and candidates:
         ts = datetime.now().strftime("%Y%m%d")
         for c in candidates:
-            dest = QUARANTINE / ts / c.relative_to(Path("static"))
+            base_root = _static_root_for(c)
+            if not base_root or _is_protected(c):
+                continue
+            dest = QUARANTINE / ts / c.relative_to(base_root)
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(c), str(dest))

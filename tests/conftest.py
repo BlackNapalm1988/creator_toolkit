@@ -30,25 +30,31 @@ def clean_runtime_dirs():
         PROJECT_ROOT / "static" / "uploads",
         PROJECT_ROOT / "static" / "reports",
         PROJECT_ROOT / "static" / "masters",
-        PROJECT_ROOT / "data" / "assets.json",
     ]
+    runtime_files = [PROJECT_ROOT / "data" / "assets.json"]
+
     for path in runtime_dirs:
         if path.exists():
             if path.is_dir():
-                for child in path.iterdir():
-                    if child.is_dir():
-                        shutil.rmtree(child, ignore_errors=True)
-                    else:
-                        try:
-                            child.unlink()
-                        except PermissionError:
-                            pass
+                shutil.rmtree(path, ignore_errors=True)
             else:
                 try:
                     path.unlink()
                 except PermissionError:
-                    continue
+                    pass
         path.mkdir(parents=True, exist_ok=True)
+
+    for file_path in runtime_files:
+        if file_path.exists():
+            if file_path.is_dir():
+                shutil.rmtree(file_path, ignore_errors=True)
+            else:
+                try:
+                    file_path.unlink()
+                except PermissionError:
+                    pass
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text("{}", encoding="utf-8")
     yield
 
 

@@ -146,7 +146,7 @@ def create_user(
     normalized_role = role.lower()
     if normalized_role not in VALID_ROLES:
         normalized_role = DEFAULT_ROLE
-    normalized_group = (access_group or "User")
+    normalized_group = access_group or "User"
     if normalized_role == "admin":
         normalized_group = "Dev"
 

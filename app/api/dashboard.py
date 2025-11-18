@@ -6,7 +6,7 @@ from typing import Annotated, Dict, List
 
 from fastapi import APIRouter, Depends
 
-from app.deps import current_user
+from app.deps import current_active_user
 from app.models.api import DashboardData, ErrorResponse
 from app.models.jobs import serialize_job
 from app.services.users import user_payload
@@ -33,7 +33,7 @@ router = APIRouter(tags=["Dashboard"])
         }
     },
 )
-def dashboard_data(user: Annotated[dict, Depends(current_user)]):
+def dashboard_data(user: Annotated[dict, Depends(current_active_user)]):
     """Return aggregated dashboard data for the signed-in user."""
 
     payload = user_payload(user)

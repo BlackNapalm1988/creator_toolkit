@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from modules.storage import project_path
@@ -18,6 +18,8 @@ _LOCK = threading.Lock()
 
 def _ensure_db() -> None:
     ASSETS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if ASSETS_PATH.exists() and ASSETS_PATH.is_dir():
+        shutil.rmtree(ASSETS_PATH, ignore_errors=True)
     if not ASSETS_PATH.exists():
         ASSETS_PATH.write_text(json.dumps(DEFAULT_DB, indent=2), encoding="utf-8")
 

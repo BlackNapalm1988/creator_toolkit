@@ -5,7 +5,7 @@ source =
     creator_toolkit/app
 
 [report]
-fail_under = 80
+fail_under = 95
 show_missing = True
 skip_covered = False
 omit =

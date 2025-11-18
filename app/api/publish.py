@@ -46,6 +46,7 @@ from app.models.publish import (
     PublishPipelineReq,
     YouTubeUploadRequest,
 )
+from app.services.assets import add_asset, list_assets_for_user
 from app.services.keys import (
     YOUTUBE_SCOPES,
     exchange_youtube_refresh,
@@ -68,7 +69,6 @@ from modules.storage import (
     project_path as _project_path_impl,
 )
 from modules.users import get_user_by_id, upsert_user_key
-from app.services.assets import add_asset, list_assets_for_user
 
 router = APIRouter(tags=["Publish"])
 
@@ -145,7 +145,9 @@ def _coerce_bool(val: Optional[object]) -> Optional[bool]:
     return str(val).strip().lower() in {"true", "1", "yes", "on", "kids"}
 
 
-def _upload_youtube_thumbnail(access_token: str, video_id: str, thumbnail_path: Path) -> None:
+def _upload_youtube_thumbnail(
+    access_token: str, video_id: str, thumbnail_path: Path
+) -> None:
     if not video_id or not thumbnail_path or not thumbnail_path.is_file():
         return
     mime = "image/png" if thumbnail_path.suffix.lower() == ".png" else "image/jpeg"
@@ -966,7 +968,10 @@ def youtube_upload_form(
 
     if source_mode == "library":
         if not library_path:
-            raise HTTPException(status_code=400, detail="library_path is required when source_mode=library")
+            raise HTTPException(
+                status_code=400,
+                detail="library_path is required when source_mode=library",
+            )
         temp_path = _resolve_video_file(library_path)
     else:
         if not chosen_file:
